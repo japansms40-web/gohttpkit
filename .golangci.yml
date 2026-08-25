@@ -1,0 +1,51 @@
+# golangci-lint v2 配置。
+# 策略：合入门禁用 make lint-new 只对增量严格（--new-from-rev）；
+# 豁免理由必须写注释，禁止无说明的 //nolint。
+version: "2"
+
+linters:
+  # standard 含 errcheck / govet / staticcheck / unused / ineffassign
+  default: standard
+  enable:
+    - errorlint   # %w 包装与 errors.Is/As 误用
+    - copyloopvar # Go 1.22+ 循环变量语义下多余的拷贝
+    - gocyclo     # 圈复杂度
+    - goconst     # 重复字符串提常量
+    - misspell
+    - unconvert
+    - unparam
+    - bodyclose   # resp.Body 关闭检查（bodyDecodeInterceptor 已规范，防新增遗漏）
+    - noctx       # HTTP 请求必须带 ctx
+    - forbidigo   # 强制 logger 门面，禁止裸打日志
+    - gosec
+    - revive
+  settings:
+    gocyclo:
+      min-complexity: 20
+    goconst:
+      min-occurrences: 3
+      min-len: 4
+    forbidigo:
+      forbid:
+        - pattern: '^(fmt\.Print(|f|ln)|log\.(Print|Fatal|Panic)|slog\.(Debug|Info|Warn|Error))'
+          msg: "请使用 logger 门面: logger.Info(ctx, msg, attrs...)，ctx 必传"
+    gosec:
+      excludes:
+        - G404 # math/rand 弱随机用于指纹域采样，非安全用途
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gocyclo, goconst, forbidigo, gosec, noctx, errcheck, revive, bodyclose]
+      # 大数据映射表（110+ 国家），复杂度与"重复字符串"告警都无意义：
+      # 表里的 "Hans"/"Hant" 就该字面写在每一行，提成常量反而看不出表长什么样
+      - path: geo/
+        linters: [gocyclo, goconst]
+      # logger 包自身是门面实现，允许直呼 slog
+      - path: logger/
+        linters: [forbidigo]
+      # examples 是给人读的示范代码，用 fmt 打印结果比走 logger 更直观
+      - path: examples/
+        linters: [forbidigo, gosec, errcheck, goconst]
+      # logger 的 "console"/"json" 是配置枚举值，散在默认值与解析处，提常量收益为零
+      - path: logger/
+        linters: [goconst]

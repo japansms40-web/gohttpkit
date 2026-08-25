@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+      - name: build
+        run: go build ./...
+      - name: vet
+        run: go vet ./...
+      - name: go mod tidy 无 diff
+        run: go mod tidy -diff
+      - name: test（含行为锁定套件）
+        run: HTTPKIT_LOG_LEVEL=error go test -count=1 ./...
+      - name: race（并发回归）
+        run: HTTPKIT_LOG_LEVEL=error go test -race -count=1 ./...
+      - name: examples 可运行
+        run: |
+          HTTPKIT_LOG_LEVEL=error go run ./examples/customchain
+          HTTPKIT_LOG_LEVEL=error go run ./examples/fidelity
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
