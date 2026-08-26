@@ -82,7 +82,7 @@ func New(opts Options) (*Client, error) {
 		headers:      opts.Headers,
 		interceptors: interceptors,
 		opts:         opts,
-		retry:        opts.Retry.normalized(),
+		retry:        normalizeRetry(opts.Retry),
 	}, nil
 }
 

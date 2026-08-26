@@ -122,9 +122,14 @@ func DialContextWithProxy(proxyDialer proxy.Dialer) func(ctx context.Context, ne
 	return dialContextWithProxyLegacy(proxyDialer)
 }
 
+// legacyDialGuardTimeout 是兜底路径里守护 goroutine 的等待上限：ctx 取消后，
+// 那个还挂在 Dial 上的 goroutine 最多再被等这么久，超时就放弃（并打一条 warn）。
+// 定义成变量而非常量，仅为让测试能把它压到毫秒级——生产路径永远用默认的 60s。
+var legacyDialGuardTimeout = 60 * time.Second
+
 // dialContextWithProxyLegacy 是无 ctx Dial 的兜底包装（仅当 dialer 未实现 ContextDialer 时使用）。
 // 用 goroutine + select 让 ctx 取消时本路径立即返回；对端完全不响应时 dial goroutine 会泄漏，
-// 加 60s 兜底 Timer 限制单次泄漏窗口。正常 SOCKS5 走不到这里。
+// 加兜底 Timer 限制单次泄漏窗口。正常 SOCKS5 走不到这里。
 func dialContextWithProxyLegacy(proxyDialer proxy.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if err := ctx.Err(); err != nil {
@@ -148,7 +153,7 @@ func dialContextWithProxyLegacy(proxyDialer proxy.Dialer) func(ctx context.Conte
 		case <-ctx.Done():
 			logCtx := context.WithoutCancel(ctx)
 			go func() {
-				t := time.NewTimer(60 * time.Second)
+				t := time.NewTimer(legacyDialGuardTimeout)
 				defer t.Stop()
 				select {
 				case r := <-ch:

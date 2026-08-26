@@ -1,3 +1,6 @@
+# 覆盖率报告
+coverage.out
+
 # 构建产物
 /dist/
 /bin/

@@ -11,6 +11,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -21,13 +22,29 @@ import (
 )
 
 func main() {
-	target := flag.String("url", "https://httpbin.org/get", "要请求的完整 URL")
-	proxyURL := flag.String("proxy", "", "代理地址，如 socks5://127.0.0.1:1080")
-	flag.Parse()
+	if err := run(os.Stdout, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// run 是 main 的可测试形态：输出写进 out，参数从 args 解析，失败返回 error 而不是 os.Exit。
+// 把 main 写成这样几乎不增加复杂度，却让示例本身也能被测试覆盖。
+func run(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("quickstart", flag.ContinueOnError)
+	fs.SetOutput(out)
+	target := fs.String("url", "https://httpbin.org/get", "要请求的完整 URL")
+	proxyURL := fs.String("proxy", "", "代理地址，如 socks5://127.0.0.1:1080")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	u, err := url.Parse(*target)
 	if err != nil {
-		exit("解析 -url 失败: %v", err)
+		return fmt.Errorf("解析 -url 失败: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("-url 必须是完整 URL（含 scheme 与域名），got %q", *target)
 	}
 	base := u.Scheme + "://" + u.Host
 	path := u.RequestURI()
@@ -46,14 +63,14 @@ func main() {
 		ProxyURL: *proxyURL,
 	})
 	if err != nil {
-		exit("创建客户端失败: %v", err)
+		return fmt.Errorf("创建客户端失败: %w", err)
 	}
 
 	// ② 发请求。ctx 里没有 trace_id 时库会自动生成一个，本次请求的所有日志都带上它。
 	ctx := logger.WithTraceID(context.Background(), "quickstart-001")
 	body, err := client.Get(ctx, path, nil)
 	if err != nil {
-		exit("请求失败: %v", err)
+		return fmt.Errorf("请求失败: %w", err)
 	}
 
 	// ③ 状态码走快照读（并发安全）。注意默认链【不会】因为非 2xx 而报错。
@@ -61,8 +78,9 @@ func main() {
 		slog.Int("status", client.SnapshotResponseStatusCode()),
 		slog.Int("body_len", len(body)))
 
-	fmt.Println("──────── 响应体 ────────")
-	fmt.Println(preview(string(body), 800))
+	fmt.Fprintln(out, "──────── 响应体 ────────")
+	fmt.Fprintln(out, preview(string(body), 800))
+	return nil
 }
 
 func preview(s string, n int) string {
@@ -71,9 +89,4 @@ func preview(s string, n int) string {
 		return s
 	}
 	return s[:n] + fmt.Sprintf("\n...(共 %d 字节)", len(s))
-}
-
-func exit(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
 }

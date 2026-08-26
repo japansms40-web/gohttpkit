@@ -28,40 +28,46 @@ const (
 	defaultResponseHeaderTimeout = 15 * time.Second
 )
 
-// RetryPolicy 网络层重试策略。零值经 normalized() 补齐为默认值（并允许 env 覆盖）。
+// RetryPolicy 网络层重试策略。
 //
 // 只有 *TransportError（网络发送本身失败）才进入重试判断；HTTP 状态码不触发重试
 // —— 「503 该不该重试」是业务语义，请自己写一层拦截器，不要让基建替你决定。
+//
+// 在 Options 里以【指针】出现：nil 表示「没配」（走默认值，可被 env 覆盖），
+// 非 nil 表示「配了」，此时每个字段都字面生效 —— 包括 MaxRetries: 0（就是不重试）。
+// 用指针而不是「零值即未配」，是因为后者分不清「没配」和「明确要求不重试」。
 type RetryPolicy struct {
-	// MaxRetries 重试次数上限（总尝试次数 = MaxRetries + 1）。负数视为 0。
+	// MaxRetries 重试次数上限（总尝试次数 = MaxRetries + 1）。负数按 0 处理。
 	MaxRetries int
-	// BaseBackoff 指数退避基数：第 n 次退避 = BaseBackoff * 2^n。
+	// BaseBackoff 指数退避基数：第 n 次退避 = BaseBackoff * 2^n。<=0 回落默认 200ms。
 	BaseBackoff time.Duration
 	// MaxBackoff 单次退避封顶，0 = 不封顶。
 	MaxBackoff time.Duration
 	// IsRetryable 判断某个网络错误是否值得重试；nil 时用 errors.IsRetryableNetworkError。
 	IsRetryable func(error) bool
-	// set 标记本策略是否由调用方显式设置（用于区分零值与「显式要求不重试」）。
-	set bool
 }
 
-// NoRetry 返回一条「不重试」策略（显式设置，不会被默认值/env 覆盖）。
-func NoRetry() RetryPolicy {
-	return RetryPolicy{MaxRetries: 0, BaseBackoff: defaultRetryBackoff, set: true}
+// NoRetry 返回一条「不重试」策略，可直接赋给 Options.Retry。
+func NoRetry() *RetryPolicy {
+	return &RetryPolicy{MaxRetries: 0, BaseBackoff: defaultRetryBackoff}
 }
 
-// WithRetry 返回一条显式重试策略。
-func WithRetry(maxRetries int, baseBackoff, maxBackoff time.Duration) RetryPolicy {
-	return RetryPolicy{MaxRetries: maxRetries, BaseBackoff: baseBackoff, MaxBackoff: maxBackoff, set: true}
+// WithRetry 返回一条显式重试策略，可直接赋给 Options.Retry。
+func WithRetry(maxRetries int, baseBackoff, maxBackoff time.Duration) *RetryPolicy {
+	return &RetryPolicy{MaxRetries: maxRetries, BaseBackoff: baseBackoff, MaxBackoff: maxBackoff}
 }
 
-// normalized 补齐缺省字段：调用方显式设置的值优先，未设置的字段读 env，env 缺省用常量。
-func (p RetryPolicy) normalized() RetryPolicy {
-	out := p
-	if !out.set {
-		out.MaxRetries = envx.Int(envMaxRetries, defaultMaxRetries)
-		out.BaseBackoff = time.Duration(envx.Int(envRetryBackoffMS, int(defaultRetryBackoff/time.Millisecond))) * time.Millisecond
-		out.MaxBackoff = time.Duration(envx.Int(envRetryMaxBackoffMS, 0)) * time.Millisecond
+// normalizeRetry 归一化重试策略：p 为 nil 时读 env（缺省用常量），非 nil 时字面采用并补齐非法值。
+func normalizeRetry(p *RetryPolicy) RetryPolicy {
+	var out RetryPolicy
+	if p == nil {
+		out = RetryPolicy{
+			MaxRetries:  envx.Int(envMaxRetries, defaultMaxRetries),
+			BaseBackoff: time.Duration(envx.Int(envRetryBackoffMS, int(defaultRetryBackoff/time.Millisecond))) * time.Millisecond,
+			MaxBackoff:  time.Duration(envx.Int(envRetryMaxBackoffMS, 0)) * time.Millisecond,
+		}
+	} else {
+		out = *p
 	}
 	if out.MaxRetries < 0 {
 		out.MaxRetries = 0
@@ -72,7 +78,6 @@ func (p RetryPolicy) normalized() RetryPolicy {
 	if out.IsRetryable == nil {
 		out.IsRetryable = errors.IsRetryableNetworkError
 	}
-	out.set = true
 	return out
 }
 
@@ -94,8 +99,9 @@ type Options struct {
 	// Interceptors 拦截器链。nil → DefaultChain()。
 	Interceptors Interceptors
 
-	// Retry 重试策略。零值 → 默认策略（可被 env 覆盖）。
-	Retry RetryPolicy
+	// Retry 重试策略。nil → 默认策略（3 次 + 200/400/800ms，可被 env 覆盖）；
+	// 非 nil 则字面生效。用 NoRetry() 关掉重试，WithRetry(...) 自定义。
+	Retry *RetryPolicy
 
 	// LogSummaryOnly 置 true 后 2xx/3xx 的 http_transaction 日志只打 6 个摘要字段
 	// （4xx/5xx 始终全量）。几百 worker 并发时压日志体积用。

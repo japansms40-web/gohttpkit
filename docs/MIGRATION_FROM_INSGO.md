@@ -114,6 +114,9 @@ insgo 只接受 `nil` / `string` / `url.Values` / `map`，其它类型报 `unsup
 insgo 的重试次数与退避只能靠 env 调。本库多了 `Options.Retry`（含自定义 `IsRetryable`），
 显式设置优先于 env；`httpx.NoRetry()` 可关掉重试。
 
+`Options.Retry` 的类型是 `*RetryPolicy`（指针）：nil = 没配、走默认值；非 nil = 每个字段字面生效。
+用指针而不是「值类型 + 零值即未配」，是因为后者分不清「没配」和「明确要求 MaxRetries=0」。
+
 ## 同步共性修复时
 
 两边都改的典型是：`errors` 的可重试关键词表（新的代理/网络栈错误文案）、

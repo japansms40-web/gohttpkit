@@ -96,3 +96,23 @@ func TestEnvConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyEnv_无相关变量时返回false(t *testing.T) {
+	for _, k := range []string{envx.Key(envLogFile), envx.Key(envLogLevel), envx.Key(envLogFormat), envx.Key(envLogOutput)} {
+		t.Setenv(k, "")
+	}
+	if ApplyEnv() {
+		t.Fatal("无任何相关变量时应返回 false，且不覆盖已有配置")
+	}
+}
+
+func TestApplyEnv_换前缀后重新生效(t *testing.T) {
+	old := envx.Prefix()
+	envx.SetPrefix("OTHER_")
+	t.Cleanup(func() { envx.SetPrefix(old) })
+
+	t.Setenv("OTHER_LOG_LEVEL", "warn")
+	if !ApplyEnv() {
+		t.Fatal("换前缀后 ApplyEnv 应读到配置")
+	}
+}

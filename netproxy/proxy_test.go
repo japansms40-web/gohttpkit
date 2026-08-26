@@ -225,3 +225,28 @@ func TestProxyError文案含scheme提示(t *testing.T) {
 		t.Fatalf("err = %v, 应提示支持的 scheme", err)
 	}
 }
+
+func TestParseProxyURL_错误分支(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"非法 URL", "socks5://%zz"},
+		{"缺端口", "socks5://127.0.0.1"},
+		{"缺 host", "socks5://:1080"},
+		{"非 socks5", "https://127.0.0.1:8443"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := netproxy.ParseProxyURL(tc.url); err == nil {
+				t.Fatalf("%q 应报错", tc.url)
+			}
+		})
+	}
+}
+
+func TestApplyProxyToTransport_缺host也报错(t *testing.T) {
+	if err := netproxy.ApplyProxyToTransport(&http.Transport{}, "socks5://:1080"); err == nil {
+		t.Fatal("缺 host 应报错")
+	}
+}

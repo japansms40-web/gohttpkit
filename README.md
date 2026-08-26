@@ -92,7 +92,23 @@ client.Do(ctx, httpx.RequestSpec{Path: "/x",
 白名单里 value 为空串表示「取构建值」，非空表示「用这个固定值覆盖」。
 严格模式下连标准库的默认 `User-Agent` 都会被抑制 ——「我告诉你发哪些头」就该字面成立。
 
-### 3. 会话状态回写挂在 Options 上，不挂在链上
+### 3. 重试策略：nil 是「没配」，不是「不重试」
+
+```go
+httpx.New(httpx.Options{Headers: hp})                          // 默认 3 次 + 200/400/800ms
+httpx.New(httpx.Options{Headers: hp, Retry: httpx.NoRetry()})  // 明确不重试
+httpx.New(httpx.Options{Headers: hp,
+    Retry: httpx.WithRetry(5, 100*time.Millisecond, time.Second)})
+```
+
+`Options.Retry` 是**指针**：nil 走默认值（可被 env 覆盖），非 nil 则每个字段字面生效 ——
+包括 `MaxRetries: 0`（就是不重试）。用值类型加「零值即未配」的话，
+分不清「没配」和「明确要求不重试」，后者会被静默改成重试 3 次。
+
+只有 `*TransportError`（网络发送本身失败）会触发重试；HTTP 状态码不会 ——
+「503 该不该重试」是业务语义，自己写一层拦截器，别让基建替你决定。
+
+### 4. 会话状态回写挂在 Options 上，不挂在链上
 
 ```go
 httpx.New(httpx.Options{
@@ -178,15 +194,35 @@ logger.ApplyEnv()          // 让日志配置按新前缀重新生效
 ## 开发
 
 ```bash
-make check       # build + vet + test + tidy-check
+make check       # build + vet + cover(含 90% 门禁) + tidy-check
 make char        # 行为锁定套件：改拦截器链之前先跑它
+make cover       # 覆盖率报告 + 门禁；make cover-html 看逐行
 make race        # 并发回归（需要 C 编译器）
 make examples    # 三个示例跑一遍
 ```
 
-`httpx/characterization_test.go` 锁定的是**对外行为**而非实现细节：重试几次、退避多久、
-哪些错误不重试、白名单怎么过滤、头的大小写、缓存时机、链的执行顺序。
-链的顺序一旦被改动，破坏的往往不是编译，而是某个只在生产环境偶发的行为 —— 那就是它存在的理由。
+覆盖率门禁在 `make cover` 里，低于 90% 直接失败（`MIN_COVERAGE` 可调高，不要调低）。
+当前 **98.1%**，每个包都在 93% 以上：
+
+| 包 | 覆盖率 | | 包 | 覆盖率 |
+|---|---|---|---|---|
+| `errors` | 100% | | `httpx` | 98.9% |
+| `internal/envx` | 100% | | `geo` | 98.8% |
+| `traffic` | 100% | | `netproxy` | 98.4% |
+| `versionreg` | 100% | | `logger` | 97.3% |
+| `examples/*` | 93~96% | | | |
+
+测试分三层，各管各的：
+
+- `httpx/characterization_test.go` —— **对外行为**锁定：重试几次、退避多久、哪些错误不重试、
+  白名单怎么过滤、头的大小写、缓存时机、链的执行顺序。链的顺序一旦被改动，破坏的往往不是编译，
+  而是某个只在生产环境偶发的行为 —— 那就是它存在的理由。
+- `httpx/units_test.go` —— 每个导出符号自己的契约：编解码矩阵、选项归一化、链编辑工具、
+  各类 nil / 零值 / 错误分支。
+- `httpx/concurrency_test.go` —— 并发回归，配合 `make race` 用。
+
+示例也在测试里跑（`examples/*/main_test.go`）：示例是给人读的，但读者会照抄，
+所以它必须真的能跑，且行为如注释所述。
 
 ## 血缘
 

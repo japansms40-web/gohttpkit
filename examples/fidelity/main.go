@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -167,8 +169,21 @@ var (
 )
 
 func main() {
-	dumpDir := flag.String("dump", "", "把每次请求的完整快照落盘到该目录")
-	flag.Parse()
+	if err := run(os.Stdout, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// run 是 main 的可测试形态：自带 FlagSet（不碰全局 flag.CommandLine，否则跑第二次就 panic），
+// 输出写进 out，失败返回 error 而不是 os.Exit。
+func run(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("fidelity", flag.ContinueOnError)
+	fs.SetOutput(out)
+	dumpDir := fs.String("dump", "", "把每次请求的完整快照落盘到该目录")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	srv := fakeServer()
 	defer srv.Close()
@@ -181,9 +196,9 @@ func main() {
 		// 它被标记为旁路观察层，WithChain 派生子链时会自动跟着走。
 		httpx.NewTransactionInterceptor(func(tx *httpx.Transaction) {
 			n := step.Add(1)
-			printTransaction(n, tx)
+			printTransaction(out, n, tx)
 			if *dumpDir != "" {
-				dump(*dumpDir, n, tx)
+				dump(out, *dumpDir, n, tx)
 			}
 		}),
 	)
@@ -196,25 +211,25 @@ func main() {
 		OnResponseHeaders: func(_ context.Context, h http.Header) { hp.applySetCookie(h) },
 	})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("创建客户端失败: %w", err)
 	}
 	ctx := context.Background()
 
 	// ① 抓主页：拿 csrftoken。注意用【禁重定向】的派生子链 —— 这一步真实抓包里是 302，
 	//    跟随重定向会把 Location 与 302 上的 Set-Cookie 一起吃掉。
-	fmt.Println("═══ step 1: GET / （禁重定向，读 302 与 Set-Cookie）═══")
+	fmt.Fprintln(out, "═══ step 1: GET / （禁重定向，读 302 与 Set-Cookie）═══")
 	noRedirect := client.WithChain(httpx.NoRedirectChain())
 	if _, err := noRedirect.Do(ctx, httpx.RequestSpec{
 		Path:            "/",
 		HeaderWhitelist: endpointFetchPage,
 	}); err != nil {
-		panic(err)
+		return fmt.Errorf("step 1 失败: %w", err)
 	}
-	fmt.Printf("  status=%d location=%q\n\n",
+	fmt.Fprintf(out, "  status=%d location=%q\n\n",
 		noRedirect.SnapshotResponseStatusCode(), noRedirect.SnapshotResponseHeaders().Get("location"))
 
 	// ② 提交表单：body 手工拼，保持抓包里的参数顺序（url.Values 会按字典序重排）。
-	fmt.Println("═══ step 2: POST /api/submit （白名单精确发头 + 手工保序 body）═══")
+	fmt.Fprintln(out, "═══ step 2: POST /api/submit （白名单精确发头 + 手工保序 body）═══")
 	body := "user_id=42&action=confirm&timestamp=1700000000&nonce=abc123"
 	respBody, err := client.Do(ctx, httpx.RequestSpec{
 		Method:          http.MethodPost,
@@ -223,32 +238,35 @@ func main() {
 		HeaderWhitelist: endpointSubmit,
 	})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("step 2 失败: %w", err)
 	}
-	fmt.Printf("  响应: %s\n", strings.TrimSpace(string(respBody)))
+	fmt.Fprintf(out, "  响应: %s\n", strings.TrimSpace(string(respBody)))
+	return nil
 }
 
-func printTransaction(n int32, tx *httpx.Transaction) {
+func printTransaction(out io.Writer, n int32, tx *httpx.Transaction) {
 	keys := make([]string, 0, len(tx.ReqHeaders))
 	for k := range tx.ReqHeaders {
 		keys = append(keys, k)
 	}
-	fmt.Printf("  [snapshot %02d] %s %s → %d\n", n, tx.Method, tx.URL, tx.Status)
-	fmt.Printf("               发出 %d 个请求头: %s\n", len(keys), strings.Join(keys, ", "))
+	sort.Strings(keys) // 排序只为输出稳定；线上头的实际顺序由 Go 的 map 决定，不可控
+	fmt.Fprintf(out, "  [snapshot %02d] %s %s → %d\n", n, tx.Method, tx.URL, tx.Status)
+	fmt.Fprintf(out, "               发出 %d 个请求头: %s\n", len(keys), strings.Join(keys, ", "))
 }
 
-func dump(dir string, n int32, tx *httpx.Transaction) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "落盘失败: %v\n", err)
+// dump 落盘一次快照。失败只提示不中断——调试辅助不该把主流程搞挂。
+func dump(out io.Writer, dir string, n int32, tx *httpx.Transaction) {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		fmt.Fprintf(out, "               落盘失败: %v\n", err)
 		return
 	}
 	data, _ := json.MarshalIndent(tx, "", "  ")
 	path := filepath.Join(dir, fmt.Sprintf("step%03d_transaction.json", n))
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "落盘失败: %v\n", err)
+		fmt.Fprintf(out, "               落盘失败: %v\n", err)
 		return
 	}
-	fmt.Printf("               已落盘 %s\n", path)
+	fmt.Fprintf(out, "               已落盘 %s\n", path)
 }
 
 func fakeServer() *httptest.Server {

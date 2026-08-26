@@ -495,7 +495,7 @@ func TestRetry_不可重试错误立即返回(t *testing.T) {
 	var hits atomic.Int32
 	c, err := httpx.New(httpx.Options{
 		Headers: httpx.StaticHeaders{Base: "https://example.invalid"},
-		Retry: httpx.RetryPolicy{
+		Retry: &httpx.RetryPolicy{
 			MaxRetries:  3,
 			BaseBackoff: time.Millisecond,
 			IsRetryable: func(error) bool { return false }, // 一律不可重试

@@ -2,7 +2,11 @@
 
 BASE_REV ?= HEAD~1
 
-.PHONY: build vet test char race lint lint-new tidy-check examples check
+.PHONY: build vet test char race cover cover-html lint lint-new tidy-check examples check
+
+# 覆盖率门禁：低于 MIN_COVERAGE 直接失败。数字只能往上调，不许往下调——
+# 往下调的那一刻，这道门禁就从"防线"变成了"摆设"。
+MIN_COVERAGE ?= 90
 
 build:
 	go build ./...
@@ -23,6 +27,19 @@ char:
 race:
 	CGO_ENABLED=1 HTTPKIT_LOG_LEVEL=error go test -race -count=1 ./...
 
+# 覆盖率报告 + 门禁
+cover:
+	@HTTPKIT_LOG_LEVEL=error go test -count=1 -coverprofile=coverage.out ./... > /dev/null
+	@go tool cover -func=coverage.out | tail -1
+	@total=$$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+'); \
+	 pass=$$(awk -v t="$$total" -v m="$(MIN_COVERAGE)" 'BEGIN{print (t+0 >= m+0) ? "1" : "0"}'); \
+	 if [ "$$pass" != "1" ]; then echo "覆盖率 $$total% 低于门禁 $(MIN_COVERAGE)%"; exit 1; fi; \
+	 echo "覆盖率 $$total% ≥ 门禁 $(MIN_COVERAGE)% ✓"
+
+# 在浏览器里看逐行覆盖情况（排查"这行到底有没有被跑到"）
+cover-html: cover
+	go tool cover -html=coverage.out
+
 lint:
 	golangci-lint run --timeout 5m
 
@@ -38,4 +55,4 @@ examples:
 	HTTPKIT_LOG_LEVEL=error go run ./examples/customchain
 	HTTPKIT_LOG_LEVEL=error go run ./examples/fidelity
 
-check: build vet test tidy-check
+check: build vet cover tidy-check

@@ -78,3 +78,19 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+func TestIsRetryableNetworkError_netOpError文案分支(t *testing.T) {
+	// 有些包装层会把 net.OpError 的类型名直接写进文案，这条兜底规则专门接它。
+	if !kiterrors.IsRetryableNetworkError(stderrors.New("dial failed: net.OpError while connecting")) {
+		t.Fatal("含 net.OpError 的文案应判为可重试")
+	}
+}
+
+func TestRegisterRetryableKeywords_空输入与空白条目被忽略(t *testing.T) {
+	before := len(kiterrors.RetryableKeywords())
+	kiterrors.RegisterRetryableKeywords()          // 空调用
+	kiterrors.RegisterRetryableKeywords("", "   ") // 全是空白
+	if after := len(kiterrors.RetryableKeywords()); after != before {
+		t.Fatalf("关键词数 %d → %d，空条目不该入表", before, after)
+	}
+}

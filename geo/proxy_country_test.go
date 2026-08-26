@@ -41,3 +41,22 @@ func TestParseCountryFromProxyURL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCountryFromProxyURL_空与不匹配(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"空串", ""},
+		{"无 country 标记", "socks5://user:pass@1.2.3.4:1080"},
+		{"无凭据", "socks5://1.2.3.4:1080"},
+		{"非法 URL", "socks5://%zz"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseCountryFromProxyURL(tc.url); got != "" {
+				t.Fatalf("got %q, want 空串(拿不到国家就该显式为空，不能瞎猜)", got)
+			}
+		})
+	}
+}

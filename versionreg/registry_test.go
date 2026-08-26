@@ -90,3 +90,122 @@ func TestHeaderWhitelists_nil安全(t *testing.T) {
 		t.Fatal("nil 白名单集合应安全返回零值")
 	}
 }
+
+// ─────────────────────────── 访问器与边界补全 ───────────────────────────
+
+func TestID与Endpoint_String(t *testing.T) {
+	if versionreg.ID("v1").String() != "v1" {
+		t.Fatal("ID.String 应返回原串")
+	}
+	if versionreg.Endpoint("user.profile").String() != "user.profile" {
+		t.Fatal("Endpoint.String 应返回原串")
+	}
+}
+
+func TestRegistry_HasLenMustGet(t *testing.T) {
+	r := newReg(t)
+	if r.Len() != 0 {
+		t.Fatalf("空注册表 Len = %d", r.Len())
+	}
+	r.MustRegister(versionreg.NewConfig("v1", "https://a.example"))
+
+	if !r.Has("v1") {
+		t.Fatal("Has 应命中已注册版本")
+	}
+	if r.Has("v9") {
+		t.Fatal("Has 不该命中未注册版本")
+	}
+	if r.Len() != 1 {
+		t.Fatalf("Len = %d, want 1", r.Len())
+	}
+	if got := r.MustGet("v1"); got.BaseURL != "https://a.example" {
+		t.Fatalf("MustGet = %+v", got)
+	}
+}
+
+func TestRegistry_MustGet未注册时panic(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("want panic")
+		}
+	}()
+	newReg(t).MustGet("nope")
+}
+
+func TestRegistry_空版本标识panic(t *testing.T) {
+	// Validate 过得去、但 VersionID 为空的配置也必须被挡住，
+	// 否则注册表里会出现一个永远取不出来的幽灵条目。
+	defer func() {
+		if recover() == nil {
+			t.Fatal("want panic")
+		}
+	}()
+	r := versionreg.New[emptyIDConfig]("test")
+	r.MustRegister(emptyIDConfig{})
+}
+
+// emptyIDConfig 是 Validate 通过但 VersionID 为空的病态配置。
+type emptyIDConfig struct{}
+
+func (emptyIDConfig) VersionID() versionreg.ID { return "" }
+func (emptyIDConfig) Validate() error          { return nil }
+
+func TestConfig_未配置项返回零值(t *testing.T) {
+	cfg := versionreg.NewConfig("v1", "https://a.example")
+	if cfg.DocID("nope") != "" {
+		t.Fatal("未配置 docIDs 时应返回空串")
+	}
+	if cfg.Param("nope") != "" {
+		t.Fatal("未配置 Params 时应返回空串")
+	}
+	if cfg.HeaderWhitelist("nope") != nil {
+		t.Fatal("未配置白名单时应返回 nil(= 发全量头)")
+	}
+}
+
+func TestConfig_Validate缺ID(t *testing.T) {
+	cfg := versionreg.NewConfig("", "https://a.example")
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("缺 ID 应报错")
+	}
+}
+
+func TestConfig_Option可叠加(t *testing.T) {
+	cfg := versionreg.NewConfig("v1", "https://a.example",
+		versionreg.WithParams(map[string]string{"a": "1"}),
+		versionreg.WithParams(map[string]string{"b": "2"}), // 第二次应合并而非覆盖
+		versionreg.WithDocIDs(map[versionreg.Endpoint]string{"e1": "d1"}),
+		versionreg.WithDocIDs(map[versionreg.Endpoint]string{"e2": "d2"}),
+	)
+	if cfg.Param("a") != "1" || cfg.Param("b") != "2" {
+		t.Fatalf("WithParams 应合并, got %v", cfg.Params)
+	}
+	if cfg.DocID("e1") != "d1" || cfg.DocID("e2") != "d2" {
+		t.Fatal("WithDocIDs 应合并")
+	}
+}
+
+func TestHeaderWhitelists_HasEndpoints与深拷贝(t *testing.T) {
+	src := map[versionreg.Endpoint]map[string]string{
+		"b.ep": {"accept": ""},
+		"a.ep": {"accept": "", "x-k": "v"},
+	}
+	w := versionreg.NewHeaderWhitelists(src)
+
+	if !w.Has("a.ep") || w.Has("zzz") {
+		t.Fatal("Has 判定不对")
+	}
+	eps := w.Endpoints()
+	if len(eps) != 2 || eps[0] != "a.ep" || eps[1] != "b.ep" {
+		t.Fatalf("Endpoints = %v, want 字典序", eps)
+	}
+	if w.For("zzz") != nil {
+		t.Fatal("未配置的 endpoint 应返回 nil")
+	}
+
+	// 构造时深拷贝：改入参不该影响已构造的集合
+	src["a.ep"]["injected"] = "boom"
+	if _, leaked := w.For("a.ep")["injected"]; leaked {
+		t.Fatal("NewHeaderWhitelists 未做深拷贝")
+	}
+}

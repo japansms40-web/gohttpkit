@@ -20,8 +20,8 @@ jobs:
         run: go vet ./...
       - name: go mod tidy 无 diff
         run: go mod tidy -diff
-      - name: test（含行为锁定套件）
-        run: HTTPKIT_LOG_LEVEL=error go test -count=1 ./...
+      - name: test + 覆盖率门禁（≥90%）
+        run: make cover
       - name: race（并发回归）
         run: HTTPKIT_LOG_LEVEL=error go test -race -count=1 ./...
       - name: examples 可运行
