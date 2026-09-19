@@ -4,6 +4,9 @@
 // 设计取舍：判定用「错误文案关键词表」而非 net.Error.Temporary()——经过 SOCKS5 代理、
 // TLS、HTTP/2 多层包装后，底层错误类型早已丢失，只有文案还留着线索。关键词表可经
 // RegisterRetryableKeywords 扩展，也可经 httpx.RetryPolicy.IsRetryable 整体替换。
+//
+// 本包单文件即可：可重试错误与 HTTP 状态码错误体量都小，再拆只增加跳转。
+// 测试专用快照见 export_test.go（仅 go test 编译，不进生产 API）。
 package errors
 
 import (
@@ -13,13 +16,19 @@ import (
 	"sync"
 )
 
-// RetryableError 可重试的网络错误
+// RetryableError 可重试的网络错误。httpx 重试耗尽、或接入方按「稍后换出口再试」
+// 处理瞬时失败时返回它；判定请用 errors.As，不要扫 Error() 文案。
 type RetryableError struct {
-	Err       error // 原始错误
-	Attempts  int   // 已经尝试的次数
-	LastError error // 最后一次尝试的错误
+	// Err 触发重试判定的那次底层错误（通常是网络发送失败）。
+	Err error
+	// Attempts 已经尝试的次数（含第一次；耗尽时 = MaxRetries+1）。
+	Attempts int
+	// LastError 最后一次尝试的错误，便于日志区分「最初原因」和「最后一次现象」。
+	LastError error
 }
 
+// Error 用英文短句，便于跨语言接入方 grep 与 errors.Is 对照；次数与两次错误都保留，
+// 因为「重试了几次、最后一次是什么」比「最初为什么失败」更常用来排障。
 func (e *RetryableError) Error() string {
 	return fmt.Sprintf("network error after %d attempts: %v (last error: %v)",
 		e.Attempts, e.Err, e.LastError)
@@ -43,23 +52,20 @@ func IsRetryableNetworkError(err error) bool {
 		return true
 	}
 
-	errStr := strings.ToLower(err.Error())
+	return matchRetryableKeyword(err.Error())
+}
 
+// matchRetryableKeyword 在读锁内扫关键词表。单独成函数是为了能用 defer 解锁，
+// 命中或未命中都能解开，不必写两处 RUnlock。
+func matchRetryableKeyword(msg string) bool {
+	errStr := strings.ToLower(msg)
 	keywordsMu.RLock()
+	defer keywordsMu.RUnlock()
 	for _, keyword := range retryableKeywords {
 		if strings.Contains(errStr, keyword) {
-			keywordsMu.RUnlock()
 			return true
 		}
 	}
-	keywordsMu.RUnlock()
-
-	// 检查是否为临时网络错误（net.Error 接口）
-	if strings.Contains(err.Error(), "net.OpError") {
-		// 如果是网络操作错误，可能是临时错误，基于错误信息判断
-		return true
-	}
-
 	return false
 }
 
@@ -92,6 +98,7 @@ var retryableKeywords = []string{
 	"unknown error",                   // 未知的网络错误
 	"socks connect",                   // SOCKS 代理连接错误
 	"with body length 0",              // ContentLength 与 Body 长度不匹配的错误
+	"net.operror",                     // 包装层把 *net.OpError 类型名写进文案；小写匹配 "net.OpError"
 }
 
 // RegisterRetryableKeywords 追加可重试错误关键词（小写）。用于接入方遇到本表未覆盖的
@@ -107,12 +114,13 @@ func RegisterRetryableKeywords(keywords ...string) {
 		}
 	}
 	keywordsMu.Lock()
+	defer keywordsMu.Unlock()
 	retryableKeywords = append(retryableKeywords, lowered...)
-	keywordsMu.Unlock()
 }
 
-// RetryableKeywords 返回当前关键词表的快照（只读，供诊断/测试）。
-func RetryableKeywords() []string {
+// retryableKeywordsSnapshot 返回当前关键词表的副本。生产代码不导出；
+// 测试经 export_test.go 的 RetryableKeywords 调用。
+func retryableKeywordsSnapshot() []string {
 	keywordsMu.RLock()
 	defer keywordsMu.RUnlock()
 	return append([]string(nil), retryableKeywords...)
@@ -124,12 +132,26 @@ func RetryableKeywords() []string {
 // 注意：默认链【不含】statusSemantics——本库默认把非 2xx 原样交给调用方（body, nil），
 // 与状态码一起经 Client.SnapshotResponseStatusCode() 读取。
 type HTTPStatusError struct {
+	// StatusCode HTTP 状态码（调用方应用它做分支，而不是解析 Error() 里的数字）。
 	StatusCode int
-	Body       []byte
+	// Body 响应体快照。空体是 statusSemantics 默认规则的触发条件；HTML 错误页路径
+	// 可能只放命中的 marker，便于日志短、errors.As 后仍能读到状态码。
+	Body []byte
 }
 
+// FormatHTTPStatus 把状态码与响正文案收成库内统一格式。
+// httpx 的 RetryableTextRule / HTML 错误页与本类型的 Error() 必须走这里，
+// 否则接入方一半 errors.As、一半扫字符串，两种判定会漂。
+func FormatHTTPStatus(status int, body []byte) string {
+	return fmt.Sprintf("http error: %d, body: %s", status, body)
+}
+
+// Error 实现 error；格式由 FormatHTTPStatus 单一出处保证。
 func (e *HTTPStatusError) Error() string {
-	return fmt.Sprintf("http error: %d, body: %s", e.StatusCode, string(e.Body))
+	if e == nil {
+		return "http error: <nil>"
+	}
+	return FormatHTTPStatus(e.StatusCode, e.Body)
 }
 
 // IsHTTPStatus 判断 err 链上是否存在指定状态码的 HTTPStatusError。

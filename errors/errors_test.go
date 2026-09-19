@@ -34,6 +34,7 @@ func TestIsRetryableNetworkError(t *testing.T) {
 		{"DNS", stderrors.New("lookup x.example: no such host"), true},
 		{"TLS 串包", stderrors.New("local error: tls: bad record MAC"), true},
 		{"SOCKS", stderrors.New("socks connect tcp: unknown error"), true},
+		{"net.OpError 文案", stderrors.New("dial failed: net.OpError while connecting"), true},
 		{"业务错误不重试", stderrors.New("invalid parameter"), false},
 		{"包装过的 RetryableError", fmt.Errorf("wrap: %w", &kiterrors.RetryableError{Err: stderrors.New("x"), Attempts: 1}), true},
 	}
@@ -67,6 +68,19 @@ func TestHTTPStatusError(t *testing.T) {
 	}
 	if kiterrors.IsHTTPStatus(err, 500) {
 		t.Fatal("状态码不同不该命中")
+	}
+	if got, want := err.Error(), kiterrors.FormatHTTPStatus(503, []byte("down")); got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatHTTPStatus_与Error一致(t *testing.T) {
+	if got := kiterrors.FormatHTTPStatus(404, []byte("nope")); got != "http error: 404, body: nope" {
+		t.Fatalf("got %q", got)
+	}
+	var nilErr *kiterrors.HTTPStatusError
+	if got := nilErr.Error(); !contains(got, "<nil>") {
+		t.Fatalf("nil receiver Error() = %q", got)
 	}
 }
 
