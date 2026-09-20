@@ -1,4 +1,4 @@
-// Package geo 提供「地理派生」基建：国家代码 → locale / 时区偏移、代理 URL → 出口国家、
+// Package geo 提供「地理派生」基建：国家代码 → locale / 时区偏移，
 // 以及按 Chromium 规则拼 Web Accept-Language（不含具体 App 的业务 header 名）。
 //
 // 典型用途：走住宅代理出网时，请求头里的 Accept-Language、时区、locale 必须与代理出口
@@ -14,7 +14,7 @@
 //     Accept-Language 由 BuildChromeAcceptLanguage / BuildChromeAcceptLanguageForCountry
 //     按 Chromium 前瞻展开和 q 值规则构建。调用方传入的 *rand.Rand 不能被多个
 //     goroutine 共享，若共享须自行加锁；rng == nil 时用 math/rand/v2 顶层源，可并发。
-//   - 查表公用函数在 lookup.go。显式 locale / country / proxy 的优先级由调用方组合。
+//   - 查表公用函数在 lookup.go。显式 locale / country 的优先级由调用方组合。
 //   - 查表未命中是 *UnknownCountryError；extra 负数是 *InvalidExtraLanguageCountError；
 //     extra 超出候选是 *ExtraLanguageCountExceedsPoolError。上层一律 errors.As，不要扫文案。
 //   - 纯函数 + 表驱动，不引入「为模式而模式」的接口/抽象。
