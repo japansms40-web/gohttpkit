@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// proxy_country.go —— 从代理 URL 的 userinfo 解析出口国家。
+// 独立成文件：解析规则跟 locale/时区大表无关，混在一起会让「改正则」和「改国家表」搅在同一 diff。
+
 // rolaCountryRegex 匹配 rola.vip 风格代理用户名里的 country-xx 段。
 //
 // 真实样本：socks5://new001kOtD8x_559143-sesstime-20-country-us:pwd@gate5.rola.vip:2031
@@ -14,15 +17,12 @@ import (
 // 后界 [-_]|$ 防止 country-united-states 这种长串误命中前两位 "un"。
 var rolaCountryRegex = regexp.MustCompile(`country-([a-zA-Z]{2})(?:[-_]|$)`)
 
-// ParseCountryFromProxyURL 从 SOCKS5/HTTP proxy URL 的 userinfo 里解析 country-xx
-// 标签——用户名段优先，密码段兜底（不同代理商编码位置不同，见下方实现注释）。
-// 命中返回大写 ISO 3166-1 alpha-2（"US"/"KR"/"PR" 等），未命中或畸形 URL 返回 ""。
-//
-// 用途：当 Config.CountryCode 为空时，SDK 派生层用本函数从 proxy URL 提取出口国家
-// 作为 fallback，避免出现"代理 country-us 但 header 全是 zh_CN"的矛盾信号面。
-// 调用方（resolveAndroidLocale / resolveAndroidTimezoneOffset / resolveWebAcceptLanguage）
-// 把本函数结果再喂给 MobileLocaleForCountry / TimezoneOffsetForCountry / WebAcceptLanguageForCountry
-// 二次校验——本函数不保证返回的两位字母是合法 ISO 国家。
+// ParseCountryFromProxyURL 从代理 URL 的 userinfo 解析 country-xx。
+// 输入 rawURL：SOCKS5/HTTP 代理 URL 原文。
+// 返回：命中是大写两位（"US"）；空串、畸形 URL、无 userinfo、无 country-xx 都返回 ""。
+// 例：`socks5://acc-country-us:pwd@h:1` → "US"；`http://h:1` → ""。
+// 给 CountryCode 为空时做出口国 fallback。用户名优先、密码兜底。
+// 不保证两位字母是合法 ISO 国家，调用方再喂给查表函数校验。
 func ParseCountryFromProxyURL(rawURL string) string {
 	if rawURL == "" {
 		return ""
@@ -44,7 +44,9 @@ func ParseCountryFromProxyURL(rawURL string) string {
 	return matchCountryTag(password)
 }
 
-// matchCountryTag 从一段凭据文本里抓 country-xx，命中返回大写两位，否则空串。
+// matchCountryTag 从一段凭据文本里抓 country-xx。
+// 输入 s：用户名或密码原文。
+// 返回：命中是大写两位；空串或不匹配返回 ""。
 func matchCountryTag(s string) string {
 	if s == "" {
 		return ""

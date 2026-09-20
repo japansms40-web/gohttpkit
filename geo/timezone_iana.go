@@ -1,5 +1,9 @@
 package geo
 
+// timezone_iana.go —— 国家码 → IANA 时区名称（子集表）。
+// 独立成文件：它不要求覆盖全部国家，和偏移秒数全量表分开，避免「补一个 CDP 时区」
+// 被误当成必须同步加进 offset 表之外的义务（反过来：本表 key 必须已在 offset 表里）。
+
 // countryToIANATimezone 按 ISO 3166-1 alpha-2 国家代码给出 IANA 时区【名称】。
 //
 // 与同目录 countryToTimezoneOffset 的分工：那张表给偏移秒数，供协议层填
@@ -77,6 +81,7 @@ var countryToIANATimezone = map[string]string{
 	"VN": "Asia/Ho_Chi_Minh",
 	"PH": "Asia/Manila",
 	"KH": "Asia/Phnom_Penh",
+	"LA": "Asia/Vientiane",
 	"MM": "Asia/Yangon",
 	"JP": "Asia/Tokyo",
 	"KR": "Asia/Seoul",
@@ -113,9 +118,11 @@ var countryToIANATimezone = map[string]string{
 	"NZ": "Pacific/Auckland",
 }
 
-// IANATimezoneForCountry 按国家代码返回 IANA 时区名。
-// 第二个返回值为 false 表示本表未收录——调用方应当放弃时区覆盖并告警，
-// 而不是自己编一个（编错了比不设更容易暴露）。
+// IANATimezoneForCountry 按国家代码查 IANA 时区名（子集表，不覆盖全部国家）。
+// 输入 country：ISO 3166-1 alpha-2；空串直接未命中。内部会归一化。
+// 返回：命中是 (IANA 名, true)；未收录或空输入是 ("", false)。本函数不返回 error。
+// 例："us" → ("America/New_York", true)；"xx" / "" → ("", false)。
+// false 时调用方应放弃覆盖并告警，不要自己编 Etc/GMT±N（编错了比不设更容易暴露）。
 func IANATimezoneForCountry(country string) (string, bool) {
 	if country == "" {
 		return "", false

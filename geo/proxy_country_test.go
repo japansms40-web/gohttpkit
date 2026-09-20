@@ -31,10 +31,12 @@ func TestParseCountryFromProxyURL(t *testing.T) {
 		{"用户名优先于密码段", "socks5://u-country-kr:pw_country-jp@h:1", "KR"},
 		{"两段都没有 country 返回空", "socks5://user:plainpassword@h:1", ""},
 		{"密码段 country-united 这种长串不误命中", "socks5://user:pw_country-united-states@h:1", ""},
+		{"空用户名扫密码段", "socks5://:pw_country-jp@h:1", "JP"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := ParseCountryFromProxyURL(c.raw)
+			t.Logf("url=%q → country=%q", c.raw, got)
 			if got != c.want {
 				t.Errorf("ParseCountryFromProxyURL(%q) = %q, want %q", c.raw, got, c.want)
 			}
@@ -42,20 +44,38 @@ func TestParseCountryFromProxyURL(t *testing.T) {
 	}
 }
 
-func TestParseCountryFromProxyURL_空与不匹配(t *testing.T) {
+func TestParseCountryFromProxyURL_空密码仍读用户名(t *testing.T) {
+	got := ParseCountryFromProxyURL("socks5://u-country-us:@h:1")
+	t.Logf("empty password → %q", got)
+	if got != "US" {
+		t.Errorf("got %q, want US", got)
+	}
+}
+
+func TestMatchCountryTag(t *testing.T) {
 	cases := []struct {
 		name string
-		url  string
+		in   string
+		want string
 	}{
-		{"空串", ""},
-		{"无 country 标记", "socks5://user:pass@1.2.3.4:1080"},
-		{"无凭据", "socks5://1.2.3.4:1080"},
-		{"非法 URL", "socks5://%zz"},
+		{"空串", "", ""},
+		{"标准小写", "acc-country-us", "US"},
+		{"地区码大写", "acc-country-US", "US"},
+		{"后界连字符", "acc-country-uy-extra", "UY"},
+		{"后界下划线", "pw_country-jp_session", "JP"},
+		{"末尾", "pw_country-jp", "JP"},
+		{"长串不误切 united", "country-united-states", ""},
+		{"三位 usa 后界是字母", "country-usa", ""},
+		{"一位不够", "country-u", ""},
+		{"COUNTRY 大写关键字不匹配", "COUNTRY-us", ""},
+		{"无标签", "plainpassword", ""},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ParseCountryFromProxyURL(tc.url); got != "" {
-				t.Fatalf("got %q, want 空串(拿不到国家就该显式为空，不能瞎猜)", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := matchCountryTag(c.in)
+			t.Logf("%q → %q", c.in, got)
+			if got != c.want {
+				t.Errorf("matchCountryTag(%q) = %q, want %q", c.in, got, c.want)
 			}
 		})
 	}

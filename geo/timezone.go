@@ -1,5 +1,8 @@
 package geo
 
+// timezone.go —— 国家码 → 冬令时偏移秒数大表。
+// 独立成文件：与 locale 表分开维护，keyset 由测试对齐，避免「加了语言忘了时区」。
+
 // countryToTimezoneOffset 按 ISO 3166-1 alpha-2 国家代码派生 IANA 主时区的"冬令时（标准时间）"
 // 偏移秒数。东半球正、西半球负。**不处理 DST**：欧洲国家夏令时偏移 +1h 不在此表表达，
 // 如需精准 DST 行为请通过 Config.TimezoneOffset 显式覆盖。
@@ -51,16 +54,19 @@ var countryToTimezoneOffset = map[string]int{
 	"XK": 3600, "YE": 10800, "YT": 10800, "ZA": 7200, "ZM": 7200, "ZW": 7200,
 }
 
-// TimezoneOffsetForCountry 按 country code 查找时区偏移（秒）。
-// 返回 (offset, true) 命中；(0, false) 未命中——注意 0 是合法 offset
-// （GB/IS/PT/SN/CI/GH/FO/IE/BF/GN/ML/SL/ST/GM/LR/TG/GG/IM/JE 等 GMT+0 国家），
-// 调用方必须用 ok 区分而非 offset==0。
-// country 大小写不敏感，自动 trim。
-func TimezoneOffsetForCountry(country string) (int, bool) {
+// TimezoneOffsetForCountry 按国家代码查冬令时偏移秒数。
+// 输入 country：ISO 3166-1 alpha-2，大小写不敏感，自动 trim。
+// 返回：命中是 (offset, nil)；空输入或未命中是 (0, *UnknownCountryError)。
+// 例："jp" → (32400, nil)；"gb" → (0, nil)；"" → (0, *UnknownCountryError{Country:""})。
+// 0 是合法 offset（GB 等 GMT+0），必须用 error 区分，不要用 offset==0 当失败。
+func TimezoneOffsetForCountry(country string) (int, error) {
 	key := normalizeCountryKey(country)
 	if key == "" {
-		return 0, false
+		return 0, &UnknownCountryError{Country: ""}
 	}
 	off, ok := countryToTimezoneOffset[key]
-	return off, ok
+	if !ok {
+		return 0, &UnknownCountryError{Country: key}
+	}
+	return off, nil
 }
