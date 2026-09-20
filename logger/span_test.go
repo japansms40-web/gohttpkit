@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
-// allLines 解析 buf 全部 JSON 日志行
 func allLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	t.Helper()
 	var out []map[string]any
@@ -26,22 +27,24 @@ func allLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	return out
 }
 
-// TestStartSpanEmitsStartAndEnd StartSpan 产出 span.start/span.end,且带 span_name、span_id、duration_ms
-// 角度: #6 契约不变式 —— span 边界事件必须成对且自带耗时
-func TestStartSpanEmitsStartAndEnd(t *testing.T) {
+func TestStartSpan_成对事件并带耗时(t *testing.T) {
 	buf := captureJSON(t, nil)
 
 	ctx, end := StartSpan(context.Background(), "demo.op")
 	end(slog.String("result", "ok"))
 
 	lines := allLines(t, buf)
+	t.Logf("lines=%d start=%v end=%v", len(lines), lines[0], lines[1])
 	if len(lines) != 2 {
 		t.Fatalf("应产出 span.start + span.end 两条,实际 %d 条: %s", len(lines), buf.String())
 	}
 	start, fin := lines[0], lines[1]
 
-	if start["msg"] != "span.start" || fin["msg"] != "span.end" {
+	if start["msg"] != EventSpanStart || fin["msg"] != EventSpanEnd {
 		t.Fatalf("消息名错误: start=%v end=%v", start["msg"], fin["msg"])
+	}
+	if start["event"] != EventSpanStart || fin["event"] != EventSpanEnd {
+		t.Fatalf("event 字段错误: start=%v end=%v", start["event"], fin["event"])
 	}
 	if start["span_name"] != "demo.op" || fin["span_name"] != "demo.op" {
 		t.Errorf("span_name 缺失或不一致: %v / %v", start["span_name"], fin["span_name"])
@@ -58,16 +61,30 @@ func TestStartSpanEmitsStartAndEnd(t *testing.T) {
 	if fin["result"] != "ok" {
 		t.Errorf("end() 追加的结果字段丢失: %v", fin)
 	}
-	// 上下文未带 trace_id 时,StartSpan 应兜底生成
 	if start["trace_id"] == nil || start["trace_id"] == "" {
 		t.Errorf("StartSpan 应确保 trace_id: %v", start)
 	}
 	_ = ctx
 }
 
-// TestSpanNesting 子 span 的 parent_span_id 等于父 span 的 span_id;trace_id 全链一致
-// 角度: #6 契约不变式 —— 嵌套关系可还原调用树
-func TestSpanNesting(t *testing.T) {
+func TestStartSpan_nilContext与空名(t *testing.T) {
+	buf := captureJSON(t, nil)
+	ctx, end := StartSpan(nil, "")
+	end()
+	lines := allLines(t, buf)
+	t.Logf("nil/empty → start=%v", lines[0])
+	if len(lines) != 2 {
+		t.Fatalf("应仍产出两条,实际 %d", len(lines))
+	}
+	if lines[0]["span_name"] != "" {
+		t.Errorf("空 name 应写出空串 span_name, got %v", lines[0]["span_name"])
+	}
+	if TraceIDFromContext(ctx) == "" || SpanIDFromContext(ctx) == "" {
+		t.Fatal("nil ctx 也应带上 trace_id 与 span_id")
+	}
+}
+
+func TestSpanNesting_parent与trace一致(t *testing.T) {
 	buf := captureJSON(t, nil)
 
 	parentCtx, endParent := StartSpan(WithTraceID(context.Background(), "tid-1"), "parent")
@@ -77,9 +94,9 @@ func TestSpanNesting(t *testing.T) {
 	_ = childCtx
 
 	lines := allLines(t, buf)
-	// 顺序: parent.start, child.start, child.end, parent.end
 	parentStart := lines[0]
 	childStart := lines[1]
+	t.Logf("parent=%v child=%v", parentStart["span_id"], childStart["span_id"])
 
 	if parentStart["parent_span_id"] != nil {
 		t.Errorf("根 span 不应有 parent_span_id: %v", parentStart["parent_span_id"])
@@ -98,9 +115,7 @@ func TestSpanNesting(t *testing.T) {
 	}
 }
 
-// TestSpanCtxAutoCarriesSpanID span 内的普通 logger.Info 自动带当前 span_id
-// 角度: #5 副作用 —— ctx 自动注入对普通日志同样生效
-func TestSpanCtxAutoCarriesSpanID(t *testing.T) {
+func TestSpanCtx_普通Info自动带span_id(t *testing.T) {
 	buf := captureJSON(t, nil)
 
 	ctx, end := StartSpan(context.Background(), "op")
@@ -109,7 +124,8 @@ func TestSpanCtxAutoCarriesSpanID(t *testing.T) {
 
 	lines := allLines(t, buf)
 	spanID := lines[0]["span_id"]
-	mid := lines[1] // "inside span work"
+	mid := lines[1]
+	t.Logf("span_id=%v mid=%v", spanID, mid)
 	if mid["msg"] != "inside span work" {
 		t.Fatalf("中间日志顺序错误: %v", mid)
 	}
@@ -118,14 +134,111 @@ func TestSpanCtxAutoCarriesSpanID(t *testing.T) {
 	}
 }
 
-// TestDurationMs DurationMs 统一字段名 duration_ms,单位毫秒
-// 角度: #6 契约不变式 —— 全项目耗时字段同名同单位
-func TestDurationMs(t *testing.T) {
-	a := DurationMs(1500 * 1e6) // 1500ms = 1.5s
-	if a.Key != "duration_ms" {
-		t.Errorf("字段名应为 duration_ms,实际 %s", a.Key)
+func TestSpanIDFromContext_空与nil(t *testing.T) {
+	if got := SpanIDFromContext(nil); got != "" {
+		t.Fatalf("nil → %q", got)
 	}
-	if got := a.Value.Int64(); got != 1500 {
-		t.Errorf("1.5s 应为 1500ms,实际 %d", got)
+	if got := SpanIDFromContext(context.Background()); got != "" {
+		t.Fatalf("Background → %q", got)
+	}
+	t.Logf("无 span 时为空串")
+}
+
+func TestNewSpanID_格式为8位hex(t *testing.T) {
+	re := regexp.MustCompile(`^[0-9a-f]{8}$`)
+	id := NewSpanID()
+	t.Logf("NewSpanID = %q", id)
+	if !re.MatchString(id) {
+		t.Fatalf("不是 8 位 hex: %q", id)
+	}
+}
+
+func TestStartSpan_end可多次调用(t *testing.T) {
+	buf := captureJSON(t, nil)
+	_, end := StartSpan(context.Background(), "multi.end")
+	end()
+	end(slog.String("again", "yes"))
+	lines := allLines(t, buf)
+	t.Logf("lines=%d", len(lines))
+	if len(lines) != 3 {
+		t.Fatalf("start + 两次 end 应 3 条,实际 %d: %s", len(lines), buf.String())
+	}
+	if lines[1]["event"] != EventSpanEnd || lines[2]["event"] != EventSpanEnd {
+		t.Fatalf("后两条都应是 span.end: %v %v", lines[1]["event"], lines[2]["event"])
+	}
+	if lines[2]["again"] != "yes" {
+		t.Fatalf("第二次 end 的字段丢失: %v", lines[2])
+	}
+	if lines[1]["span_id"] != lines[2]["span_id"] || lines[1]["span_id"] != lines[0]["span_id"] {
+		t.Fatalf("多次 end 应属同一 span: %v", lines)
+	}
+}
+
+func TestStartSpan_start带调用方attrs(t *testing.T) {
+	buf := captureJSON(t, nil)
+	_, end := StartSpan(context.Background(), "with.attr", slog.String("method", "GET"))
+	end()
+	start := allLines(t, buf)[0]
+	t.Logf("start=%v", start)
+	if start["method"] != "GET" {
+		t.Fatalf("start attrs 丢失 method: %v", start)
+	}
+	if start["event"] != EventSpanStart {
+		t.Fatalf("event=%v", start["event"])
+	}
+}
+
+func TestStartSpan_不改入参ctx(t *testing.T) {
+	_ = captureJSON(t, nil)
+	parent := context.Background()
+	ctx, end := StartSpan(parent, "immutable")
+	end()
+	t.Logf("parent span=%q child span=%q", SpanIDFromContext(parent), SpanIDFromContext(ctx))
+	if SpanIDFromContext(parent) != "" {
+		t.Fatal("StartSpan 不应改写入参 ctx")
+	}
+	if SpanIDFromContext(ctx) == "" {
+		t.Fatal("返回 ctx 应带 span_id")
+	}
+}
+
+func TestNewSpanID_不重复(t *testing.T) {
+	seen := make(map[string]struct{})
+	re := regexp.MustCompile(`^[0-9a-f]{8}$`)
+	for i := 0; i < 200; i++ {
+		id := NewSpanID()
+		if !re.MatchString(id) {
+			t.Fatalf("NewSpanID = %q 不是 8 位 hex", id)
+		}
+		if _, dup := seen[id]; dup {
+			t.Fatalf("NewSpanID 重复: %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	t.Logf("200 个 NewSpanID 无重复")
+}
+
+func TestDurationMs_字段名与毫秒(t *testing.T) {
+	cases := []struct {
+		name string
+		in   time.Duration
+		want int64
+	}{
+		{"1.5秒", 1500 * time.Millisecond, 1500},
+		{"零", 0, 0},
+		{"负值", -2 * time.Millisecond, -2},
+		{"不足一毫秒截断", 500 * time.Microsecond, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := DurationMs(c.in)
+			t.Logf("DurationMs(%v) → key=%s val=%d", c.in, a.Key, a.Value.Int64())
+			if a.Key != "duration_ms" {
+				t.Errorf("字段名应为 duration_ms,实际 %s", a.Key)
+			}
+			if got := a.Value.Int64(); got != c.want {
+				t.Errorf("got %d, want %d", got, c.want)
+			}
+		})
 	}
 }

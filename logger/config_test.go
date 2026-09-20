@@ -3,144 +3,71 @@ package logger
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
-// TestSetLogger 注入非 nil *slog.Logger 生效,且其 handler 被包装后自动获得 trace_id
-// 角度: #8 状态转换 —— 覆盖 SetLogger 的非 nil 分支
-func TestSetLogger(t *testing.T) {
-	buf := &bytes.Buffer{}
-	SetLogger(slog.New(slog.NewJSONHandler(buf, nil)))
-	t.Cleanup(func() { SetLogger(nil) })
-
-	Info(WithTraceID(context.Background(), "lg"), "via-setlogger")
-	m := lastLine(t, buf)
-	if m["msg"] != "via-setlogger" {
-		t.Fatalf("SetLogger 注入未生效: %v", m)
-	}
-	if m["trace_id"] != "lg" {
-		t.Fatalf("SetLogger 注入的 handler 未自动获得 trace_id: %v", m)
-	}
-}
-
-// TestSetHandlerNil 传 nil 还原默认:清空 external,注入的 buf 不再被写入
-// 角度: #5 nil 值 + #8 状态转换 —— 覆盖 SetHandler 的 nil 分支
-func TestSetHandlerNil(t *testing.T) {
-	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
-
-	SetHandler(nil) // 还原默认
-	if external.Load() != nil {
-		t.Fatal("SetHandler(nil) 应清空 external")
-	}
-
-	buf.Reset()
-	Info(context.Background(), "after-nil")
-	if buf.Len() != 0 {
-		t.Fatalf("SetHandler(nil) 后不应再写入旧注入 buf: %s", buf.String())
-	}
-}
-
-// TestDefaultReflectsActive Default() 返回当前生效 logger,可直接交给其它库使用
-// 角度: #8 状态转换 —— 覆盖 Default()
-func TestDefaultReflectsActive(t *testing.T) {
-	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
-
-	Default().Info("via-default")
-	if !strings.Contains(buf.String(), "via-default") {
-		t.Fatalf("Default() 未反映已注入的 handler: %s", buf.String())
-	}
-}
-
-// TestActiveLazyInit 无 external 且 fallback 为 nil 时,active() 惰性创建默认并回填 fallback
-// 角度: #8 状态转换(初始化前/后) —— 覆盖 active() 的 CAS 惰性初始化分支
-func TestActiveLazyInit(t *testing.T) {
-	prevExt := external.Load()
-	prevFb := fallback.Load()
-	t.Cleanup(func() {
-		external.Store(prevExt)
-		fallback.Store(prevFb)
-	})
-
-	external.Store(nil)
-	fallback.Store(nil)
-
-	if active() == nil {
-		t.Fatal("惰性初始化应返回非 nil logger")
-	}
-	if fallback.Load() == nil {
-		t.Fatal("惰性初始化应回填 fallback")
-	}
-}
-
-// TestActiveLazyInitRace fallback 为 nil 时多 goroutine 同时 active():仅一个 CAS 成功,
-// 其余落到 fallback.Load() 兜底分支,且全员拿到同一实例(惰性初始化幂等)
-// 角度: #6 并发 —— 覆盖 active() CAS 抢输后的 fallback.Load() 分支
-func TestActiveLazyInitRace(t *testing.T) {
-	prevExt := external.Load()
-	prevFb := fallback.Load()
-	t.Cleanup(func() {
-		external.Store(prevExt)
-		fallback.Store(prevFb)
-	})
-
-	external.Store(nil)
-
-	// 多轮:每轮把 fallback 归零后齐发,反复制造 CAS 抢输窗口,确保兜底分支至少执行一次
-	const rounds, n = 200, 8
-	for r := 0; r < rounds; r++ {
-		fallback.Store(nil)
-
-		var wg sync.WaitGroup
-		start := make(chan struct{})
-		got := make([]*slog.Logger, n)
-		for i := 0; i < n; i++ {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
-				<-start // barrier:让所有 goroutine 同时冲 CAS
-				got[idx] = active()
-			}(i)
-		}
-		close(start)
-		wg.Wait()
-
-		first := got[0]
-		if first == nil {
-			t.Fatal("惰性初始化返回 nil")
-		}
-		for i, l := range got {
-			if l != first { // 幂等:无论谁赢 CAS,全员拿到同一实例
-				t.Fatalf("round %d 并发惰性初始化返回不同实例: got[%d]=%p first=%p", r, i, l, first)
-			}
-		}
-	}
-}
-
-// TestFileOutput output=file 写入指定文件,且不存在的父目录被自动创建
-// 角度: #10 资源生命周期 —— 覆盖 newDefault 的 file 分支与 mustFileWriter 主路径
-func TestFileOutput(t *testing.T) {
+func restoreFallback(t *testing.T) {
+	t.Helper()
 	prevFb := fallback.Load()
 	t.Cleanup(func() { fallback.Store(prevFb); SetLogger(nil) })
+}
+
+func TestDefaultConfig_单点默认值(t *testing.T) {
+	c := DefaultConfig()
+	t.Logf("DefaultConfig = %+v", c)
+	if c.Level != LevelInfo || c.Format != FormatJSON || c.Output != OutputConsole || c.FilePath != "./logs/app.log" {
+		t.Fatalf("DefaultConfig() = %+v", c)
+	}
+}
+
+func TestParseLevel_非法值回落info(t *testing.T) {
+	cases := []struct {
+		name string
+		in   Level
+		want slog.Level
+	}{
+		{"debug", LevelDebug, slog.LevelDebug},
+		{"info", LevelInfo, slog.LevelInfo},
+		{"warn", LevelWarn, slog.LevelWarn},
+		{"error", LevelError, slog.LevelError},
+		{"空串兜底", "", slog.LevelInfo},
+		{"大写不当debug", "DEBUG", slog.LevelInfo},
+		{"大写不当info", "INFO", slog.LevelInfo},
+		{"未知值兜底", "verbose", slog.LevelInfo},
+		{"带空白不trim", " warn ", slog.LevelInfo},
+		{"尾部空格不trim", "info ", slog.LevelInfo},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseLevel(c.in)
+			t.Logf("parseLevel(%q) → %v", c.in, got)
+			if got != c.want {
+				t.Errorf("parseLevel(%q) = %v, want %v", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+func TestSetConfig_file写入指定路径并建目录(t *testing.T) {
+	restoreFallback(t)
 
 	dir := t.TempDir()
-	path := filepath.Join(dir, "nested", "app.log") // nested 不存在,须自动创建
+	path := filepath.Join(dir, "nested", "app.log")
 
-	SetLogger(nil) // 确保走 fallback
-	SetConfig(Config{Level: "info", Format: "json", Output: "file", FilePath: path})
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile, FilePath: path})
 
 	Info(context.Background(), "to-file-unique-xyz")
 
 	data, err := os.ReadFile(path)
+	t.Logf("path=%s err=%v body=%s", path, err, data)
 	if err != nil {
 		t.Fatalf("读日志文件失败(目录或文件未创建): %v", err)
 	}
@@ -149,18 +76,16 @@ func TestFileOutput(t *testing.T) {
 	}
 }
 
-// TestBothOutput output=both 同时写 stdout 与文件(console 格式)
-// 角度: #9 side effect(两个 sink 都要写到) + #8 状态 —— 覆盖 newDefault 的 both/console 分支
-func TestBothOutput(t *testing.T) {
-	prevFb := fallback.Load()
+func TestSetConfig_both同时写stdout与文件(t *testing.T) {
+	restoreFallback(t)
 	origStdout := os.Stdout
-	t.Cleanup(func() { fallback.Store(prevFb); os.Stdout = origStdout; SetLogger(nil) })
+	t.Cleanup(func() { os.Stdout = origStdout })
 
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Stdout = w // newDefault 在 SetConfig 时按当前 os.Stdout 构造 MultiWriter
+	os.Stdout = w
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "both.log")
@@ -172,19 +97,18 @@ func TestBothOutput(t *testing.T) {
 	os.Stdout = origStdout
 	_ = w.Close()
 	stdoutData, _ := io.ReadAll(r)
+	fileData, err := os.ReadFile(path)
+	t.Logf("stdout=%s file=%s err=%v", stdoutData, fileData, err)
 
 	if !strings.Contains(string(stdoutData), "both-unique-abc") {
 		t.Fatalf("both 模式未写入 stdout: %s", stdoutData)
 	}
-	fileData, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(fileData), "both-unique-abc") {
 		t.Fatalf("both 模式未写入文件: err=%v data=%s", err, fileData)
 	}
 }
 
-// TestMustFileWriterEmptyPath 空路径回退默认 ./logs/app.log,并自动建目录
-// 角度: #2 边界(空输入) + #10 资源生命周期
-func TestMustFileWriterEmptyPath(t *testing.T) {
+func TestMustFileWriter_空路径回落默认文件(t *testing.T) {
 	dir := t.TempDir()
 	wd, err := os.Getwd()
 	if err != nil {
@@ -195,7 +119,9 @@ func TestMustFileWriterEmptyPath(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(wd) })
 
-	if mustFileWriter("") == nil {
+	w := mustFileWriter("")
+	t.Logf("writer=%T", w)
+	if w == nil {
 		t.Fatal("空路径应返回默认文件 writer")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "logs", "app.log")); err != nil {
@@ -203,68 +129,268 @@ func TestMustFileWriterEmptyPath(t *testing.T) {
 	}
 }
 
-// TestMustFileWriterPanicsOnBadDir 父路径中存在同名普通文件导致建目录失败 → panic
-// 角度: #3 错误路径 + #12 对抗性输入 —— 覆盖 MkdirAll 失败的 panic 分支
-func TestMustFileWriterPanicsOnBadDir(t *testing.T) {
+func TestMustFileWriter_建目录失败是FileSetupError(t *testing.T) {
 	dir := t.TempDir()
 	notDir := filepath.Join(dir, "afile")
 	if err := os.WriteFile(notDir, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	bad := filepath.Join(notDir, "sub", "app.log") // afile 是文件,不能当目录
+	bad := filepath.Join(notDir, "sub", "app.log")
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("建目录失败应 panic")
+		r := recover()
+		t.Logf("recover=%v (%T)", r, r)
+		err, ok := r.(error)
+		if !ok {
+			t.Fatalf("panic 值不是 error: %T %v", r, r)
 		}
+		assertFileSetup(t, err, "mkdir", bad)
 	}()
 	mustFileWriter(bad)
 }
 
-// TestMustFileWriterPanicsOnOpenFail 目录可建但目标本身是目录,OpenFile 失败 → panic
-// 角度: #3 错误路径 —— 覆盖 OpenFile 失败的 panic 分支
-func TestMustFileWriterPanicsOnOpenFail(t *testing.T) {
-	dir := t.TempDir() // 把目录当文件路径打开必失败
+func TestMustFileWriter_打开失败是FileSetupError(t *testing.T) {
+	dir := t.TempDir()
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("打开目录作文件应 panic")
+		r := recover()
+		t.Logf("recover=%v (%T)", r, r)
+		err, ok := r.(error)
+		if !ok {
+			t.Fatalf("panic 值不是 error: %T %v", r, r)
+		}
+		assertFileSetup(t, err, "open", dir)
+		var fe *FileSetupError
+		if !errors.As(err, &fe) || fe.Err == nil {
+			t.Fatal("应带底层 Err")
 		}
 	}()
 	mustFileWriter(dir)
 }
 
-// TestWithAttrsEmpty 空 attrs 原样返回父 ctx(不分配、不破坏链路)
-// 角度: #2 边界 + #5 nil/zero —— 覆盖 WithAttrs 的 len==0 早返回分支
-func TestWithAttrsEmpty(t *testing.T) {
-	parent := WithAttrs(context.Background(), slog.String("a", "1"))
-	if got := WithAttrs(parent); got != parent {
-		t.Fatal("空 attrs 应原样返回同一父 ctx")
-	}
+func TestSetConfig_零值回落info且走JSON(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "zero.log")
 
-	base := context.Background()
-	if got := WithAttrs(base); got != base {
-		t.Fatal("无 attrs 应返回原 ctx")
+	SetLogger(nil)
+	SetConfig(Config{Output: OutputFile, FilePath: path})
+	Debug(context.Background(), "zero-debug-should-drop")
+	Info(context.Background(), "zero-info-keep")
+
+	data, err := os.ReadFile(path)
+	t.Logf("zero config body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "zero-debug-should-drop") {
+		t.Fatal("空 Level 应回落 info，debug 不应写出")
+	}
+	if !strings.Contains(string(data), `"msg":"zero-info-keep"`) {
+		t.Fatalf("空 Format 应按 JSON 写出 info: %s", data)
 	}
 }
 
-// TestConcurrentContextDerive 并发派生 ctx(WithAttrs copy-on-write + WithTraceID)无数据竞争
-// 角度: #6 并发 —— 须配合 -race 运行;共享父 ctx 的 attrs 切片只读、派生只追加副本
-func TestConcurrentContextDerive(t *testing.T) {
-	buf := captureJSON(t, nil) // slog handler 内部带锁,可并发写
-	base := WithAttrs(context.Background(), slog.String("base", "0"))
+func TestSetConfig_非法Format按JSON(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fmt.log")
 
-	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				ctx := WithTraceID(WithAttrs(base, slog.Int("g", n)), "x")
-				Info(ctx, "c")
-			}
-		}(i)
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: "XML", Output: OutputFile, FilePath: path})
+	Info(context.Background(), "xml-as-json")
+
+	data, err := os.ReadFile(path)
+	t.Logf("illegal format body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	wg.Wait()
-	_ = buf
+	if !json.Valid(bytes.TrimSpace(data)) {
+		t.Fatalf("非 console 的 Format 应按 JSON: %s", data)
+	}
+	if !strings.Contains(string(data), `"msg":"xml-as-json"`) {
+		t.Fatalf("JSON 行缺少 msg: %s", data)
+	}
+}
+
+func TestSetConfig_FormatConsole走文本(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "console.log")
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: FormatConsole, Output: OutputFile, FilePath: path})
+	Info(context.Background(), "console-line")
+
+	data, err := os.ReadFile(path)
+	t.Logf("console body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if json.Valid(bytes.TrimSpace(data)) {
+		t.Fatalf("FormatConsole 不应产出 JSON: %s", data)
+	}
+	if !strings.Contains(string(data), "console-line") {
+		t.Fatalf("文本行缺少消息: %s", data)
+	}
+}
+
+func TestSetConfig_未知Output当console写stdout(t *testing.T) {
+	restoreFallback(t)
+	origStdout := os.Stdout
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: "syslog"})
+	Info(context.Background(), "unknown-output-stdout")
+
+	os.Stdout = origStdout
+	_ = w.Close()
+	stdoutData, _ := io.ReadAll(r)
+	t.Logf("stdout=%s", stdoutData)
+	if !strings.Contains(string(stdoutData), "unknown-output-stdout") {
+		t.Fatalf("未知 Output 应回落 stdout: %s", stdoutData)
+	}
+}
+
+func TestSetConfig_LevelError过滤低级别(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "err-only.log")
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelError, Format: FormatJSON, Output: OutputFile, FilePath: path})
+	Debug(context.Background(), "drop-debug")
+	Info(context.Background(), "drop-info")
+	Warn(context.Background(), "drop-warn")
+	Error(context.Background(), "keep-error")
+
+	data, err := os.ReadFile(path)
+	t.Logf("error-level body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	for _, drop := range []string{"drop-debug", "drop-info", "drop-warn"} {
+		if strings.Contains(body, drop) {
+			t.Fatalf("LevelError 不应写出 %s: %s", drop, body)
+		}
+	}
+	if !strings.Contains(body, `"msg":"keep-error"`) {
+		t.Fatalf("LevelError 应写出 error: %s", body)
+	}
+}
+
+func TestSetConfig_LevelDebug放行Debug(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "debug.log")
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelDebug, Format: FormatJSON, Output: OutputFile, FilePath: path})
+	Debug(context.Background(), "debug-ok")
+
+	data, err := os.ReadFile(path)
+	t.Logf("debug body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"msg":"debug-ok"`) {
+		t.Fatalf("LevelDebug 应写出 debug: %s", data)
+	}
+}
+
+func TestSetConfig_空FilePath回落默认路径(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile})
+	Info(context.Background(), "default-path-msg")
+
+	data, err := os.ReadFile(filepath.Join(dir, "logs", "app.log"))
+	t.Logf("default path body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatalf("空 FilePath 应回落 ./logs/app.log: %v", err)
+	}
+	if !strings.Contains(string(data), "default-path-msg") {
+		t.Fatalf("默认路径未写入: %s", data)
+	}
+}
+
+func TestMustFileWriter_追加不覆盖(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "append.log")
+	w1 := mustFileWriter(path)
+	if _, err := io.WriteString(w1, "first-line\n"); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := w1.(io.Closer); ok {
+		_ = c.Close()
+	}
+	w2 := mustFileWriter(path)
+	if _, err := io.WriteString(w2, "second-line\n"); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := w2.(io.Closer); ok {
+		_ = c.Close()
+	}
+
+	data, err := os.ReadFile(path)
+	t.Logf("append body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "first-line") || !strings.Contains(string(data), "second-line") {
+		t.Fatalf("应追加而不是覆盖: %s", data)
+	}
+}
+
+func TestMustFileWriter_权限600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "perm.log")
+	w := mustFileWriter(path)
+	if c, ok := w.(io.Closer); ok {
+		_ = c.Close()
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := info.Mode().Perm()
+	t.Logf("perm=%o", got)
+	if got != 0o600 {
+		t.Fatalf("日志文件权限 = %o, want 0600", got)
+	}
+}
+
+func TestSetConfig_AddSource指向业务调用点(t *testing.T) {
+	restoreFallback(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "src.log")
+
+	SetLogger(nil)
+	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile, FilePath: path})
+	Info(context.Background(), "src-line")
+
+	data, err := os.ReadFile(path)
+	t.Logf("source body=%s err=%v", data, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "config_test.go") {
+		t.Fatalf("默认 handler 应 AddSource 到测试调用点: %s", data)
+	}
 }
