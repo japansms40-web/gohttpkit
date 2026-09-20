@@ -15,6 +15,7 @@
 //	cfg, err := versions.Registry.Get("v1.2.3")
 //
 // 各版本包用一行 blank import 接入分发；新增版本不需要改任何已有代码。
+// Get / Validate 失败是本包类型错误，判定请用 errors.As，不要扫文案。
 package versionreg
 
 import (
@@ -23,26 +24,37 @@ import (
 	"sync"
 )
 
+// registry.go —— 泛型版本注册表。独立成文件：和 endpoint 白名单、示例配置分开，
+// 接入方先认 Register/Get，再决定要不要用 HeaderWhitelists。
+
 // ID 版本标识，如 "429.1.0.44.70" / "web-2026-06-22"。
-// 定义成独立类型而不是裸 string：版本号会在很多地方被传来传去，
-// 类型化之后传错参数是编译错误而不是运行时找不到版本。
+// 给接入方在各处传来传去；定义成独立类型而不是裸 string，传错参数是编译错误。
+// 输入：构造时就是原串，不做 trim。
+// 返回：String 原样返回底层 string。
 type ID string
 
 // String 实现 fmt.Stringer。
+// 输入：接收者是版本标识本身。
+// 返回：底层字符串，空 ID 返回 ""。
 func (id ID) String() string { return string(id) }
 
 // Versioned 是可注册配置需要满足的最小契约。
+// 给各版本包的配置对象实现；注册表只认这两件事。
 type Versioned interface {
 	// VersionID 返回本配置的版本标识（注册表的键）。
+	// 输入：无。返回：非空 ID；空串会在 MustRegister 启动期 panic。
 	VersionID() ID
 	// Validate 在注册时被调用，返回错误即在进程启动期 panic。
-	// 把「配置写漏了一个必填字段」暴露在启动那一刻，而不是半夜跑到那条分支时。
+	// 输入：接收者应已填好必填字段。
+	// 返回：nil 表示可注册；本包 Config 失败是 *MissingConfigFieldError。
 	Validate() error
 }
 
 // Registry 版本注册表。零值不可用，用 New 构造。
+// 给接入方在 init() 注册、请求路径 Get。
 //
-// 并发模型：注册通常发生在 init()（单线程），但 Get / List 会在请求热路径上被并发调用，
+// 并发模型：mu 保护 items；name 在 New 之后只读。
+// 注册通常发生在 init()（单线程），但 Get / List / Has 会在请求热路径上被并发调用，
 // 故仍用 RWMutex 保护，允许运行期动态注册。
 type Registry[T Versioned] struct {
 	mu    sync.RWMutex
@@ -50,16 +62,22 @@ type Registry[T Versioned] struct {
 	name  string
 }
 
-// New 创建一个注册表。name 用于错误信息（如 "android versions"）。
+// New 创建一个注册表。
+// 输入：name 仅用于错误信息（如 "android versions"），不会当键。
+// 返回：可用的空注册表；零值 Registry 不可用。
+// 例：New[*Config]("android") → 空表，Len()==0。
 func New[T Versioned](name string) *Registry[T] {
 	return &Registry[T]{items: make(map[ID]T), name: name}
 }
 
-// MustRegister 注册一个版本配置。校验失败或版本重复直接 panic —— 这是启动期 fail-fast，
-// 不是运行期错误处理：一个注册不上的版本配置意味着代码或配置写错了，越早炸越好。
+// MustRegister 注册一个版本配置。
+// 给各版本包 init()：校验失败或版本重复直接 panic —— 启动期 fail-fast，不是运行期错误。
+// 输入：cfg 必须通过 Validate 且 VersionID 非空；T 为指针时表内保存同一实例，注册后勿改字段。
+// 返回：无；失败 panic。Validate 错误会以 %w 包一层，recover 后可 errors.As。
+// 例：MustRegister(NewConfig("v1", "https://a.example"))；重复 "v1" panic。
 func (r *Registry[T]) MustRegister(cfg T) {
 	if err := cfg.Validate(); err != nil {
-		panic(fmt.Sprintf("versionreg[%s]: 版本 %q 配置非法: %v", r.name, cfg.VersionID(), err))
+		panic(fmt.Errorf("versionreg[%s]: 版本 %q 配置非法: %w", r.name, cfg.VersionID(), err))
 	}
 	id := cfg.VersionID()
 	if id == "" {
@@ -73,44 +91,59 @@ func (r *Registry[T]) MustRegister(cfg T) {
 	r.items[id] = cfg
 }
 
-// Get 取版本配置。版本为空或未注册时返回错误，【不回退默认版本】——
-// 静默回退会让「配置漏填」表现成「行为莫名其妙不对”，排查成本极高。
+// Get 取版本配置。
+// 给请求路径：版本来自配置或请求，取不到必须显式失败。【不回退默认版本】。
+// 输入：id 为空或未注册都是错误；不会改调用方。
+// 返回：命中是表内同一 T（指针类型时共享实例，注册后勿改）；
+// 空 id → *EmptyVersionError；未注册 → *UnknownVersionError。
+// 失败时 Registered 与判定来自同一把读锁快照，按字典序，是新切片。
+// 例：Get("v1") → (cfg, nil)；Get("") → *EmptyVersionError；Get("v9") → *UnknownVersionError。
 func (r *Registry[T]) Get(id ID) (T, error) {
 	var zero T
-	if id == "" {
-		return zero, fmt.Errorf("versionreg[%s]: 必须指定版本(已注册: %v)", r.name, r.List())
-	}
 	r.mu.RLock()
-	cfg, ok := r.items[id]
-	r.mu.RUnlock()
-	if !ok {
-		return zero, fmt.Errorf("versionreg[%s]: 不支持的版本 %q(已注册: %v)", r.name, id, r.List())
+	if id == "" {
+		ids := r.copyIDsLocked()
+		r.mu.RUnlock()
+		sortIDs(ids)
+		return zero, &EmptyVersionError{Registry: r.name, Registered: ids}
 	}
+	cfg, ok := r.items[id]
+	if !ok {
+		ids := r.copyIDsLocked()
+		r.mu.RUnlock()
+		sortIDs(ids)
+		return zero, &UnknownVersionError{Registry: r.name, Requested: id, Registered: ids}
+	}
+	r.mu.RUnlock()
 	return cfg, nil
 }
 
-// MustGet 取版本配置，取不到就 panic。仅用于「版本来自常量、取不到即代码错误」的场景。
+// MustGet 取版本配置，取不到就 panic。
+// 给「版本来自常量、取不到即代码错误」的场景。
+// 输入：id 与 Get 相同。
+// 返回：命中的 T；失败 panic(err)，err 仍是 Get 的类型错误，recover 后可 errors.As。
 func (r *Registry[T]) MustGet(id ID) T {
 	cfg, err := r.Get(id)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 	return cfg
 }
 
 // List 列出已注册版本（按字典序，便于稳定输出到错误信息与日志）。
+// 输入：无。
+// 返回：新切片，与表内存储无关；空表返回长度为 0 的切片。
 func (r *Registry[T]) List() []ID {
 	r.mu.RLock()
-	ids := make([]ID, 0, len(r.items))
-	for id := range r.items {
-		ids = append(ids, id)
-	}
+	ids := r.copyIDsLocked()
 	r.mu.RUnlock()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	sortIDs(ids)
 	return ids
 }
 
 // Has 判断版本是否已注册。
+// 输入：id 原样比较，不做 trim。
+// 返回：已注册 true，否则 false。
 func (r *Registry[T]) Has(id ID) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -119,8 +152,28 @@ func (r *Registry[T]) Has(id ID) bool {
 }
 
 // Len 返回已注册版本数。
+// 输入：无。
+// 返回：items 长度，空表为 0。
 func (r *Registry[T]) Len() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.items)
+}
+
+// copyIDsLocked 复制 items 的 key。
+// 输入：调用方必须已持有 r.mu 的读锁或写锁。
+// 返回：新切片，未排序；空表是长度为 0 的切片，不共享内部存储。
+func (r *Registry[T]) copyIDsLocked() []ID {
+	ids := make([]ID, 0, len(r.items))
+	for id := range r.items {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// sortIDs 按字典序排 ID 切片。
+// 输入：ids 可被就地排序；nil / 空切片可接受。
+// 返回：无，就地改 ids。
+func sortIDs(ids []ID) {
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 }

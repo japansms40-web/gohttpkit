@@ -3,12 +3,12 @@ package netproxy_test
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -29,8 +29,8 @@ func TestApplyProxyToTransport_scheme矩阵(t *testing.T) {
 			}
 		}},
 		{name: "socks5 改写 DialContext", url: "socks5://127.0.0.1:1080", check: func(t *testing.T, tr *http.Transport) {
-			if tr.Proxy != nil {
-				t.Fatal("socks5 不该走 transport.Proxy")
+			if tr.Proxy != nil || tr.DialContext == nil {
+				t.Fatal("socks5 应改写 DialContext 且不设 Proxy")
 			}
 		}},
 		{name: "socks5 带账密", url: "socks5://u:p@127.0.0.1:1080"},
@@ -39,15 +39,26 @@ func TestApplyProxyToTransport_scheme矩阵(t *testing.T) {
 				t.Fatal("http 代理应设置 transport.Proxy")
 			}
 		}},
-		{name: "https 走 transport.Proxy", url: "https://127.0.0.1:8443"},
+		{name: "https 走 transport.Proxy", url: "https://127.0.0.1:8443", check: func(t *testing.T, tr *http.Transport) {
+			if tr.Proxy == nil || tr.DialContext != nil {
+				t.Fatal("https 应设置 Proxy 且不改 DialContext")
+			}
+		}},
 		{name: "不支持的 scheme", url: "ftp://127.0.0.1:21", wantErr: true},
 		{name: "缺端口", url: "socks5://127.0.0.1", wantErr: true},
 		{name: "非法 URL", url: "socks5://%zz", wantErr: true},
+		{name: "scheme 大写 SOCKS5", url: "SOCKS5://127.0.0.1:1080", check: func(t *testing.T, tr *http.Transport) {
+			if tr.DialContext == nil {
+				t.Fatal("SOCKS5:// 应改写 DialContext")
+			}
+		}},
+		{name: "IPv6 host", url: "socks5://[::1]:1080"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tr := &http.Transport{}
 			err := netproxy.ApplyProxyToTransport(tr, tc.url)
+			t.Logf("url=%q err=%v", tc.url, err)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("want error")
@@ -66,14 +77,19 @@ func TestApplyProxyToTransport_scheme矩阵(t *testing.T) {
 
 func TestParseProxyURL_只接受socks5(t *testing.T) {
 	d, err := netproxy.ParseProxyURL("")
+	t.Logf(`"" → dialer=%v err=%v`, d, err)
 	if d != nil || err != nil {
 		t.Fatal("空串应返回 (nil, nil)")
 	}
-	if _, err := netproxy.ParseProxyURL("http://127.0.0.1:8080"); err == nil {
+	d, err = netproxy.ParseProxyURL("http://127.0.0.1:8080")
+	t.Logf("http → dialer=%v err=%v", d, err)
+	if err == nil {
 		t.Fatal("裸 dialer 入口只支持 socks5，http 应报错")
 	}
-	if _, err := netproxy.ParseProxyURL("socks5://127.0.0.1:1080"); err != nil {
-		t.Fatalf("socks5 应可用: %v", err)
+	d, err = netproxy.ParseProxyURL("socks5://127.0.0.1:1080")
+	t.Logf("socks5 → dialer=%v err=%v", d != nil, err)
+	if err != nil || d == nil {
+		t.Fatalf("socks5 应可用: dialer=%v err=%v", d, err)
 	}
 }
 
@@ -219,11 +235,27 @@ func serveSOCKS5(conn net.Conn) {
 	<-done
 }
 
-func TestProxyError文案含scheme提示(t *testing.T) {
+func TestApplyProxyToTransport_ftp是UnsupportedScheme(t *testing.T) {
 	err := netproxy.ApplyProxyToTransport(&http.Transport{}, "ftp://h:1")
-	if err == nil || !strings.Contains(err.Error(), "socks5") {
-		t.Fatalf("err = %v, 应提示支持的 scheme", err)
+	t.Logf("ftp → err=%v", err)
+	var got *netproxy.UnsupportedProxySchemeError
+	if !errors.As(err, &got) {
+		t.Fatalf("err = %v (%T), want *UnsupportedProxySchemeError", err, err)
 	}
+	if got.Scheme != "ftp" || got.RawDialer {
+		t.Fatalf("Scheme=%q RawDialer=%v, want ftp / false", got.Scheme, got.RawDialer)
+	}
+}
+
+func TestApplyProxyToTransport_非空URL且transport为nil会panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		t.Logf("recover=%v", r)
+		if r == nil {
+			t.Fatal("非空代理 + nil transport 应 panic（调用方违约，不改成类型错误）")
+		}
+	}()
+	_ = netproxy.ApplyProxyToTransport(nil, "socks5://127.0.0.1:1080")
 }
 
 func TestParseProxyURL_错误分支(t *testing.T) {
@@ -238,8 +270,13 @@ func TestParseProxyURL_错误分支(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := netproxy.ParseProxyURL(tc.url); err == nil {
+			d, err := netproxy.ParseProxyURL(tc.url)
+			t.Logf("url=%q dialer=%v err=%v", tc.url, d, err)
+			if err == nil {
 				t.Fatalf("%q 应报错", tc.url)
+			}
+			if d != nil {
+				t.Fatal("失败时 dialer 必须为 nil")
 			}
 		})
 	}

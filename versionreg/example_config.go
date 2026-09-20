@@ -1,7 +1,5 @@
 package versionreg
 
-import "fmt"
-
 // example_config.go —— 一个可直接用、也可照抄改造的版本配置实现。
 //
 // 它演示的是本包期望的用法形态：配置对象自带 Validate、用 functional options 构建、
@@ -9,6 +7,7 @@ import "fmt"
 // 照着 Config + Option + New 这三样改就行。
 
 // Config 一份版本配置：标识 + 基础信息 + 按 endpoint 组织的白名单与参数。
+// 给接入方在 init 注册；Get 返回的是表内同一指针，注册后勿改导出字段。
 type Config struct {
 	// ID 版本标识（必填）。
 	ID ID
@@ -25,23 +24,33 @@ type Config struct {
 }
 
 // VersionID 实现 Versioned。
+// 输入：无。
+// 返回：c.ID，可为 ""（MustRegister 会再拦一层）。
 func (c *Config) VersionID() ID { return c.ID }
 
 // Validate 实现 Versioned：必填字段缺一不可。
+// 输入：接收者的 ID / BaseURL。
+// 返回：nil；缺 ID / BaseURL → *MissingConfigFieldError{Field}。
+// 例：NewConfig("v1", "https://a.example").Validate() → nil；
+// NewConfig("", "...").Validate() → *MissingConfigFieldError{Field:"ID"}。
 func (c *Config) Validate() error {
 	if c.ID == "" {
-		return fmt.Errorf("ID 必填")
+		return &MissingConfigFieldError{Field: "ID"}
 	}
 	if c.BaseURL == "" {
-		return fmt.Errorf("BaseURL 必填")
+		return &MissingConfigFieldError{Field: "BaseURL"}
 	}
 	return nil
 }
 
-// HeaderWhitelist 返回某 endpoint 的头白名单副本（未配置返回 nil，即「发全量头」）。
+// HeaderWhitelist 返回某 endpoint 的头白名单副本。
+// 输入：ep 端点标识。
+// 返回：未配置 → nil（发全量头）；已配置 → 副本 map，就地改不影响表内。
 func (c *Config) HeaderWhitelist(ep Endpoint) map[string]string { return c.whitelists.For(ep) }
 
-// DocID 返回某 endpoint 的接口标识；未配置返回空串。
+// DocID 返回某 endpoint 的接口标识。
+// 输入：ep 端点标识。
+// 返回：未配置或 map 为 nil → ""。
 func (c *Config) DocID(ep Endpoint) string {
 	if c.docIDs == nil {
 		return ""
@@ -49,7 +58,9 @@ func (c *Config) DocID(ep Endpoint) string {
 	return c.docIDs[ep]
 }
 
-// Param 返回版本级参数；未配置返回空串。
+// Param 返回版本级参数。
+// 输入：key 参数名。
+// 返回：未配置或 map 为 nil → ""。
 func (c *Config) Param(key string) string {
 	if c.Params == nil {
 		return ""
@@ -61,9 +72,13 @@ func (c *Config) Param(key string) string {
 type Option func(*Config)
 
 // WithUserAgent 设置 User-Agent。
+// 输入：ua 完整 UA 串，原样写入。
+// 返回：可叠加的 Option。
 func WithUserAgent(ua string) Option { return func(c *Config) { c.UserAgent = ua } }
 
-// WithParams 设置版本级参数（合并进已有参数）。
+// WithParams 合并版本级参数。
+// 输入：params 为 nil 不增加任何项；已有同名 key 被覆盖。
+// 返回：可叠加的 Option。
 func WithParams(params map[string]string) Option {
 	return func(c *Config) {
 		if c.Params == nil {
@@ -76,11 +91,15 @@ func WithParams(params map[string]string) Option {
 }
 
 // WithHeaderWhitelists 设置按 endpoint 的头白名单。
+// 输入：src 会被 NewHeaderWhitelists 深拷贝；nil 得到空集合（与「未设置、发全量头」不同）。
+// 返回：可叠加的 Option。
 func WithHeaderWhitelists(src map[Endpoint]map[string]string) Option {
 	return func(c *Config) { c.whitelists = NewHeaderWhitelists(src) }
 }
 
-// WithDocIDs 设置按 endpoint 的接口标识。
+// WithDocIDs 合并按 endpoint 的接口标识。
+// 输入：src 为 nil 不增加任何项。
+// 返回：可叠加的 Option。
 func WithDocIDs(src map[Endpoint]string) Option {
 	return func(c *Config) {
 		if c.docIDs == nil {
@@ -93,6 +112,9 @@ func WithDocIDs(src map[Endpoint]string) Option {
 }
 
 // NewConfig 构造版本配置：必填字段走参数、可选字段走 Option。
+// 输入：id / baseURL 写入对应字段，不在这里 Validate；opts 按顺序叠加。
+// 返回：新 *Config，尚未注册。
+// 例：NewConfig("v1", "https://a.example", WithUserAgent("ua/1"))。
 func NewConfig(id ID, baseURL string, opts ...Option) *Config {
 	c := &Config{ID: id, BaseURL: baseURL}
 	for _, opt := range opts {

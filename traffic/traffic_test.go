@@ -33,7 +33,7 @@ func (f *fakeConn) SetDeadline(t time.Time) error      { return nil }
 func (f *fakeConn) SetReadDeadline(t time.Time) error  { return nil }
 func (f *fakeConn) SetWriteDeadline(t time.Time) error { return nil }
 
-func TestSetHook_NilDisables(t *testing.T) {
+func TestSetHook_传入nil关闭统计(t *testing.T) {
 	resetHook(t)
 
 	SetHook(func(r, w int64) {})
@@ -47,13 +47,13 @@ func TestSetHook_NilDisables(t *testing.T) {
 	}
 }
 
-func TestReport_NoHookIsNoop(t *testing.T) {
+func TestReport_未注入时noop(t *testing.T) {
 	resetHook(t)
 	// 未注入 hook 时调用 report 不应 panic。
 	report(1, 2)
 }
 
-func TestReport_InvokesHook(t *testing.T) {
+func TestReport_已注入时透传(t *testing.T) {
 	resetHook(t)
 
 	var gotR, gotW int64
@@ -62,12 +62,13 @@ func TestReport_InvokesHook(t *testing.T) {
 	})
 
 	report(123, 456)
+	t.Logf("report(123,456) → r=%d w=%d", gotR, gotW)
 	if gotR != 123 || gotW != 456 {
 		t.Fatalf("report 透传错误: got (%d, %d), want (123, 456)", gotR, gotW)
 	}
 }
 
-func TestWrapConn_NilConn(t *testing.T) {
+func TestWrapConn_nil连接原样返回(t *testing.T) {
 	resetHook(t)
 	SetHook(func(r, w int64) {})
 
@@ -76,7 +77,7 @@ func TestWrapConn_NilConn(t *testing.T) {
 	}
 }
 
-func TestWrapConn_NoHookReturnsOriginal(t *testing.T) {
+func TestWrapConn_未注入返回原连接(t *testing.T) {
 	resetHook(t)
 
 	c := &fakeConn{}
@@ -89,7 +90,7 @@ func TestWrapConn_NoHookReturnsOriginal(t *testing.T) {
 	}
 }
 
-func TestWrapConn_WithHookWraps(t *testing.T) {
+func TestWrapConn_已注入则包装(t *testing.T) {
 	resetHook(t)
 	SetHook(func(r, w int64) {})
 
@@ -104,7 +105,7 @@ func TestWrapConn_WithHookWraps(t *testing.T) {
 	}
 }
 
-func TestStatConn_Read(t *testing.T) {
+func TestStatConn_读路径(t *testing.T) {
 	wantErr := errors.New("read boom")
 	tests := []struct {
 		name      string
@@ -131,6 +132,7 @@ func TestStatConn_Read(t *testing.T) {
 
 			sc := &statConn{Conn: &fakeConn{readN: tt.readN, readErr: tt.readErr}}
 			n, err := sc.Read(make([]byte, 16))
+			t.Logf("readN=%d readErr=%v → n=%d err=%v reported=%v r=%d", tt.readN, tt.readErr, n, err, called, gotR)
 
 			if n != tt.readN {
 				t.Fatalf("n = %d, want %d", n, tt.readN)
@@ -148,7 +150,7 @@ func TestStatConn_Read(t *testing.T) {
 	}
 }
 
-func TestStatConn_Write(t *testing.T) {
+func TestStatConn_写路径(t *testing.T) {
 	wantErr := errors.New("write boom")
 	tests := []struct {
 		name      string
@@ -175,6 +177,7 @@ func TestStatConn_Write(t *testing.T) {
 
 			sc := &statConn{Conn: &fakeConn{writeN: tt.writeN, writeErr: tt.writeErr}}
 			n, err := sc.Write(make([]byte, 16))
+			t.Logf("writeN=%d writeErr=%v → n=%d err=%v reported=%v w=%d", tt.writeN, tt.writeErr, n, err, called, gotW)
 
 			if n != tt.writeN {
 				t.Fatalf("n = %d, want %d", n, tt.writeN)
@@ -194,7 +197,7 @@ func TestStatConn_Write(t *testing.T) {
 
 // TestStatConn_Concurrent 验证多 goroutine 并发读写下 hook 累加值正确,
 // 同时配合 -race 检测竞态。
-func TestStatConn_Concurrent(t *testing.T) {
+func TestStatConn_并发读写累加(t *testing.T) {
 	resetHook(t)
 
 	var totalR, totalW int64
@@ -243,7 +246,7 @@ func (s *spyConn) SetDeadline(t time.Time) error { s.deadlineCalls++; return s.C
 
 // 角度 #7 契约: statConn 仅重写 Read/Write, 内嵌方法须透传, 否则会悄悄吞掉
 // 调用方对底层 conn 的 Close/超时控制 —— 这是"只测 Read/Write"最易漏的契约。
-func TestStatConn_EmbeddedMethodsPassThrough(t *testing.T) {
+func TestStatConn_内嵌方法透传(t *testing.T) {
 	resetHook(t)
 	SetHook(func(r, w int64) {})
 
@@ -268,7 +271,7 @@ func TestStatConn_EmbeddedMethodsPassThrough(t *testing.T) {
 }
 
 // 角度 #8 状态转换: 重复 SetHook 后者胜, 旧回调不再触发。
-func TestSetHook_ReplaceLatestWins(t *testing.T) {
+func TestSetHook_后者覆盖前者(t *testing.T) {
 	resetHook(t)
 
 	var first, second int
@@ -286,7 +289,7 @@ func TestSetHook_ReplaceLatestWins(t *testing.T) {
 
 // 角度 #8 状态转换: 已包装的 statConn 在 hook 被关闭后仍能正常读写, 只是不再上报
 // —— 验证关闭统计不影响数据通路(零行为变化)。
-func TestStatConn_SilentAfterHookDisabled(t *testing.T) {
+func TestStatConn_关闭Hook后仍可读不报(t *testing.T) {
 	resetHook(t)
 
 	var calls int
@@ -305,7 +308,7 @@ func TestStatConn_SilentAfterHookDisabled(t *testing.T) {
 }
 
 // 角度 #8 状态转换: 关 -> 开重新生效, 仅重新启用后那次上报。
-func TestSetHook_ReEnableAfterDisable(t *testing.T) {
+func TestSetHook_关闭后再开只计新的(t *testing.T) {
 	resetHook(t)
 
 	var calls int
@@ -322,7 +325,7 @@ func TestSetHook_ReEnableAfterDisable(t *testing.T) {
 
 // 角度 #5 防御分支: report 的内层 *p != nil 守卫。SetHook 不会存入 nil 函数值,
 // 但底层若被存入指向 nil Hook 的指针(防御性场景), report 必须不 panic、不调用。
-func TestReport_InnerNilFuncGuard(t *testing.T) {
+func TestReport_内层nil函数不panic(t *testing.T) {
 	resetHook(t)
 
 	var nilHook Hook     // 函数值为 nil
@@ -335,7 +338,7 @@ func TestReport_InnerNilFuncGuard(t *testing.T) {
 // 角度 #6 并发: atomic.Pointer 的 Store(SetHook) 与 Load(report) 并发, 一边高频读写、
 // 一边反复切换回调(含 nil), 仅以 -race 验证无数据竞争、无 panic。切换下累加值不确定,
 // 故不断言数值 —— 这正是该用例区别于 TestStatConn_Concurrent(固定回调、断言精确和)之处。
-func TestSetHook_ConcurrentSwitching(t *testing.T) {
+func TestSetHook_并发切换不竞态(t *testing.T) {
 	resetHook(t)
 
 	var total int64
@@ -370,7 +373,7 @@ func TestSetHook_ConcurrentSwitching(t *testing.T) {
 }
 
 // 角度 #12 对抗输入: 空 buffer 的 Read/Write 不应 panic; 底层返回 0 时不上报。
-func TestStatConn_EmptyBuffer(t *testing.T) {
+func TestStatConn_空缓冲不上报(t *testing.T) {
 	resetHook(t)
 
 	var calls int
@@ -385,5 +388,57 @@ func TestStatConn_EmptyBuffer(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("0 字节不应上报, got %d 次", calls)
+	}
+}
+
+func TestWrapConn_重复包装不双计(t *testing.T) {
+	resetHook(t)
+	var reads, writes atomic.Int64
+	SetHook(func(r, w int64) {
+		reads.Add(r)
+		writes.Add(w)
+	})
+
+	c := &fakeConn{readN: 4, writeN: 6}
+	first := WrapConn(c)
+	second := WrapConn(first)
+	t.Logf("first=%T second=%T same=%v", first, second, first == second)
+	if first != second {
+		t.Fatal("重复 WrapConn 应返回同一连接")
+	}
+
+	n, err := second.Read(make([]byte, 8))
+	t.Logf("Read n=%d err=%v reads=%d", n, err, reads.Load())
+	if n != 4 || err != nil {
+		t.Fatalf("Read = (%d,%v), want (4,nil)", n, err)
+	}
+	n, err = second.Write(make([]byte, 8))
+	t.Logf("Write n=%d err=%v writes=%d", n, err, writes.Load())
+	if n != 6 || err != nil {
+		t.Fatalf("Write = (%d,%v), want (6,nil)", n, err)
+	}
+	if reads.Load() != 4 || writes.Load() != 6 {
+		t.Fatalf("上报 read=%d write=%d, want 4/6（不得双计）", reads.Load(), writes.Load())
+	}
+}
+
+func TestWrapConn_未注入时返回原连接_事后SetHook不生效(t *testing.T) {
+	resetHook(t)
+	c := &fakeConn{readN: 3, writeN: 5}
+	got := WrapConn(c)
+	t.Logf("未注入 WrapConn → %T same=%v", got, got == net.Conn(c))
+	if got != net.Conn(c) {
+		t.Fatal("hook 未注入时应返回原连接")
+	}
+
+	var calls int
+	SetHook(func(r, w int64) { calls++ })
+	n, err := got.Read(make([]byte, 8))
+	t.Logf("事后 SetHook 后 Read n=%d err=%v calls=%d", n, err, calls)
+	if n != 3 || err != nil {
+		t.Fatalf("原连接仍应可读: n=%d err=%v", n, err)
+	}
+	if calls != 0 {
+		t.Fatalf("事后注入 Hook 不得追溯包装已返回的原连接, calls=%d", calls)
 	}
 }
