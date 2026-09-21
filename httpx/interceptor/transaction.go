@@ -27,17 +27,19 @@ func (i *transactionInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, er
 	resp, err := ch.Proceed()
 	if i.sink != nil && resp != nil {
 		req := ch.Request()
+		// Header 用 Clone 深拷贝 map 与每个 key 的值切片：快照交给 sink 之后，
+		// 后续拦截器改原 Header 不应污染已落盘的 Transaction。Clone 对 nil 返回 nil，无需额外判空。
 		i.sink(&httpx.Transaction{
 			Method:      req.Method,
 			URL:         req.FullURL,
 			Proxy:       ch.Client().Options().ProxyURL,
 			ExitIP:      ch.Client().Options().ExitIP,
 			ASN:         ch.Client().Options().ASN,
-			ReqHeaders:  map[string][]string(req.ReqHeaders),
+			ReqHeaders:  req.ReqHeaders.Clone(),
 			ReqBody:     string(req.Body),
 			ReqBodyLen:  len(req.Body),
 			Status:      resp.StatusCode,
-			RespHeaders: map[string][]string(resp.Header),
+			RespHeaders: resp.Header.Clone(),
 			RespBody:    string(resp.Body),
 			RespBodyLen: len(resp.Body),
 			DurationMS:  time.Since(start).Milliseconds(),

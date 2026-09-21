@@ -69,6 +69,7 @@ func TestStartSpan_成对事件并带耗时(t *testing.T) {
 
 func TestStartSpan_nilContext与空名(t *testing.T) {
 	buf := captureJSON(t, nil)
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 不 panic 且能兜底，nil 正是被测契约
 	ctx, end := StartSpan(nil, "")
 	end()
 	lines := allLines(t, buf)
@@ -135,6 +136,7 @@ func TestSpanCtx_普通Info自动带span_id(t *testing.T) {
 }
 
 func TestSpanIDFromContext_空与nil(t *testing.T) {
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 返回空串而非 panic，nil 正是被测契约
 	if got := SpanIDFromContext(nil); got != "" {
 		t.Fatalf("nil → %q", got)
 	}

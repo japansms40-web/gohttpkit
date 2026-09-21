@@ -1720,3 +1720,66 @@ func TestTransaction_快照保留请求头原文(t *testing.T) {
 		t.Fatalf("Transaction 应保留原文: %v", txn.ReqHeaders["authorization"])
 	}
 }
+
+func TestTransaction_快照头与后续改写隔离(t *testing.T) {
+	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-server", "kit")
+		w.Header().Add("set-cookie", "a=1")
+		_, _ = w.Write([]byte("ok"))
+	})
+	var txn *httpx.Transaction
+	var capturedReq *httpx.Request
+	var capturedResp *httpx.Response
+	c := newClient(t, srv.Server, func(o *httpx.Options) {
+		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(),
+			interceptor.NewTransactionInterceptor(func(tx *httpx.Transaction) { txn = tx }),
+			httpx.InterceptorFunc(func(ch *httpx.Chain) (*httpx.Response, error) {
+				resp, err := ch.Proceed()
+				capturedReq = ch.Request()
+				capturedResp = resp
+				return resp, err
+			}),
+		)
+	})
+	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+		t.Fatal(err)
+	}
+	if txn == nil || capturedReq == nil || capturedResp == nil {
+		t.Fatal("未收到快照或链路引用")
+	}
+
+	if got := txn.ReqHeaders["user-agent"]; len(got) != 1 || got[0] != "kit-test/1.0" {
+		t.Fatalf("快照 user-agent = %v", txn.ReqHeaders["user-agent"])
+	}
+	if got := txn.RespHeaders["X-Server"]; len(got) != 1 || got[0] != "kit" {
+		t.Fatalf("快照 X-Server = %v", txn.RespHeaders["X-Server"])
+	}
+
+	// 改「原始」请求头验证快照已与之隔离。ReqHeaders 底层是 http.Header，本库刻意保留
+	// 全小写原文 key，这里按同一约定转成裸 map 就地改写（直接用小写 key 索引 http.Header 会触发 SA1008）。
+	rawReq := map[string][]string(capturedReq.ReqHeaders)
+	rawReq["user-agent"][0] = "mutated"
+	rawReq["x-injected"] = []string{"req"}
+	capturedResp.Header.Set("x-server", "mutated")
+	capturedResp.Header.Set("x-injected", "resp")
+	if v := capturedResp.Header["Set-Cookie"]; len(v) > 0 {
+		v[0] = "mutated-cookie"
+	}
+
+	t.Logf("after mutate req=%v resp=%v", txn.ReqHeaders["user-agent"], txn.RespHeaders["X-Server"])
+	if got := txn.ReqHeaders["user-agent"]; len(got) != 1 || got[0] != "kit-test/1.0" {
+		t.Fatalf("ReqHeaders 被后续改写污染: %v", txn.ReqHeaders)
+	}
+	if _, ok := txn.ReqHeaders["x-injected"]; ok {
+		t.Fatalf("ReqHeaders 被注入新键: %v", txn.ReqHeaders)
+	}
+	if got := txn.RespHeaders["X-Server"]; len(got) != 1 || got[0] != "kit" {
+		t.Fatalf("RespHeaders 被后续改写污染: %v", txn.RespHeaders)
+	}
+	if _, ok := txn.RespHeaders["x-injected"]; ok {
+		t.Fatalf("RespHeaders 被注入新键: %v", txn.RespHeaders)
+	}
+	if got := txn.RespHeaders["Set-Cookie"]; len(got) != 1 || got[0] != "a=1" {
+		t.Fatalf("RespHeaders 切片被就地改写: %v", txn.RespHeaders["Set-Cookie"])
+	}
+}

@@ -13,6 +13,7 @@ import (
 // Level 日志级别枚举。合法值见下列常量；其它值（空串、大小写、带空格）由 parseLevel 回落 LevelInfo。
 type Level string
 
+// Level 的合法取值，由低到高。parseLevel 只认这四个，其它一律回落 LevelInfo。
 const (
 	LevelDebug Level = "debug"
 	LevelInfo  Level = "info"
@@ -23,6 +24,7 @@ const (
 // Format 默认 handler 的输出格式枚举。FormatConsole 用文本 handler，其它值一律按 JSON。
 type Format string
 
+// Format 的合法取值。仅 FormatConsole 走文本 handler，其余一律按 JSON。
 const (
 	FormatJSON    Format = "json"
 	FormatConsole Format = "console"
@@ -31,6 +33,7 @@ const (
 // Output 默认 handler 的输出目标枚举。
 type Output string
 
+// Output 的合法取值。OutputBoth 同时写控制台与文件。
 const (
 	OutputConsole Output = "console"
 	OutputFile    Output = "file"

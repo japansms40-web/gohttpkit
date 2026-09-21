@@ -49,6 +49,7 @@ func TestTraceIDFromContext_nil与空串(t *testing.T) {
 }
 
 func TestWithTraceID_nilContext不panic(t *testing.T) {
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 不 panic 且能兜底，nil 正是被测契约
 	ctx := WithTraceID(nil, "from-nil")
 	got := TraceIDFromContext(ctx)
 	t.Logf("WithTraceID(nil, from-nil) → %q", got)
@@ -85,6 +86,7 @@ func TestEnsureTraceID_生成幂等且不覆盖调用方(t *testing.T) {
 		t.Fatal("空串 trace_id 应被兜底生成")
 	}
 
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 不 panic 且能兜底，nil 正是被测契约
 	fromNil := EnsureTraceID(nil)
 	t.Logf("EnsureTraceID(nil) = %q", TraceIDFromContext(fromNil))
 	if TraceIDFromContext(fromNil) == "" {
@@ -156,6 +158,7 @@ func TestWithAttrs_空切片原样返回(t *testing.T) {
 }
 
 func TestWithAttrs_nilContext加字段(t *testing.T) {
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 不 panic 且能兜底，nil 正是被测契约
 	ctx := WithAttrs(nil, slog.String("k", "v"))
 	got := attrsFromContext(ctx)
 	t.Logf("WithAttrs(nil, k=v) → %v", got)
@@ -192,6 +195,7 @@ func TestEnsureTraceID_不改入参Background(t *testing.T) {
 }
 
 func TestAttrsFromContext_nil返回nil(t *testing.T) {
+	//nolint:staticcheck // SA1012：本用例就是要验证传 nil context 返回 nil 而非 panic，nil 正是被测契约
 	got := attrsFromContext(nil)
 	t.Logf("attrsFromContext(nil) = %v", got)
 	if got != nil {
