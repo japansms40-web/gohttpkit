@@ -199,6 +199,8 @@ client, err := interceptor.NewClient(httpx.Options{
 
 ## 开发
 
+贡献流程与提交前清单见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；版本策略（导出即契约，0.x 破坏性变更升 minor）见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
+
 ```bash
 make check       # 本地轻量：build + vet + cover(含 90% 门禁) + tidy-check
 make ci          # 合入口径聚合：check + lint-new + race + char（race 需要 C 编译器）
