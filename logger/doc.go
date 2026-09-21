@@ -6,7 +6,9 @@
 // 三行接入（业务入口必须保留派生 ctx，才能和后续 HTTP 日志同链）：
 //
 //	ctx = logger.EnsureTraceID(ctx) // 业务入口保留派生 ctx
-//	logger.Info(ctx, "业务开始", logger.Event("account.sync.started"))
+//	accountSyncStarted := logger.NewEvent("account.sync.started")
+//	logger.InfoEvent(ctx, accountSyncStarted, slog.String("account_id", "123"))
+//	logger.Info(ctx, "业务开始", logger.EventAttr(accountSyncStarted.Name()))
 //	body, err := client.Get(ctx, "/v1/account", nil)
 //
 // ctx 值不可变：EnsureTraceID / WithAttrs / StartSpan / WithTraceID 都返回派生 ctx，
@@ -14,7 +16,8 @@
 // HTTP 日志补 trace；要让 Do 前后的业务日志同链，必须在业务入口先保留派生 ctx。
 // SetHandler 是可选的进程级注入点，不用每个请求重复设置。
 //
-// event 是机器契约，msg 继续是旧查询和人类文案契约：加 Event() 不改 msg。
+// InfoEvent / WarnEvent 的 msg 与 event 同值。需要人类文案与机器事件分离时，
+// 才用 Info(ctx, msg, EventAttr(name))。
 // 保留字段（trace_id / span_id / parent_span_id / span_name / event / duration_ms / error）
 // 不得由业务 attrs 重用；slog 允许重名 key，不同 JSON 消费器的取值可能不一致。
 //

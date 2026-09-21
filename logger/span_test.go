@@ -40,11 +40,11 @@ func TestStartSpan_成对事件并带耗时(t *testing.T) {
 	}
 	start, fin := lines[0], lines[1]
 
-	if start["msg"] != EventSpanStart || fin["msg"] != EventSpanEnd {
-		t.Fatalf("消息名错误: start=%v end=%v", start["msg"], fin["msg"])
+	if start["msg"] != EventSpanStart.Name() || fin["msg"] != EventSpanEnd.Name() {
+		t.Fatalf("span msg 契约错误: start=%v end=%v", start["msg"], fin["msg"])
 	}
-	if start["event"] != EventSpanStart || fin["event"] != EventSpanEnd {
-		t.Fatalf("event 字段错误: start=%v end=%v", start["event"], fin["event"])
+	if start["event"] != EventSpanStart.Name() || fin["event"] != EventSpanEnd.Name() {
+		t.Fatalf("span event 契约错误: start=%v end=%v", start["event"], fin["event"])
 	}
 	if start["span_name"] != "demo.op" || fin["span_name"] != "demo.op" {
 		t.Errorf("span_name 缺失或不一致: %v / %v", start["span_name"], fin["span_name"])
@@ -163,8 +163,9 @@ func TestStartSpan_end可多次调用(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("start + 两次 end 应 3 条,实际 %d: %s", len(lines), buf.String())
 	}
-	if lines[1]["event"] != EventSpanEnd || lines[2]["event"] != EventSpanEnd {
-		t.Fatalf("后两条都应是 span.end: %v %v", lines[1]["event"], lines[2]["event"])
+	if lines[1]["event"] != EventSpanEnd.Name() || lines[2]["event"] != EventSpanEnd.Name() {
+		t.Fatalf("后两条都应是 %q: %v %v",
+			EventSpanEnd.Name(), lines[1]["event"], lines[2]["event"])
 	}
 	if lines[2]["again"] != "yes" {
 		t.Fatalf("第二次 end 的字段丢失: %v", lines[2])
@@ -183,7 +184,7 @@ func TestStartSpan_start带调用方attrs(t *testing.T) {
 	if start["method"] != "GET" {
 		t.Fatalf("start attrs 丢失 method: %v", start)
 	}
-	if start["event"] != EventSpanStart {
+	if start["event"] != EventSpanStart.Name() {
 		t.Fatalf("event=%v", start["event"])
 	}
 }

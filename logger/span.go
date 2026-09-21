@@ -64,15 +64,13 @@ func StartSpan(ctx context.Context, name string, attrs ...slog.Attr) (context.Co
 		startAttrs = append(startAttrs, slog.String("parent_span_id", parent))
 	}
 	startAttrs = append(startAttrs, attrs...)
-	startAttrs = append(startAttrs, Event(EventSpanStart))
-	Info(ctx, EventSpanStart, startAttrs...)
+	InfoEvent(ctx, EventSpanStart, startAttrs...)
 
 	end := func(endAttrs ...slog.Attr) {
 		final := make([]slog.Attr, 0, len(endAttrs)+2)
 		final = append(final, slog.String("span_name", name), DurationMs(time.Since(start)))
 		final = append(final, endAttrs...)
-		final = append(final, Event(EventSpanEnd))
-		Info(ctx, EventSpanEnd, final...)
+		InfoEvent(ctx, EventSpanEnd, final...)
 	}
 	return ctx, end
 }
