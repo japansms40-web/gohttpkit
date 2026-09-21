@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -138,7 +137,8 @@ func (c *Client) Do(ctx context.Context, spec RequestSpec) ([]byte, error) {
 
 	baseURL := c.headers.BaseURL()
 	fullURL := baseURL + spec.Path
-	if strings.HasPrefix(spec.Path, "http://") || strings.HasPrefix(spec.Path, "https://") {
+	// Path 自带 scheme（绝对 URL）时直接用它发跨域请求，否则拼在 BaseURL 后面。
+	if u, err := url.Parse(spec.Path); err == nil && u.IsAbs() {
 		fullURL = spec.Path
 	}
 	if len(spec.Params) > 0 {
