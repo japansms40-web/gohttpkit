@@ -183,8 +183,12 @@ func (e *ContentEncodingError) Unwrap() error {
 // ReadResponseBodyError 读响应体失败且不是可重试网络错。
 // Encoding 是当时的 ContentEncoding（未压缩时为 EncodingIdentity）。判定请用 errors.As。
 type ReadResponseBodyError struct {
-	// Encoding 当时的 content-encoding，未压缩时为 EncodingIdentity。
+	// Encoding 当时归一化后的编码，未压缩或未识别时为 EncodingIdentity。
 	Encoding ContentEncoding
+	// RawEncoding 是响应头 content-encoding 的原文（未归一化，未设头时为空）。
+	// 保留它是因为 Encoding 已把「未登记的编码」（如 "identity"、"compress"）都收成 EncodingIdentity，
+	// 排障时想知道服务器到底发的哪个未知编码，只能看这里。
+	RawEncoding string
 	// Err io.ReadAll 的非重试错误。
 	Err error
 }

@@ -147,6 +147,36 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 			t.Fatal("普通读错不该变成 RetryableError")
 		}
 	})
+	t.Run("未识别编码保留原文", func(t *testing.T) {
+		cause := errors.New("disk read failed")
+		header := http.Header{}
+		header.Set("content-encoding", "compress") // 本库不解压 compress，Encoding 会收成 Identity
+		c := newClientWith(t, httpx.Options{
+			Headers: httpx.StaticHeaders{Base: "https://x.example"},
+			Interceptors: httpx.Interceptors{
+				interceptor.NewBodyDecodeInterceptor(),
+				httpx.InterceptorFunc(func(*httpx.Chain) (*httpx.Response, error) {
+					return &httpx.Response{
+						StatusCode: 200,
+						Header:     header,
+						Raw:        &http.Response{Body: failReadCloser{err: cause}},
+					}, nil
+				}),
+			},
+		})
+		_, err := c.Get(context.Background(), "/x", nil)
+		var got *httpx.ReadResponseBodyError
+		if !errors.As(err, &got) {
+			t.Fatalf("err = %v (%T), want *httpx.ReadResponseBodyError", err, err)
+		}
+		t.Logf("Encoding=%q RawEncoding=%q", got.Encoding, got.RawEncoding)
+		if got.Encoding != httpx.EncodingIdentity {
+			t.Fatalf("Encoding = %q, want EncodingIdentity（未登记编码归一化为 Identity）", got.Encoding)
+		}
+		if got.RawEncoding != "compress" {
+			t.Fatalf("RawEncoding = %q, want %q（未识别编码原文必须保留供排障）", got.RawEncoding, "compress")
+		}
+	})
 	t.Run("可重试网络读错", func(t *testing.T) {
 		cause := errors.New("connection reset by peer")
 		c := newClientWith(t, httpx.Options{

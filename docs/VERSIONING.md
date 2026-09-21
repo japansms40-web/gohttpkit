@@ -14,6 +14,7 @@
 新增（不破坏现有签名）：
 
 - `httpx.ContentEncoding` / `ParseContentEncoding`
+- `httpx.ReadResponseBodyError.RawEncoding`（新增字段，保留未识别 content-encoding 原文；不破坏 `errors.As` 用法）
 - `httpx.Header*` 全套 header 名 const（含 `HeaderUserAgentCanonical`）
 - `httpx.LogField*`、`logger.Field*` 日志字段 key const
 - `httpx.StatusClass` / `ClassifyStatus` / `IsSuccessStatus` / `IsErrorStatus`

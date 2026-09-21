@@ -42,7 +42,8 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 		}
 	}()
 
-	encoding, _ := httpx.ParseContentEncoding(resp.Header.Get(httpx.HeaderContentEncoding))
+	rawEncoding := resp.Header.Get(httpx.HeaderContentEncoding)
+	encoding, _ := httpx.ParseContentEncoding(rawEncoding)
 	var reader io.Reader = raw.Body
 	switch encoding {
 	case httpx.EncodingZstd:
@@ -72,7 +73,7 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 		if errors.IsRetryableNetworkError(rerr) {
 			return nil, &errors.RetryableError{Err: rerr, Attempts: 1, LastError: rerr}
 		}
-		return nil, &httpx.ReadResponseBodyError{Encoding: encoding, Err: rerr}
+		return nil, &httpx.ReadResponseBodyError{Encoding: encoding, RawEncoding: rawEncoding, Err: rerr}
 	}
 
 	resp.Body = body
