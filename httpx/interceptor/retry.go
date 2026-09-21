@@ -4,6 +4,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/japansms40-web/gohttpkit/errors"
@@ -14,6 +15,36 @@ import (
 type retryInterceptor struct{}
 
 const sendRequestErrFmt = "failed to send request: %w"
+
+// computeBackoff 第 attempt 次重试的退避时长：base * 2^attempt，封顶 limit（limit<=0 表示不封顶）。
+// 输入 base：退避基数（已由 normalizeRetry 保证 >0）；limit：单次封顶；attempt：从 0 起的重试序号。
+// 返回：base<<attempt，超过 limit 时钳到 limit；base>0 时结果恒 >0。
+// 逐次翻倍而不是一步 `base * (1 << attempt)`：后者在大 attempt 下会整型溢出成负数或 0，
+// 让 `backoff > limit` 判断失效、把 MaxBackoff 封顶绕过并触发立即重试（重试风暴）。
+// 翻倍前先判断是否会越过 limit 或越过 int64 上限，越过就钳住，绝不溢出。
+// 形参用 limit 不用 max：避免遮蔽 Go 1.21 内建 max（revive redefines-builtin-id）。
+func computeBackoff(base, limit time.Duration, attempt int) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	backoff := base
+	for i := 0; i < attempt; i++ {
+		if limit > 0 && backoff >= limit {
+			return limit
+		}
+		if backoff > math.MaxInt64/2 { // 再翻倍会溢出 int64
+			if limit > 0 {
+				return limit
+			}
+			return backoff // 不封顶：停在溢出前的安全上限
+		}
+		backoff *= 2
+	}
+	if limit > 0 && backoff > limit {
+		return limit
+	}
+	return backoff
+}
 
 // NewRetryInterceptor 网络层重试：包住 bridge + 终端，每次重试重新构建请求与请求头。
 // 给默认链：策略只认 New 时已归一化的 Options.Retry（经 Client.RetryPolicy()），不读环境变量。
@@ -65,10 +96,7 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 			return nil, &errors.RetryableError{Err: doErr, Attempts: attempt + 1, LastError: lastErr}
 		}
 
-		backoff := policy.BaseBackoff * (1 << uint(attempt))
-		if policy.MaxBackoff > 0 && backoff > policy.MaxBackoff {
-			backoff = policy.MaxBackoff
-		}
+		backoff := computeBackoff(policy.BaseBackoff, policy.MaxBackoff, attempt)
 
 		logger.WarnEvent(req.Ctx, httpx.EventHTTPRetry,
 			slog.String(httpx.LogFieldMethod, req.Method),
