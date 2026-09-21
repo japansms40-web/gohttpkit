@@ -4,6 +4,7 @@ package httpx
 // Transaction 的 json tag 必须与下列常量同值（struct tag 不能引用 const）。
 // 不作 type 枚举：它们只当 slog.Attr 的 key。
 
+// HTTP 交易 / 重试日志字段 key，与 Transaction 的 json tag 同值。
 const (
 	LogFieldMethod      = "method"
 	LogFieldURL         = "url"

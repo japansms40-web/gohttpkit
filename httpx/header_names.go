@@ -3,6 +3,7 @@ package httpx
 // header_names.go —— 本库用到的 HTTP header 名。单一事实源，禁止在发头 / 读头处再写同名字面量。
 // 值一律小写，遵守「全小写发头」约定。不作 type 枚举：它们只当 map key，套 type 只会引入转换噪音。
 
+// 本库用到的 HTTP header 名。值一律小写，遵守全小写发头约定。
 const (
 	HeaderContentType     = "content-type"
 	HeaderContentEncoding = "content-encoding"

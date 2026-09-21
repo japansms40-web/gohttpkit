@@ -23,8 +23,14 @@ linters:
     gocyclo:
       min-complexity: 20
     goconst:
-      min-occurrences: 3
+      # header 名、日志字段 key 常只出现 2 次就会漏网；降到 2 卡住新增裸字面量。
+      min-occurrences: 2
       min-len: 4
+      # 默认 ignore-calls=true 会放过 Header.Get("content-encoding") / slog.String("method", …)
+      # 这类正是我们要卡的用法。
+      ignore-calls: false
+    # 不启用 mnd / revive.add-constant：状态码已由 StatusClass 收敛，但 0o750、退避毫秒、
+    # 重试次数等数字遍布生产代码，开魔法数字检测噪音远大于收益。第 9 章 MUST + 评审兜底。
     forbidigo:
       forbid:
         - pattern: '^(fmt\.Print(|f|ln)|log\.(Print|Fatal|Panic)|slog\.(Debug|Info|Warn|Error))'
@@ -40,12 +46,17 @@ linters:
       # 表里的 "Hans"/"Hant" 就该字面写在每一行，提成常量反而看不出表长什么样
       - path: geo/
         linters: [gocyclo, goconst]
+      # error 文案在 nil / 非 nil 两条 Error() 路径各写一次；身份是类型不是文案，
+      # min-occurrences=2 会把这些兼容文案误报成「该提常量」
+      - path: netproxy/
+        linters: [goconst]
       # logger 包自身是门面实现，允许直呼 slog
       - path: logger/
         linters: [forbidigo]
       # examples 是给人读的示范代码，用 fmt 打印结果比走 logger 更直观
       - path: examples/
         linters: [forbidigo, gosec, errcheck, goconst]
-      # logger 的 "console"/"json" 是配置枚举值，散在默认值与解析处，提常量收益为零
+      # logger.Format / Output 两个枚举共享字面量 "console"，goconst min-occurrences=2
+      # 会把这两条合法定义误报成「该提常量」。字段 key 已收敛到 fields.go。
       - path: logger/
         linters: [goconst]

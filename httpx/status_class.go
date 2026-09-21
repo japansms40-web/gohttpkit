@@ -8,6 +8,7 @@ import "net/http"
 // 给 statusSemantics / logging 与自定义拦截器判断 2xx / 4xx / 5xx。
 type StatusClass uint8
 
+// HTTP 状态码按百位归类的取值。
 const (
 	ClassUnknown StatusClass = iota
 	ClassInformational

@@ -13,6 +13,8 @@ import (
 
 type retryInterceptor struct{}
 
+const sendRequestErrFmt = "failed to send request: %w"
+
 // NewRetryInterceptor 网络层重试：包住 bridge + 终端，每次重试重新构建请求与请求头。
 // 给默认链：策略只认 New 时已归一化的 Options.Retry（经 Client.RetryPolicy()），不读环境变量。
 // 输入：无。返回可放入链的 Interceptor。
@@ -56,7 +58,7 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		lastErr = doErr
 
 		if !policy.IsRetryable(doErr) {
-			return nil, fmt.Errorf("failed to send request: %w", doErr)
+			return nil, fmt.Errorf(sendRequestErrFmt, doErr)
 		}
 
 		if attempt == policy.MaxRetries {
@@ -89,5 +91,5 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("failed to send request: %w", lastErr)
+	return nil, fmt.Errorf(sendRequestErrFmt, lastErr)
 }
