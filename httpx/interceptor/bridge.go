@@ -48,8 +48,8 @@ func (i *bridgeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) 
 
 	if !c.Options().DisableOriginReferer {
 		origin, referer := httpx.BuildOriginAndReferer(req.BaseURL, req.Path)
-		allHeaders["origin"] = origin
-		allHeaders["referer"] = referer
+		allHeaders[httpx.HeaderOrigin] = origin
+		allHeaders[httpx.HeaderReferer] = referer
 	}
 
 	strict := req.HeaderWhitelist != nil
@@ -79,18 +79,18 @@ func (i *bridgeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) 
 // 都产生同一份、且不重复的线上字节。
 // 给 bridge：final 里被本函数消化掉的条目会被删除。
 func applySpecialHeaders(httpReq *http.Request, final map[string]string, strict bool) {
-	if v, ok := final["host"]; ok {
+	if v, ok := final[httpx.HeaderHost]; ok {
 		httpReq.Host = v
-		delete(final, "host")
+		delete(final, httpx.HeaderHost)
 	}
-	if v, ok := final["content-length"]; ok {
+	if v, ok := final[httpx.HeaderContentLength]; ok {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
 			httpReq.ContentLength = n
 		}
-		delete(final, "content-length")
+		delete(final, httpx.HeaderContentLength)
 	}
-	_, hasUA := final["user-agent"]
+	_, hasUA := final[httpx.HeaderUserAgent]
 	if hasUA || strict {
-		httpReq.Header["User-Agent"] = []string{""}
+		httpReq.Header[httpx.HeaderUserAgentCanonical] = []string{""}
 	}
 }

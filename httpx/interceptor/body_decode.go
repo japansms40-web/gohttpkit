@@ -42,7 +42,7 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 		}
 	}()
 
-	encoding, _ := httpx.ParseContentEncoding(resp.Header.Get("content-encoding"))
+	encoding, _ := httpx.ParseContentEncoding(resp.Header.Get(httpx.HeaderContentEncoding))
 	var reader io.Reader = raw.Body
 	switch encoding {
 	case httpx.EncodingZstd:

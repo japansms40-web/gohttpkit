@@ -199,7 +199,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, body any) ([]byte, e
 		Method:       http.MethodPost,
 		Path:         path,
 		Body:         body,
-		ExtraHeaders: map[string]string{headerContentType: mimeJSON},
+		ExtraHeaders: map[string]string{HeaderContentType: mimeJSON},
 	})
 }
 

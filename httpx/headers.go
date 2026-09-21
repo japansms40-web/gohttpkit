@@ -10,9 +10,8 @@ import (
 // 独立成文件：发哪些头是本库最容易被误改的契约，和链框架、拦截器实现分开便于评审。
 
 const (
-	headerContentType = "content-type"
-	mimeJSON          = "application/json"
-	mimeHTML          = "text/html"
+	mimeJSON = "application/json"
+	mimeHTML = "text/html"
 )
 
 // HeaderProvider 是本库最重要的接缝：请求头怎么构建完全交给接入方。
@@ -156,7 +155,7 @@ func HeaderIsHTML(h http.Header) bool {
 	if h == nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(h.Get(headerContentType)), mimeHTML)
+	return strings.Contains(strings.ToLower(h.Get(HeaderContentType)), mimeHTML)
 }
 
 // SnapshotRequestHeaders 在第一次尝试时留一份「最终发出的请求头」快照到 Request.ReqHeaders。
@@ -169,15 +168,15 @@ func SnapshotRequestHeaders(req *Request) {
 	}
 	snapshot := make(http.Header, len(req.HTTPReq.Header)+1)
 	for k, v := range req.HTTPReq.Header {
-		if k == "User-Agent" && len(v) == 1 && v[0] == "" {
+		if k == HeaderUserAgentCanonical && len(v) == 1 && v[0] == "" {
 			continue
 		}
 		snapshot[k] = v
 	}
 	if req.HTTPReq.Host != "" {
-		snapshot["host"] = []string{req.HTTPReq.Host}
+		snapshot[HeaderHost] = []string{req.HTTPReq.Host}
 	} else if req.HTTPReq.URL != nil {
-		snapshot["host"] = []string{req.HTTPReq.URL.Host}
+		snapshot[HeaderHost] = []string{req.HTTPReq.URL.Host}
 	}
 	req.ReqHeaders = snapshot
 }
