@@ -134,3 +134,31 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 - **MAY** 错误路径再打 `errors.As` 解出的类型和字段，方便核对类型错误而不是文案。
   范例：`geo/errors_test.go` 的 `assertUnknownCountry` / `assertInvalidExtra` /
   `assertExtraExceedsPool`。本库错误的定义与对比见第 5 节。
+
+## 9. 常量、枚举与魔法值
+
+稳定取值是对外契约：下游按日志字段做过滤、按 header 名复刻指纹、按 encoding 分支。
+散落字面量意味着改一个名字要全仓库搜，漏一处就静默出错。先判定该用枚举还是具名 const，
+再写代码；禁止为了消灭字面量而无脑加 `type`。
+
+- **MUST** 闭合取值集合，且会被 `switch` / 比较 / 解析或带方法的，定义为 `type X string`
+  （或其它合适底层类型）枚举 + 常量 + `String()`；需要从外部原文收回来时再加 `ParseX`。
+  范例：`netproxy.Scheme`、`logger.Level` / `logger.Format` / `logger.Output`、
+  `httpx.ContentEncoding`、`httpx.StatusClass`。
+- **MUST** 对外契约类稳定标识符（HTTP header 名、结构化日志字段 key、event / span 名）
+  集中定义为具名 const，单一事实源；禁止在分支、拼装、打点处再写同名字面量。
+  范例：`httpx/header_names.go`、`httpx/log_fields.go`、`logger/fields.go`、
+  `httpx.EventHTTP*` / `httpx.SpanHTTPRequest`。
+- **SHOULD** header 名、日志字段 key 用具名 const，**不要**套 `type` 枚举。
+  它们作 `map[string]string` 的 key 或 `slog.String(key, v)` 的实参，套 type 只在每个
+  访问点引入 `string(...)` 转换噪音，没有分支收益。标准库 `net/http` 对 header 名也是
+  纯 const。判定边界：值会进 `switch` → 枚举（如 `content-encoding` 的 gzip/zstd）；
+  只当 map key / 日志字段名 → const（如 `"content-length"`、`"trace_id"`）。
+- **MUST** 数值边界（HTTP 状态码等）用 stdlib 常量（`http.StatusBadRequest`）或本库
+  `StatusClass` / `ClassifyStatus` / `IsSuccessStatus` 表达语义，禁止裸区间魔法数字
+  （如 `code >= 200 && code < 300`、`code >= 400`）。
+- **明确豁免**：
+  - `geo/` 大数据映射表里的 `"Hans"` / `"zh-CN"` 等字面量就该写在每一行
+    （`.golangci.yml` 已豁免 `goconst`）。表即数据，提成常量反而看不出表长什么样。
+  - `examples/` 为直观允许字面量（`.golangci.yml` 已豁免）。
+  - `*_test.go` 可用字面量从「外部视角」核对契约实际值；生产代码不得回写字面量。
