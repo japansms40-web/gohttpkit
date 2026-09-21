@@ -73,7 +73,7 @@ func assertNilBuildHeaders(t *testing.T, err error, providerType string) {
 	}
 }
 
-func assertReadResponseBody(t *testing.T, err error, encoding string, cause error) {
+func assertReadResponseBody(t *testing.T, err error, encoding httpx.ContentEncoding, cause error) {
 	t.Helper()
 	var got *httpx.ReadResponseBodyError
 	if !errors.As(err, &got) {

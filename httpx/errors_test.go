@@ -82,7 +82,7 @@ func assertCreateHTTPRequest(t *testing.T, err error, method string, cause error
 	t.Logf("errors.As → *CreateHTTPRequestError Method=%q err=%v", got.Method, err)
 }
 
-func assertContentEncoding(t *testing.T, err error, encoding string, cause error) {
+func assertContentEncoding(t *testing.T, err error, encoding httpx.ContentEncoding, cause error) {
 	t.Helper()
 	var got *httpx.ContentEncodingError
 	if !errors.As(err, &got) {
@@ -106,7 +106,7 @@ func assertTransportError(t *testing.T, err error, cause error) {
 	t.Logf("errors.As → *TransportError err=%v", err)
 }
 
-func assertReadResponseBody(t *testing.T, err error, encoding string, cause error) {
+func assertReadResponseBody(t *testing.T, err error, encoding httpx.ContentEncoding, cause error) {
 	t.Helper()
 	var got *httpx.ReadResponseBodyError
 	if !errors.As(err, &got) {
@@ -276,8 +276,8 @@ func TestCreateHTTPRequestError_包装后仍可As(t *testing.T) {
 
 func TestContentEncodingError_字段解包与文案(t *testing.T) {
 	cause := errors.New("gzip: invalid header")
-	err := &httpx.ContentEncodingError{Encoding: "gzip", Err: cause}
-	assertContentEncoding(t, err, "gzip", cause)
+	err := &httpx.ContentEncodingError{Encoding: httpx.EncodingGzip, Err: cause}
+	assertContentEncoding(t, err, httpx.EncodingGzip, cause)
 	want := "failed to create gzip reader: gzip: invalid header"
 	t.Logf("Error() = %q", err.Error())
 	if err.Error() != want {
@@ -296,14 +296,14 @@ func TestContentEncodingError_nil接收者与空Err(t *testing.T) {
 
 func TestContentEncodingError_包装后仍可As(t *testing.T) {
 	cause := errors.New("zstd: bad")
-	wrapped := fmt.Errorf("decode: %w", &httpx.ContentEncodingError{Encoding: "zstd", Err: cause})
-	assertContentEncoding(t, wrapped, "zstd", cause)
+	wrapped := fmt.Errorf("decode: %w", &httpx.ContentEncodingError{Encoding: httpx.EncodingZstd, Err: cause})
+	assertContentEncoding(t, wrapped, httpx.EncodingZstd, cause)
 }
 
 func TestReadResponseBodyError_字段解包与文案(t *testing.T) {
 	cause := errors.New("disk read failed")
-	err := &httpx.ReadResponseBodyError{Encoding: "gzip", Err: cause}
-	assertReadResponseBody(t, err, "gzip", cause)
+	err := &httpx.ReadResponseBodyError{Encoding: httpx.EncodingGzip, Err: cause}
+	assertReadResponseBody(t, err, httpx.EncodingGzip, cause)
 	want := "failed to read response: disk read failed"
 	t.Logf("Error() = %q", err.Error())
 	if err.Error() != want {
@@ -322,8 +322,8 @@ func TestReadResponseBodyError_nil接收者与空Err(t *testing.T) {
 
 func TestReadResponseBodyError_包装后仍可As(t *testing.T) {
 	cause := errors.New("short read")
-	wrapped := fmt.Errorf("body: %w", &httpx.ReadResponseBodyError{Encoding: "", Err: cause})
-	assertReadResponseBody(t, wrapped, "", cause)
+	wrapped := fmt.Errorf("body: %w", &httpx.ReadResponseBodyError{Encoding: httpx.EncodingIdentity, Err: cause})
+	assertReadResponseBody(t, wrapped, httpx.EncodingIdentity, cause)
 }
 
 func TestTransportError_文案与解包(t *testing.T) {
@@ -367,8 +367,8 @@ func TestHttpx错误类型互不误匹配(t *testing.T) {
 		&httpx.RequestBodyEncodeError{BodyType: "chan int", Err: errors.New("e")},
 		&httpx.ResponseJSONDecodeError{TargetType: "*int", Err: errors.New("e")},
 		&httpx.CreateHTTPRequestError{Method: "GET", Err: errors.New("e")},
-		&httpx.ContentEncodingError{Encoding: "gzip", Err: errors.New("e")},
-		&httpx.ReadResponseBodyError{Encoding: "gzip", Err: errors.New("e")},
+		&httpx.ContentEncodingError{Encoding: httpx.EncodingGzip, Err: errors.New("e")},
+		&httpx.ReadResponseBodyError{Encoding: httpx.EncodingGzip, Err: errors.New("e")},
 		&httpx.TransportError{Err: errors.New("e")},
 	}
 	newTargets := func() []any {

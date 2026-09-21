@@ -45,7 +45,7 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 		c := newClient(t, srv.Server, nil)
 		_, err := c.Get(context.Background(), "/x", nil)
 		var ce *httpx.ContentEncodingError
-		if !errors.As(err, &ce) || ce.Encoding != "gzip" {
+		if !errors.As(err, &ce) || ce.Encoding != httpx.EncodingGzip {
 			t.Fatalf("err = %v (%T), want *ContentEncodingError Encoding=gzip", err, err)
 		}
 		t.Logf("gzip construct err Encoding=%q unwrap=%v", ce.Encoding, ce.Err)
@@ -63,13 +63,13 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 		var ce *httpx.ContentEncodingError
 		var re *httpx.ReadResponseBodyError
 		if errors.As(err, &ce) {
-			if ce.Encoding != "zstd" {
+			if ce.Encoding != httpx.EncodingZstd {
 				t.Fatalf("Encoding = %q, want zstd", ce.Encoding)
 			}
 			t.Logf("zstd construct err Encoding=%q unwrap=%v", ce.Encoding, ce.Err)
 			return
 		}
-		if !errors.As(err, &re) || re.Encoding != "zstd" {
+		if !errors.As(err, &re) || re.Encoding != httpx.EncodingZstd {
 			t.Fatalf("err = %v (%T), want ContentEncodingError 或 ReadResponseBodyError Encoding=zstd", err, err)
 		}
 		t.Logf("zstd read err Encoding=%q unwrap=%v", re.Encoding, re.Err)
@@ -141,7 +141,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 			},
 		})
 		_, err := c.Get(context.Background(), "/x", nil)
-		assertReadResponseBody(t, err, "", cause)
+		assertReadResponseBody(t, err, httpx.EncodingIdentity, cause)
 		var re *kiterrors.RetryableError
 		if errors.As(err, &re) {
 			t.Fatal("普通读错不该变成 RetryableError")

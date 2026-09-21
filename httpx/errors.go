@@ -151,10 +151,10 @@ func (e *CreateHTTPRequestError) Unwrap() error {
 }
 
 // ContentEncodingError 按 content-encoding 构造解压 reader 失败。
-// Encoding 为 "gzip" 或 "zstd"。判定请用 errors.As。
+// Encoding 为 EncodingGzip / EncodingZstd 等枚举。判定请用 errors.As。
 type ContentEncodingError struct {
-	// Encoding 失败的编码名。
-	Encoding string
+	// Encoding 失败的编码。
+	Encoding ContentEncoding
 	// Err reader 构造错误。
 	Err error
 }
@@ -181,10 +181,10 @@ func (e *ContentEncodingError) Unwrap() error {
 }
 
 // ReadResponseBodyError 读响应体失败且不是可重试网络错。
-// Encoding 是当时的 content-encoding（小写，可能为空）。判定请用 errors.As。
+// Encoding 是当时的 ContentEncoding（未压缩时为 EncodingIdentity）。判定请用 errors.As。
 type ReadResponseBodyError struct {
-	// Encoding 当时的 content-encoding，未压缩时为 ""。
-	Encoding string
+	// Encoding 当时的 content-encoding，未压缩时为 EncodingIdentity。
+	Encoding ContentEncoding
 	// Err io.ReadAll 的非重试错误。
 	Err error
 }

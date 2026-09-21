@@ -4,7 +4,6 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"io"
-	"strings"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
@@ -43,28 +42,28 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 		}
 	}()
 
-	encoding := strings.ToLower(resp.Header.Get("content-encoding"))
+	encoding, _ := httpx.ParseContentEncoding(resp.Header.Get("content-encoding"))
 	var reader io.Reader = raw.Body
 	switch encoding {
-	case "zstd":
+	case httpx.EncodingZstd:
 		zr, zerr := zstd.NewReader(raw.Body)
 		if zerr != nil {
-			return nil, &httpx.ContentEncodingError{Encoding: "zstd", Err: zerr}
+			return nil, &httpx.ContentEncodingError{Encoding: httpx.EncodingZstd, Err: zerr}
 		}
 		defer zr.Close()
 		reader = zr
-	case "gzip":
+	case httpx.EncodingGzip:
 		gz, gerr := gzip.NewReader(raw.Body)
 		if gerr != nil {
-			return nil, &httpx.ContentEncodingError{Encoding: "gzip", Err: gerr}
+			return nil, &httpx.ContentEncodingError{Encoding: httpx.EncodingGzip, Err: gerr}
 		}
 		defer func() { _ = gz.Close() }()
 		reader = gz
-	case "deflate":
+	case httpx.EncodingDeflate:
 		fr := flate.NewReader(raw.Body)
 		defer func() { _ = fr.Close() }()
 		reader = fr
-	case "br":
+	case httpx.EncodingBr:
 		reader = brotli.NewReader(raw.Body)
 	}
 
