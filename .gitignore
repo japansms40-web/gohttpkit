@@ -9,7 +9,7 @@ coverage.out
 # 示例落盘目录（go run ./examples/fidelity -dump ./out）
 /out/
 
-# 本地环境变量（从 .env.example 复制后填入真实值，切勿提交）
+# 本地环境变量（切勿提交）
 .env
 .env.local
 
@@ -19,3 +19,16 @@ coverage.out
 # 编辑器
 /.idea/
 /.vscode/
+/.cursor/plans/accept-language_按_chrome_拼_de41b8f0.plan.md
+/.cursor/plans/geo_按表拆文件_e4beb683.plan.md
+/.cursor/plans/删掉_locale_格式转换_a5fa2e39.plan.md
+/.cursor/plans/删掉_web_拼装_335c487e.plan.md
+/.cursor/plans/accept-language_按_chrome_拼_de41b8f0.plan.md
+/.cursor/plans/geo_按表拆文件_e4beb683.plan.md
+/.cursor/plans/httpx规范对齐_6db04f29.plan.md
+/.cursor/plans/logger_ctx_链路_3674a5a4.plan.md
+/.cursor/plans/三包规范对齐_bc94a3b6.plan.md
+/.cursor/plans/删掉_locale_格式转换_a5fa2e39.plan.md
+/.cursor/plans/删掉_web_拼装_335c487e.plan.md
+/.cursor/plans/可复用_event_类型_f3fa6235.plan.md
+/.cursor/plans/拦截器子包拆分_fd794b60.plan.md

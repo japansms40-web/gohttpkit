@@ -15,30 +15,30 @@ insgo 侧**未做任何改动**，两边是独立演进的两份代码；本文�
 
 | insgo | gohttpkit | 说明 |
 |---|---|---|
-| `internal.Client` / `internal.NewClient` | `httpx.Client` / `httpx.New(Options)` | 去掉 Platform / VersionConfig，换成 `HeaderProvider` |
+| `internal.Client` / `internal.NewClient` | `httpx.Client` / `interceptor.NewClient(Options)` | 去掉 Platform / VersionConfig，换成 `HeaderProvider` |
 | `Client.DoRequestWithHeadersAndWhitelist` | `Client.Do(ctx, RequestSpec)` | 7 个位置参数改成结构体 |
 | `Client.GetWithHeadersAndWhitelist` | `Client.Get` / `Client.Do` | |
 | `Client.PostFormWithHeadersAndWhitelist` | `Client.PostForm` / `Client.Do` | |
-| `internal.NewInterceptorChain` | `httpx.DefaultChain` | 去掉 IG 专属三层 |
-| `internal.NewRawInterceptorChain` | `httpx.DefaultChain` | 新库默认就是 raw，不再需要独立预设 |
-| `internal.NewWarmupChain` | `httpx.DefaultChain` | |
-| `internal.NewWarmupNoRedirectChain` | `httpx.NoRedirectChain` | |
-| `internal.NewWarmupStep1Chain` | `NoRedirectChain` + `NewRequestMutatorInterceptor`（删 cookie 头） | 删头属业务，示例见 `examples/fidelity` |
+| `internal.NewInterceptorChain` | `interceptor.DefaultChain` | 去掉 IG 专属三层 |
+| `internal.NewRawInterceptorChain` | `interceptor.DefaultChain` | 新库默认就是 raw，不再需要独立预设 |
+| `internal.NewWarmupChain` | `interceptor.DefaultChain` | |
+| `internal.NewWarmupNoRedirectChain` | `interceptor.NoRedirectChain` | |
+| `internal.NewWarmupStep1Chain` | `interceptor.NoRedirectChain` + `interceptor.NewRequestMutatorInterceptor`（删 cookie 头） | 删头属业务，示例见 `examples/fidelity` |
 | `internal.InterceptorChain` | `httpx.Interceptors` | 切片类型；`httpx.Chain` 现在指链的执行游标 |
 | `internal.Interceptor`（不可外部实现） | `httpx.Interceptor`（**可外部实现**） | 最大的一处变化，见下文 |
 | `internal.UserInterceptor` / `pkg.Interceptor` | `httpx.Interceptor` | 只读面板与内部接口合并成一个 |
 | `internal.HTTPTransaction` | `httpx.Transaction` | 多了 `duration_ms` 字段 |
-| `internal.NewHTTPTransactionInterceptor` | `httpx.NewTransactionInterceptor` | |
-| `internal.NewHTMLSaveInterceptor` | `httpx.NewHTMLSaveInterceptor` | |
+| `internal.NewHTTPTransactionInterceptor` | `interceptor.NewTransactionInterceptor` | |
+| `internal.NewHTMLSaveInterceptor` | `interceptor.NewHTMLSaveInterceptor` | |
 | `internal.FilterHeadersByWhitelist` | `httpx.FilterHeadersByWhitelist` | 行为一致（含小写快路径优化） |
 | `internal.DecodeResponse` | `httpx.DecodeResponse` | |
 | `internal.TruncateBodyForLog` / `LogBodyMaxBytes` | `httpx.TruncateBodyForLog` / `httpx.LogBodyMaxBytes` | |
 | `internal.ApplyProxyToTransport` | `netproxy.ApplyProxyToTransport` | |
 | `internal.ParseProxyURL` / `DialContextWithProxy` | `netproxy.*` | |
 | `pkg/traffic` | `traffic` | 原样 |
-| `insgo/logger` | `logger` | 原样，env 前缀改为 `HTTPKIT_LOG_*`（可 `envx.SetPrefix("INSGO_")` 沿用旧名） |
+| `insgo/logger` | `logger` | 日志用 `SetConfig` / `SetHandler`，不读环境变量 |
 | `insgo/errors`（通用半边） | `errors` | 只带 `RetryableError` / `IsRetryableNetworkError` / 关键词表 |
-| `insgo/errors`（IG sentinel、`ClassifyIGResponse*`） | 不带 | 业务归类改由 `NewClassifyInterceptor` 注入 |
+| `insgo/errors`（IG sentinel、`ClassifyIGResponse*`） | 不带 | 业务归类改由 `interceptor.NewClassifyInterceptor` 注入 |
 | `internal/geo` | `geo` | 原样（含两张国家表与 keyset 守护测试） |
 | `pkg/versions` | `versionreg` | 只取注册表 / 白名单 / Builder 模式，零 IG 数据 |
 | `internal.HeaderBuilder` / `HeaderConfig` | 不带 | 纯 IG；改为自己实现 `httpx.HeaderProvider`，示例见 `examples/fidelity` |
@@ -74,11 +74,11 @@ insgo 默认链含 `igErrorClassify`（业务错误归类）、`igState`（`ig-s
 
 | insgo 那一层 | 现在怎么做 |
 |---|---|
-| `igErrorClassify` | `httpx.NewClassifyInterceptor(func(status int, body []byte) error)` |
-| `igState` 的响应头缓存 | 已在默认链里（`NewResponseHeaderCacheInterceptor`） |
+| `igErrorClassify` | `interceptor.NewClassifyInterceptor(func(status int, body []byte) error)` |
+| `igState` 的响应头缓存 | 已在默认链里（`interceptor.NewResponseHeaderCacheInterceptor`） |
 | `igState` 的 `ig-set-*` 回写 | `Options.OnResponseHeaders` |
-| `htmlText` | `httpx.NewHTMLTextInterceptor(errorPageMarkers...)` |
-| `statusSemantics` | `httpx.NewStatusSemanticsInterceptor(rule)`，限流文案用 `RetryableTextRule` |
+| `htmlText` | `interceptor.NewHTMLTextInterceptor(errorPageMarkers...)` |
+| `statusSemantics` | `interceptor.NewStatusSemanticsInterceptor(rule)`，限流文案用 `httpx.RetryableTextRule` |
 
 顺带：insgo 里「默认链 vs raw 链」的二分在本库消失了 —— 默认就是 raw。
 
@@ -111,10 +111,11 @@ insgo 只接受 `nil` / `string` / `url.Values` / `map`，其它类型报 `unsup
 
 ### 8. 重试策略可注入
 
-insgo 的重试次数与退避只能靠 env 调。本库多了 `Options.Retry`（含自定义 `IsRetryable`），
-显式设置优先于 env；`httpx.NoRetry()` 可关掉重试。
+insgo 的重试次数与退避只能靠 env 调。本库只认 `Options.Retry`（含自定义 `IsRetryable`），
+不读环境变量；`httpx.NoRetry()` 可关掉重试。超时同样只认 `Options.Timeout` /
+`Options.ResponseHeaderTimeout`。
 
-`Options.Retry` 的类型是 `*RetryPolicy`（指针）：nil = 没配、走默认值；非 nil = 每个字段字面生效。
+`Options.Retry` 的类型是 `*RetryPolicy`（指针）：nil = 没配、走代码默认值；非 nil = 每个字段字面生效。
 用指针而不是「值类型 + 零值即未配」，是因为后者分不清「没配」和「明确要求 MaxRetries=0」。
 
 ## 同步共性修复时

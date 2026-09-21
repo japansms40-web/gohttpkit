@@ -1,0 +1,42 @@
+---
+description: geo 包约定：一表一函数、类型错误、输入返回注释、边界测试
+globs: geo/**
+alwaysApply: false
+---
+
+# geo
+
+改这个目录时按现有文件长什么样写，不要重新发明一层抽象。
+
+## 文件
+
+一张静态表 + 一个查表函数，公用归一化放 `lookup.go`。Web / Android / 时区分文件维护，三表 keyset 由测试对齐。禁止 `*_android.go`（Go 会当 `GOOS=android` 丢掉）。
+
+## 错误
+
+本包错误必须是带字段的类型，`return &XxxError{...}`，对比只用 `errors.As`。禁止 `errors.New` / `var ErrXxx = errors.New(...)`。
+
+```go
+// 对
+return "", &UnknownCountryError{Country: key}
+var ue *UnknownCountryError
+if errors.As(err, &ue) { use(ue.Country) }
+
+// 错
+var ErrUnknownCountry = errors.New("geo: unknown country")
+errors.Is(err, ErrUnknownCountry)
+```
+
+查表未命中 `*UnknownCountryError`；`extra<0` `*InvalidExtraLanguageCountError`；超出候选 `*ExtraLanguageCountExceedsPoolError`。零值合法时用 error 区分（`TimezoneOffsetForCountry` 的 `0` 是 GMT+0）。
+
+## 注释
+
+顺序：做什么 → `输入：` → `返回：` → `例：` → 为什么。导出函数写清给谁用。
+
+## Accept-Language
+
+`WebAcceptLanguageForCountry` 只出 Chrome data-code。完整 header 走 `BuildChromeAcceptLanguage` 或 `BuildChromeAcceptLanguageForCountry`（内部已拼，调用方不要再串一次）。`*rand.Rand` 不能跨 goroutine 共享；`rng == nil` 可用全局源。
+
+## 测试
+
+`foo.go` → `foo_test.go`。用例名中文短句。`t.Logf` 打输入和结果，默认 `go test` 不刷屏。错误路径 `errors.As` 断言类型和字段，禁止比文案。补边界：空 / nil / 负数 extra / 不改调用方切片 / extra 恰好用尽和超一。

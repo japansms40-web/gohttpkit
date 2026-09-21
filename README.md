@@ -19,7 +19,7 @@ go get github.com/japansms40-web/gohttpkit
 ## 30 秒上手
 
 ```go
-client, err := httpx.New(httpx.Options{
+client, err := interceptor.NewClient(httpx.Options{
     Headers: httpx.StaticHeaders{
         Base:    "https://api.example.com",
         Headers: map[string]string{"accept": "application/json"},
@@ -45,12 +45,12 @@ go run ./examples/fidelity                      # 高保真复刻抓包
 
 | 包 | 作用 |
 |---|---|
-| `httpx` | **核心**：Client、拦截器链、重试、解压、日志、白名单发头、整包快照 |
+| `httpx` | **核心框架**：Client、拦截器链框架、白名单发头、`Transaction` 快照类型；内建拦截器（重试/解压/日志/缓存）与默认链在子包 `httpx/interceptor` |
 | `logger` | 基于 `log/slog` 的日志门面，trace_id / span 自动注入，可换成你自家的 handler |
 | `errors` | 可重试网络错误的判定与包装（关键词表可扩展）、HTTP 状态码错误 |
 | `netproxy` | socks5 / http / https 代理接入 `http.Transport`，或拿裸 `proxy.Dialer` 给 TCP 链路用 |
 | `traffic` | TCP 层真实收发字节计数，零注入时零开销，贴近代理商计费口径 |
-| `geo` | 国家码 → locale / 时区、代理 URL → 出口国家，各端 locale 格式派生 |
+| `geo` | 国家码 → Web data-code / Android locale / 时区，代理 URL → 出口国，按 Chromium 拼 Accept-Language |
 | `versionreg` | 「按版本隔离协议实现」的泛型注册表骨架 + 按 endpoint 的白名单访问器 |
 
 ---
@@ -70,14 +70,14 @@ logging → bodyDecode → statusCodeCache → responseHeaderCache → retry →
 需要这些行为时显式加一层，加什么、加在哪，你说了算：
 
 ```go
-chain := httpx.Prepend(httpx.DefaultChain(),
-    httpx.NewClassifyInterceptor(myClassify),        // 业务错误 → sentinel error
-    httpx.NewStatusSemanticsInterceptor(nil),        // 非 2xx 空体 → error
+chain := httpx.Prepend(interceptor.DefaultChain(),
+    interceptor.NewClassifyInterceptor(myClassify),        // 业务错误 → sentinel error
+    interceptor.NewStatusSemanticsInterceptor(nil),        // 非 2xx 空体 → error
 )
 chain = httpx.SpliceBeforeTerminal(chain, mySigner)  // 请求签名，包住每次真实发送
 ```
 
-`APIChain(classify)` 是这两层的现成组合。
+`interceptor.APIChain(classify)` 是这两层的现成组合。
 
 ### 2. `HeaderWhitelist` 的 nil 与空 map 不是一回事
 
@@ -95,9 +95,9 @@ client.Do(ctx, httpx.RequestSpec{Path: "/x",
 ### 3. 重试策略：nil 是「没配」，不是「不重试」
 
 ```go
-httpx.New(httpx.Options{Headers: hp})                          // 默认 3 次 + 200/400/800ms
-httpx.New(httpx.Options{Headers: hp, Retry: httpx.NoRetry()})  // 明确不重试
-httpx.New(httpx.Options{Headers: hp,
+interceptor.NewClient(httpx.Options{Headers: hp})                          // 默认 3 次 + 200/400/800ms
+interceptor.NewClient(httpx.Options{Headers: hp, Retry: httpx.NoRetry()})  // 明确不重试
+interceptor.NewClient(httpx.Options{Headers: hp,
     Retry: httpx.WithRetry(5, 100*time.Millisecond, time.Second)})
 ```
 
@@ -111,7 +111,7 @@ httpx.New(httpx.Options{Headers: hp,
 ### 4. 会话状态回写挂在 Options 上，不挂在链上
 
 ```go
-httpx.New(httpx.Options{
+interceptor.NewClient(httpx.Options{
     Headers: myProvider,
     OnResponseHeaders: func(ctx context.Context, h http.Header) {
         myProvider.ApplySetCookie(h)   // 服务端下发的新 token 立刻回写
@@ -134,7 +134,7 @@ httpx.New(httpx.Options{
   这三个标准库特殊对待的头，让 HTTP/1.1 与 HTTP/2 下产出同一份、不重复的线上字节
 - **cookie 手工按抓包顺序拼**：map 遍历顺序随机，顺序不稳定本身就是特征
 - **表单参数保持抓包顺序**：`url.Values.Encode()` 会按字典序重排，传 `string` 才能保序
-- **整包落盘事后对比**：挂 `NewTransactionInterceptor`，每次请求产出完整快照 JSON
+- **整包落盘事后对比**：挂 `interceptor.NewTransactionInterceptor`，每次请求产出完整快照 JSON（头是原文）
 
 **已知边界**：Go 的 `http.Header` 是 map，本库无法控制头在线上的**顺序**，只能保证
 「发哪些头、值是什么、大小写如何」。绝大多数服务端不校验头顺序；若你的目标真的校验，
@@ -166,18 +166,24 @@ func (s *signer) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 
 ---
 
-## 环境变量
+## 超时与重试
 
-全部旋钮见 [`.env.example`](.env.example)。变量名 = 前缀 + 后缀，前缀默认 `HTTPKIT_`：
+超时、重试、慢请求只认 `Options`，不读环境变量。零值回落代码默认：整请求 30s、响应头 15s、重试 3 次。
 
 ```go
-envx.SetPrefix("MYAPP_")   // 在 main 最早处调用
-logger.ApplyEnv()          // 让日志配置按新前缀重新生效
+client, err := interceptor.NewClient(httpx.Options{
+    Headers:               headers,
+    Timeout:               10 * time.Second,
+    ResponseHeaderTimeout: 5 * time.Second,
+    SlowMS:                800 * time.Millisecond,
+    Retry:                 httpx.WithRetry(5, 100*time.Millisecond, time.Second),
+})
 ```
 
-常用：`HTTPKIT_LOG_LEVEL`、`HTTPKIT_LOG_FILE`、`HTTPKIT_HTTP_MAX_RETRIES`、
-`HTTPKIT_HTTP_TIMEOUT_MS`、`HTTPKIT_HTTP_SLOW_MS`。
-代码里显式设置的 `Options` 字段优先于环境变量。
+关掉重试用 `httpx.NoRetry()`。日志用 `logger.SetConfig` / `logger.SetHandler`，也不读环境变量。
+
+按 `event=http.transaction` 过滤交易日志，请求头与响应头按原文输出。
+高保真复刻用的 `Transaction` 快照同样是原文（给抓包对比），不要写进共享日志。
 
 ---
 
@@ -194,31 +200,33 @@ logger.ApplyEnv()          // 让日志配置按新前缀重新生效
 ## 开发
 
 ```bash
-make check       # build + vet + cover(含 90% 门禁) + tidy-check
+make check       # 本地轻量：build + vet + cover(含 90% 门禁) + tidy-check
+make ci          # 合入口径聚合：check + lint-new + race + char（race 需要 C 编译器）
 make char        # 行为锁定套件：改拦截器链之前先跑它
 make cover       # 覆盖率报告 + 门禁；make cover-html 看逐行
 make race        # 并发回归（需要 C 编译器）
 make examples    # 三个示例跑一遍
 ```
 
+合入前请跑 `make check`，以及 `make lint-new` 与 `make race`（CI 已覆盖这两项）。想一条命令对齐 CI，用 `make ci`。
+
 覆盖率门禁在 `make cover` 里，低于 90% 直接失败（`MIN_COVERAGE` 可调高，不要调低）。
-当前 **98.1%**，每个包都在 93% 以上：
+当前 **97.9%**，每个包都在 93% 以上：
 
 | 包 | 覆盖率 | | 包 | 覆盖率 |
 |---|---|---|---|---|
 | `errors` | 100% | | `httpx` | 98.9% |
-| `internal/envx` | 100% | | `geo` | 98.8% |
-| `traffic` | 100% | | `netproxy` | 98.4% |
-| `versionreg` | 100% | | `logger` | 97.3% |
-| `examples/*` | 93~96% | | | |
+| `traffic` | 100% | | `geo` | 98.8% |
+| `versionreg` | 100% | | `netproxy` | 98.4% |
+| `logger` | 97.3% | | `examples/*` | 93~96% |
 
 测试分三层，各管各的：
 
 - `httpx/characterization_test.go` —— **对外行为**锁定：重试几次、退避多久、哪些错误不重试、
   白名单怎么过滤、头的大小写、缓存时机、链的执行顺序。链的顺序一旦被改动，破坏的往往不是编译，
   而是某个只在生产环境偶发的行为 —— 那就是它存在的理由。
-- `httpx/units_test.go` —— 每个导出符号自己的契约：编解码矩阵、选项归一化、链编辑工具、
-  各类 nil / 零值 / 错误分支。
+- 各源文件同名的 `*_test.go`（`httpx/*_test.go` 与 `httpx/interceptor/*_test.go`）—— 每个导出符号自己的契约：
+  编解码矩阵、选项归一化、链编辑工具、各类 nil / 零值 / 错误分支。
 - `httpx/concurrency_test.go` —— 并发回归，配合 `make race` 用。
 
 示例也在测试里跑（`examples/*/main_test.go`）：示例是给人读的，但读者会照抄，

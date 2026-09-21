@@ -16,11 +16,11 @@
 - **MUST** 本库是给别人用的基建，导出即契约。新符号默认小写；确需导出的，doc comment
   必须写明「给谁用、什么场景」。范例：`httpx.SnapshotRequestHeaders`（注明自定义终端需自行调用）。
 - **MUST** 拦截器链的顺序即语义。调整顺序前先跑 `make char`，并在 PR 里说明行为变化。
-  范例：`httpx/presets.go` 的 `DefaultChain` 注释解释了每一层为什么在那个位置。
+  范例：`httpx/interceptor/chain.go` 的 `DefaultChain` 注释解释了每一层为什么在那个位置。
 - **MUST** 业务判断不进默认链。任何「替调用方对响应下结论」的逻辑都必须是可选拦截器。
-  范例：`httpx/interceptors_opt.go` 全文件。
+  范例：`httpx/interceptor` 下的 classify / status_semantics / html_text。
 - **SHOULD** 大数据映射表（国家→locale、国家→时区）独立成文件，表头写明数据源与维护规约。
-  范例：`geo/locale.go`、`geo/timezone.go`；两表 keyset 由测试守护。
+  范例：`geo/locale_web.go`、`geo/locale_mobile.go`、`geo/timezone.go`；三表 keyset 由测试守护。
 
 ## 3. API 设计
 
@@ -46,25 +46,66 @@
 
 ## 5. 错误处理
 
-- **MUST** 包装错误一律用 `%w`，判定一律用 `errors.Is` / `errors.As`（`errorlint` 硬卡）。
+本库返回给调用方的错误是契约：必须能对比类型、读出字段。禁止用一句话哨兵冒充身份。
+
+- **MUST** 本库错误定义为带字段的类型（`type XxxError struct` + `Error()`），直接 `return &XxxError{...}`。
+  对比用 `errors.As` 解出类型和字段，不要扫 `Error()` 文案。
+  范例：`geo.UnknownCountryError`、`geo.InvalidExtraLanguageCountError`、
+  `geo.ExtraLanguageCountExceedsPoolError`、`errors.RetryableError`、`errors.HTTPStatusError`。
+- **MUST NOT** 用 `errors.New` / `fmt.Errorf("...")`（无 `%w`）/ `var ErrXxx = errors.New(...)`
+  作为本库错误的身份。哨兵没有字段，对比只能 `errors.Is` 或扫文案，`extra=3`、国家码、状态码都会丢。
+  `fmt.Errorf("%w: ...", err)` 只允许包一层上下文，里层必须仍是上面的类型错误。
+- **MUST** 包装错误一律用 `%w`（`errorlint` 硬卡）。
+- **MUST** 对本库错误的测试用 `errors.As` 断言类型和字段，禁止 `errors.Is` 对自造哨兵、禁止比文案当身份。
+  范例：`geo/errors_test.go` 的 `assertUnknownCountry` / `assertInvalidExtra` / `assertExtraExceedsPool`。
 - **MUST** 网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见它。
-- **SHOULD** 环境变量非法值回落默认而不是报错终止 —— 它是运维旋钮，打错一个字母不该让进程起不来；
-  但也绝不能静默变成 0（对超时类配置而言 0 意味着关闭保护）。范例：`internal/envx.Int`。
+- **MAY** `errors.Is` 只认本库没定义、对方已经是哨兵的错误（`io.EOF`、`context.Canceled`、第三方）。
+  测试里用 `errors.New("boom")` 冒充「别人的错误」可以；本库自己的返回值不行。
+- **SHOULD** 超时类 `Options` 的零值回落默认常量，禁止把 0 解释成「关闭保护」。
+  范例：`Options.Timeout`、`Options.ResponseHeaderTimeout`。
+
+```go
+// 对
+return "", &UnknownCountryError{Country: key}
+var ue *UnknownCountryError
+if errors.As(err, &ue) { use(ue.Country) }
+
+// 错
+var ErrUnknownCountry = errors.New("geo: unknown country")
+return "", fmt.Errorf("%w: %s", ErrUnknownCountry, key) // 字段进了文案
+errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
+```
 
 ## 6. 日志
 
-- **MUST** 统一走 `logger` 门面（`logger.Info(ctx, msg, attrs...)`），ctx 必传首参。
+- **MUST** 生产代码统一走 `logger` 门面（`logger.Info(ctx, msg, attrs...)`），ctx 必传首参。
   `forbidigo` 会拦截裸 `fmt.Print` / `log.*` / `slog.*`（`logger/` 包自身与 `examples/` 除外）。
+  测试观察日志走 `t.Log` / `t.Logf`，见第 8 节，不要在 `*_test.go` 里打 `logger` 或 `fmt.Print`。
 - **MUST** 打协议 body 时经 `TruncateBodyForLog(b, client.LogBodyLimit())` 截断，
   并同时输出原始长度（`slog.Int("..._len", len(b))`）。响应体可达数百 KB，
   全量打印会撑爆磁盘与日志聚合系统。
+- **MUST** `event=http.transaction` / `event=http.retry` 日志按原文打请求头与响应头，不做脱敏。
+  `Transaction` 快照同样是原文，给抓包对比用，不要写进共享日志。
 
 ## 7. 注释
 
-- **MUST** 注释解释「为什么」，不复述「是什么」。尤其是那些看起来可以简化、实际上不能动的地方
-  —— 写明它踩过什么坑，否则下一个人会「顺手优化掉」。
-  范例：`httpx/transport.go` 里每个 transport 参数的注释、`applySpecialHeaders` 的整段说明。
+函数注释是契约。godoc 第一行必须以符号名开头。顺序固定：**做什么 → 输入 → 返回 → 例 → 为什么**。
+
+- **MUST** 每个函数（含未导出）写清「输入什么、返回什么」，用 `输入：` / `返回：` 起行，方便扫读。
+  - 输入：每个参数的含义、允许形态、空值 / 空白 / nil 怎么处理、会不会改调用方数据。
+  - 返回：成功值长什么样；每一种失败或空结果对应哪个 error / bool / 零值。
+  - 零值合法时必须写清怎么和失败区分，禁止让读者去读实现才知道。
+  范例：`geo.TimezoneOffsetForCountry`（`0` 是合法 GMT+0，必须看 error）、
+  `geo.lookupCountry`、`geo.BuildChromeAcceptLanguageForCountry`。
+- **SHOULD** 导出函数再写一行 `例：调用 → 结果`，至少覆盖最常见成功路径和一条失败路径。
+  范例：`geo.WebAcceptLanguageForCountry`、`geo.ParseCountryFromProxyURL`。
+- **MUST** 导出符号还要写「给谁用、什么场景」（见第 2 节）。
+- **MUST** 「为什么」写在输入 / 返回之后，不复述「是什么」。看起来能简化但不能动的地方，
+  写明踩过什么坑，否则下一个人会「顺手优化掉」。
+  范例：`httpx/transport.go` 的 transport 参数、`geo/proxy_country.go` 的密码段兜底、
+  `geo.expandChromeLanguageList` 的前瞻规则。
 - **MUST** 行为怪异但有意保留的地方显式标注，并在 characterization 测试里锁定。
+- **MUST NOT** 注释只复述函数名或实现步骤（「遍历切片然后返回」）。
 
 ## 8. 测试
 
@@ -73,3 +114,23 @@
 - **SHOULD** 用例名写成中文短句，直接说明它锁的是什么行为，失败时不用读代码就知道坏了什么。
 - **SHOULD** 需要网络的测试自带假服务器（`httptest` / 最小协议实现），CI 里不依赖外网。
   范例：`netproxy/proxy_test.go` 里的最小 SOCKS5 服务端。
+- **SHOULD** 测试文件与源文件同名：`foo.go` → `foo_test.go`。fuzz 用 `foo_fuzz_test.go`。
+  范例：`geo/locale_web_test.go`、`geo/proxy_country_fuzz_test.go`。不写 `example_test.go`
+  当说明书。
+
+### 8.1 测试日志
+
+审查要能看见每条用例的输入和结果，但不能让默认 `go test` / CI 刷屏。
+
+- **MUST** 用 `t.Log` / `t.Logf`。禁止 `fmt.Print` / `log.*` / `slog.*` / `logger.*`。
+- **MUST** 默认安静：不带 `-v` 时这些日志不出现。审查或对表时用 `go test -v ./包/`。
+  只看查表：`go test -v ./geo/ -run TestWebAcceptLanguageForCountry`。
+  只看拼装：`go test -v ./geo/ -run TestBuildChromeAcceptLanguage`。
+- **SHOULD** 表驱动每条在断言前打一行，写清输入和结果：
+  `t.Logf("country=%q → %q err=%v", country, got, err)`。
+  范例：`geo/locale_web_test.go`、`geo/proxy_country_test.go`。
+- **SHOULD** 全表扫描按 key 排序后再 `Log`，map 遍历顺序不稳定，排过才方便对表。
+  范例：`geo/locale_web_test.go` 的 `TestCountryToWebAcceptTag_值不含下划线`。
+- **MAY** 错误路径再打 `errors.As` 解出的类型和字段，方便核对类型错误而不是文案。
+  范例：`geo/errors_test.go` 的 `assertUnknownCountry` / `assertInvalidExtra` /
+  `assertExtraExceedsPool`。本库错误的定义与对比见第 5 节。

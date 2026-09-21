@@ -23,11 +23,11 @@ jobs:
       - name: test + 覆盖率门禁（≥90%）
         run: make cover
       - name: race（并发回归）
-        run: HTTPKIT_LOG_LEVEL=error go test -race -count=1 ./...
+        run: go test -race -count=1 ./...
       - name: examples 可运行
         run: |
-          HTTPKIT_LOG_LEVEL=error go run ./examples/customchain
-          HTTPKIT_LOG_LEVEL=error go run ./examples/fidelity
+          go run ./examples/customchain
+          go run ./examples/fidelity
 
   lint:
     runs-on: ubuntu-latest
