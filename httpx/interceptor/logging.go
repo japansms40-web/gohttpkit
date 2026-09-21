@@ -35,7 +35,7 @@ func (i *loggingInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error)
 	req := ch.Request()
 	limit := c.LogBodyLimit()
 
-	if resp.StatusCode >= 400 || !c.Options().LogSummaryOnly {
+	if httpx.IsErrorStatus(resp.StatusCode) || !c.Options().LogSummaryOnly {
 		attrs := []slog.Attr{
 			slog.String(httpx.LogFieldMethod, req.Method),
 			slog.String(httpx.LogFieldURL, req.FullURL),

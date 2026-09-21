@@ -22,7 +22,7 @@ func (i *statusSemanticsInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	if httpx.IsSuccessStatus(resp.StatusCode) {
 		return resp, nil
 	}
 	if e := i.rule(resp.StatusCode, resp.Body); e != nil {
