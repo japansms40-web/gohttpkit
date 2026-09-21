@@ -56,6 +56,7 @@ func ApplyProxyToTransport(transport *http.Transport, proxyURL string) error {
 		transport.Proxy = http.ProxyURL(u)
 		return nil
 	default:
+		// coverage:ignore  parseScheme 已保证只返回 socks5/http/https，此分支仅防御未来新增枚举
 		return &UnsupportedProxySchemeError{Scheme: u.Scheme}
 	}
 }

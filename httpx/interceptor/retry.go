@@ -119,5 +119,6 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		}
 	}
 
+	// coverage:ignore  normalizeRetry 保证 MaxRetries>=0，循环必从 return 退出
 	return nil, fmt.Errorf(sendRequestErrFmt, lastErr)
 }

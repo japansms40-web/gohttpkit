@@ -28,6 +28,7 @@ var htmlSkipTags = map[string]bool{
 func ExtractHTMLText(htmlContent string) string {
 	doc, err := html.Parse(strings.NewReader(htmlContent))
 	if err != nil {
+		// coverage:ignore  golang.org/x/net/html.Parse 对残缺输入也成功，此分支仅防御解析器改口
 		return htmlContent
 	}
 

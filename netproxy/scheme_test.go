@@ -28,6 +28,14 @@ func TestParseScheme_归一化为枚举(t *testing.T) {
 	}
 }
 
+func TestScheme_零值String是空串(t *testing.T) {
+	var z Scheme
+	t.Logf("零值 String=%q", z.String())
+	if z.String() != "" {
+		t.Fatalf("零值 Scheme.String() = %q", z.String())
+	}
+}
+
 func TestScheme_String是字面值(t *testing.T) {
 	t.Logf("SOCKS5=%q HTTP=%q HTTPS=%q", SchemeSOCKS5, SchemeHTTP, SchemeHTTPS)
 	if SchemeSOCKS5.String() != "socks5" || SchemeHTTP.String() != "http" || SchemeHTTPS.String() != "https" {

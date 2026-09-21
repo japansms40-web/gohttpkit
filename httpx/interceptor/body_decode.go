@@ -49,6 +49,7 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 	case httpx.EncodingZstd:
 		zr, zerr := zstd.NewReader(raw.Body)
 		if zerr != nil {
+			// coverage:ignore  klauspost/zstd.NewReader 无 option 时构造失败不可达，损坏流走 ReadAll
 			return nil, &httpx.ContentEncodingError{Encoding: httpx.EncodingZstd, Err: zerr}
 		}
 		defer zr.Close()

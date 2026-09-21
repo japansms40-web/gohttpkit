@@ -61,13 +61,16 @@ func EnsureTraceID(ctx context.Context) context.Context {
 // 返回：crypto/rand 8 字节的 hex；读随机数失败则用 UnixNano 按 16 位兜底。
 func NewTraceID() string { return newRandomHex(8, 16) }
 
+// readRandom 默认 crypto/rand.Read；测试可替换以覆盖失败兜底。
+var readRandom = rand.Read
+
 // newRandomHex 生成 nBytes 的 hex。
 // 输入 nBytes：随机字节数；hexWidth：失败兜底时的 hex 宽度。
 // 返回：2*nBytes 长的 hex；rand.Read 失败时用 UnixNano 按 hexWidth 位补零。
 // NewTraceID / NewSpanID 必须共用，否则两边的失败兜底格式会漂。
 func newRandomHex(nBytes, hexWidth int) string {
 	b := make([]byte, nBytes)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := readRandom(b); err != nil {
 		return fmt.Sprintf("%0*x", hexWidth, time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
