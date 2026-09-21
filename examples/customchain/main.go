@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
+	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
 // ErrAccountBanned 业务 sentinel：由归类拦截器产出，业务代码只需 errors.Is 判断。
@@ -62,7 +63,7 @@ func main() {
 	var sends atomic.Int64
 
 	// ── 一、请求签名：插在终端之前，此时 bridge 已经把最终 URL 与头都准备好了
-	signer := httpx.NewRequestMutatorInterceptor(func(r *httpx.Request) {
+	signer := interceptor.NewRequestMutatorInterceptor(func(r *httpx.Request) {
 		mac := hmac.New(sha256.New, []byte("secret-key"))
 		mac.Write([]byte(r.Method + r.FullURL))
 		mac.Write(r.Body)
@@ -99,8 +100,8 @@ func main() {
 		return nil
 	}
 
-	chain := httpx.Prepend(httpx.DefaultChain(),
-		httpx.NewClassifyInterceptor(classify), // 最外层：只在内层判定成功时才轮到它
+	chain := httpx.Prepend(interceptor.DefaultChain(),
+		interceptor.NewClassifyInterceptor(classify), // 最外层：只在内层判定成功时才轮到它
 	)
 	chain = httpx.SpliceBeforeTerminal(chain, counter, signer) // 最内层：包住每次真实发送
 

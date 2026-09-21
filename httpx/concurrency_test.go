@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
+	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
 // statefulHeaders 模拟带会话状态的构头器：token 会被响应回写改写，
@@ -47,7 +48,7 @@ func TestConcurrent_共享Client并发请求(t *testing.T) {
 	defer srv.Close()
 
 	hp := &statefulHeaders{base: srv.URL, token: "t-0"}
-	c, err := httpx.New(httpx.Options{
+	c, err := interceptor.NewClient(httpx.Options{
 		Headers: hp,
 		// 响应回写：把服务端下发的新 token 写回构头器，下一次请求带上。
 		OnResponseHeaders: func(_ context.Context, h http.Header) {
@@ -83,7 +84,9 @@ func TestConcurrent_共享Client并发请求(t *testing.T) {
 	for err := range errs {
 		t.Fatalf("并发请求失败: %v", err)
 	}
-	if got := served.Load(); got != workers*perWorker {
+	got := served.Load()
+	t.Logf("workers=%d perWorker=%d served=%d", workers, perWorker, got)
+	if got != workers*perWorker {
 		t.Fatalf("服务端收到 %d 次，want %d", got, workers*perWorker)
 	}
 }
@@ -94,14 +97,16 @@ func TestConcurrent_派生子Client与父并发互不干扰(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := httpx.New(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
+	c, err := interceptor.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	derived := c.WithChain(httpx.NoRedirectChain())
+	derived := c.WithChain(interceptor.NoRedirectChain())
 
+	const pairs = 16
+	t.Logf("parent+derived pairs=%d", pairs)
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for i := 0; i < pairs; i++ {
 		wg.Add(2)
 		go func() { defer wg.Done(); _, _ = c.Get(context.Background(), "/p", nil) }()
 		go func() { defer wg.Done(); _, _ = derived.Get(context.Background(), "/d", nil) }()

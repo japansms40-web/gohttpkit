@@ -7,7 +7,7 @@
 //
 // 最小可用示例：
 //
-//	client, err := httpx.New(httpx.Options{
+//	client, err := interceptor.NewClient(httpx.Options{
 //	    Headers: httpx.StaticHeaders{
 //	        Base:    "https://api.example.com",
 //	        Headers: map[string]string{"accept": "application/json"},
@@ -30,6 +30,11 @@ import (
 	"github.com/japansms40-web/gohttpkit/logger"
 )
 
+// client.go —— Client 构造与请求入口（New / Do / Get / Post* / Snapshot / WithChain）。
+// 独立成文件：接入方第一眼看到的 API 与链框架、拦截器实现分开，避免打开包就陷进细节。
+//
+// 超时 / 重试 / 慢请求阈值在 New 时从 Options 固化；热路径不再回读。
+
 // Client 一个 HTTP 客户端实例。
 //
 // 并发模型：单个 *Client 可被多 goroutine 并发调用。
@@ -48,30 +53,34 @@ type Client struct {
 	interceptors Interceptors
 	opts         Options
 	retry        RetryPolicy
+	slowMS       int // 慢请求阈值（毫秒），New 时固化；0 = 关闭。
 
 	lastMu         sync.RWMutex
 	lastHeaders    http.Header
 	lastStatusCode int
 }
 
-// New 创建客户端。Options.Headers 必填。
+// New 创建客户端。
+// 给接入方：每个会话一个 Client，绑定自己的 HeaderProvider。
+// 输入 opts：Headers 必填；Timeout / ResponseHeaderTimeout / Retry 零值走代码默认；
+// Interceptors 为 nil 或空切片时不装默认链（空链 Do 得到 *ChainExhaustedError）；
+// 开箱即用请走 interceptor.NewClient。传了 Transport 则整份沿用（不再接代理、不再调优）。
+// 返回：成功 *Client；Headers==nil 是 *MissingHeaderProviderError{Field:"Options.Headers"}；
+// 自建 Transport 失败是 fmt.Errorf("httpx: build transport: %w", err)，里层仍是 netproxy 类型。
+// 例：New(Options{Headers: StaticHeaders{Base: "https://api.example.com"}}) → (*Client, nil)；
+// New(Options{}) → *MissingHeaderProviderError。
 func New(opts Options) (*Client, error) {
 	if opts.Headers == nil {
-		return nil, fmt.Errorf("httpx: Options.Headers 必填(实现 HeaderProvider，最简可用 httpx.StaticHeaders)")
+		return nil, &MissingHeaderProviderError{Field: "Options.Headers"}
 	}
 
 	transport := opts.Transport
 	if transport == nil {
-		t, err := NewTransport(opts.ProxyURL)
+		t, err := newTransport(opts.ProxyURL, opts.responseHeaderTimeout())
 		if err != nil {
-			return nil, fmt.Errorf("httpx: 构建 transport 失败: %w", err)
+			return nil, fmt.Errorf("httpx: build transport: %w", err)
 		}
 		transport = t
-	}
-
-	interceptors := opts.Interceptors
-	if interceptors == nil {
-		interceptors = DefaultChain()
 	}
 
 	return &Client{
@@ -80,9 +89,10 @@ func New(opts Options) (*Client, error) {
 			Timeout:   opts.timeout(),
 		},
 		headers:      opts.Headers,
-		interceptors: interceptors,
+		interceptors: opts.Interceptors,
 		opts:         opts,
 		retry:        normalizeRetry(opts.Retry),
+		slowMS:       opts.slowMS(),
 	}, nil
 }
 
@@ -107,13 +117,18 @@ type RequestSpec struct {
 }
 
 // Do 执行一次请求，返回经整条链处理后的响应体。
-//
-// 注意本方法【不因非 2xx 报错】：默认链把状态码原样交给调用方，用
-// SnapshotResponseStatusCode() 读。想让非 2xx 直接变成 error，挂一层
-// NewStatusSemanticsInterceptor。这个取舍是刻意的——多数私有 API 会用 200 之外的
-// 状态码承载有意义的业务响应体，基建层替你判死会丢信息。
+// 给业务代码：所有 HTTP 入口最终都落到这里。
+// 输入 ctx：取消 / deadline / 已有 trace 原样沿用；没有非空 trace_id 时在此补一个，
+// 不会改写调用方手里的原 ctx。要让 Do 前后的业务日志同链，须先 EnsureTraceID。
+// 输入 spec：Method 空则 GET；Path 可以是相对路径或绝对 URL；Body 见 EncodeRequestBody。
+// 返回：成功是链处理后的 body（非 2xx 也是 (body, nil)）；编码失败是 *RequestBodyEncodeError；
+// 链上错误原样返回。空链是 *ChainExhaustedError，不再回落默认链。
+// 例：client.Do(ctx, RequestSpec{Path: "/v1/ping"}) → (body, nil)；
+// Body 不可 JSON 编码 → *RequestBodyEncodeError。
+// 为什么不因非 2xx 报错：多数私有 API 用 200 之外的状态码承载有意义的业务响应体，
+// 基建层替你判死会丢信息。想让非 2xx 变 error，挂 interceptor.NewStatusSemanticsInterceptor。
 func (c *Client) Do(ctx context.Context, spec RequestSpec) ([]byte, error) {
-	// trace_id 兜底：所有请求的单一汇点，调用方未注入时此处生成，保证请求内日志可关联。
+	// 只补本次请求内的 trace，不 StartSpan、也不写回调用方的原 ctx。
 	ctx = logger.EnsureTraceID(ctx)
 
 	method := spec.Method
@@ -135,14 +150,9 @@ func (c *Client) Do(ctx context.Context, spec RequestSpec) ([]byte, error) {
 		return nil, err
 	}
 
-	interceptors := c.interceptors
-	if len(interceptors) == 0 {
-		interceptors = DefaultChain()
-	}
-
 	ch := &Chain{
 		client:       c,
-		interceptors: interceptors,
+		interceptors: c.interceptors,
 		req: &Request{
 			Ctx:             ctx,
 			Method:          method,
@@ -164,45 +174,86 @@ func (c *Client) Do(ctx context.Context, spec RequestSpec) ([]byte, error) {
 }
 
 // Get 发起 GET 请求（全量头）。
+// 给只需路径 + 查询参数的调用方，等价于 Do(GET)。
+// 输入 ctx / path / params：语义同 Do；params 为 nil 不带查询串。
+// 返回：同 Do。例：client.Get(ctx, "/v1/ping", nil) → (body, nil)。
 func (c *Client) Get(ctx context.Context, path string, params url.Values) ([]byte, error) {
 	return c.Do(ctx, RequestSpec{Method: http.MethodGet, Path: path, Params: params})
 }
 
-// PostForm 发起 POST 表单请求（全量头）。data 支持 url.Values（自动编码）或 string（保持自定义顺序）。
+// PostForm 发起 POST 表单请求（全量头）。
+// 给表单接口：data 走 EncodeRequestBody（url.Values 自动编码，string 保持自定义顺序）。
+// 输入 ctx / path / data：data 为 nil 则空体 POST。
+// 返回：同 Do。例：client.PostForm(ctx, "/login", url.Values{"u":{"a"}}) → (body, nil)。
 func (c *Client) PostForm(ctx context.Context, path string, data any) ([]byte, error) {
 	return c.Do(ctx, RequestSpec{Method: http.MethodPost, Path: path, Body: data})
 }
 
 // PostJSON 发起 POST JSON 请求（全量头 + content-type: application/json）。
+// 给 JSON API：body 经 EncodeRequestBody 编码，并强制带上 application/json。
+// 输入 ctx / path / body：body 不可编码时整次调用失败、不发出请求。
+// 返回：同 Do。例：client.PostJSON(ctx, "/v1/item", map[string]any{"id":1}) → (body, nil)；
+// body 为 chan 等无法 JSON 的类型 → *RequestBodyEncodeError。
 func (c *Client) PostJSON(ctx context.Context, path string, body any) ([]byte, error) {
 	return c.Do(ctx, RequestSpec{
 		Method:       http.MethodPost,
 		Path:         path,
 		Body:         body,
-		ExtraHeaders: map[string]string{"content-type": "application/json"},
+		ExtraHeaders: map[string]string{headerContentType: mimeJSON},
 	})
 }
 
-// Headers 返回本客户端的 HeaderProvider（便于调用方读回自己的会话状态）。
+// Headers 返回本客户端的 HeaderProvider。
+// 给调用方读回自己的会话状态（cookie、token），不是拷贝。
+// 输入：无。返回构造时那份引用；并发安全由 HeaderProvider 实现保证。
+// 例：client.Headers().BaseURL() → "https://api.example.com"。
 func (c *Client) Headers() HeaderProvider { return c.headers }
 
-// Interceptors 返回本客户端当前的拦截器链（副本，改它不影响客户端）。
+// Interceptors 返回本客户端当前的拦截器链。
+// 给诊断与链编辑：外层切片是副本，改切片本身不影响客户端；
+// 切片里的 Interceptor 仍是同一份引用，改拦截器内部状态会共享。
+// 输入：无。返回 append 出来的新切片。
+// 例：len(client.Interceptors()) 等于构造时写入的链长。
 func (c *Client) Interceptors() Interceptors {
 	return append(Interceptors(nil), c.interceptors...)
 }
 
-// RetryPolicy 返回归一化后的重试策略（供 retry 拦截器与诊断使用）。
+// RetryPolicy 返回归一化后的重试策略。
+// 给 retry 拦截器与诊断：New 时已补齐 MaxRetries / BaseBackoff / IsRetryable。
+// 输入：无。返回值类型副本；改返回值不影响客户端。
+// 例：NoRetry() 构造后 RetryPolicy().MaxRetries == 0。
 func (c *Client) RetryPolicy() RetryPolicy { return c.retry }
 
-// Options 返回构造时的选项（副本语义：Options 内的引用字段仍指向同一对象）。
+// Options 返回构造时的选项。
+// 给拦截器读 ProxyURL / ExitIP / ASN / OnResponseHeaders。
+// 输入：无。返回外层 struct 副本；内部引用字段（Headers、Transport、回调、切片）仍指向同一对象。
+// 例：client.Options().Timeout 是构造时写入的原值，不是归一化后的 timeout()。
 func (c *Client) Options() Options { return c.opts }
 
 // SetTimeout 设置整请求超时。
+// 给需要临时拉长/缩短单次超时的调用方。
+// 输入 timeout：直接写进共享 http.Client.Timeout；0 表示标准库「不超时」。
+// 返回：无。不得与并发中的请求同时调用，否则其它 in-flight 请求的超时会被一起改掉。
+// 例：client.SetTimeout(5*time.Second) 后后续 Do 使用 5s。
 func (c *Client) SetTimeout(timeout time.Duration) { c.HTTPClient.Timeout = timeout }
 
-// LogBodyLimit 返回日志里协议 body 的截断上限：默认 LogBodyMaxBytes，
-// Options.DisableLogBodyTruncation 为 true 时返回 0（不截断）。
-// 拦截器与长连接日志统一走这里取 limit，把「截断开关」收敛成一处语义。
+// SlowMS 返回 New 时固化的慢请求阈值（毫秒）。
+// 给 logging 拦截器：热路径读这里，不再回读 Options.SlowMS。
+// 输入：接收者可为 nil。
+// 返回：>0 是阈值；0 = 关闭；nil 接收者回落 0。
+// 例：Options{SlowMS: 1500 * time.Millisecond} 构造后 SlowMS() == 1500。
+func (c *Client) SlowMS() int {
+	if c == nil {
+		return 0
+	}
+	return c.slowMS
+}
+
+// LogBodyLimit 返回日志里协议 body 的截断上限。
+// 给拦截器与长连接日志：统一从这里取 limit，把「截断开关」收敛成一处语义。
+// 输入：接收者可为 nil。
+// 返回：默认 LogBodyMaxBytes；DisableLogBodyTruncation 为 true 时 0（不截断）；nil 接收者回落默认。
+// 例：默认客户端 → 4096；关掉截断 → 0。
 func (c *Client) LogBodyLimit() int {
 	if c == nil {
 		return LogBodyMaxBytes // nil-safe：回落到「截断开启」
@@ -213,10 +264,11 @@ func (c *Client) LogBodyLimit() int {
 	return LogBodyMaxBytes
 }
 
-// SnapshotResponseHeaders 并发安全地返回最近一次响应的头。返回 nil 表示尚未发起过请求。
-//
-// 写入端永远是「在新 map 上构建完再整体替换字段引用」，所以返回的 map 自身不会再被改写，
-// 拿到后做 Get / Values / 迭代等只读操作不会触发 race。
+// SnapshotResponseHeaders 并发安全地返回最近一次响应的头。
+// 给业务判断与会话回写核对：返回同一份只读引用，不复制；调用方不得修改。
+// 输入：无。返回缓存里那份 http.Header；尚未发起过请求为 nil。
+// 例：第一次 Do 之后 Get("content-type") 可读；改返回值会污染缓存，禁止。
+// 写入端永远是「在新 map 上构建完再整体替换字段引用」，只读迭代不会 race。
 func (c *Client) SnapshotResponseHeaders() http.Header {
 	c.lastMu.RLock()
 	defer c.lastMu.RUnlock()
@@ -224,33 +276,40 @@ func (c *Client) SnapshotResponseHeaders() http.Header {
 }
 
 // SnapshotResponseStatusCode 并发安全地返回最近一次响应的状态码。
-// 业务判断（如 statusCode == 404）必须走本方法，不要直读字段。
+// 给业务判断（如 statusCode == 404）；必须走本方法，不要直读字段。
+// 输入：无。返回最近一次成功走到缓存层的状态码；尚未请求为 0。
+// 例：404 响应后本方法返回 404，Do 的 error 仍为 nil。
 func (c *Client) SnapshotResponseStatusCode() int {
 	c.lastMu.RLock()
 	defer c.lastMu.RUnlock()
 	return c.lastStatusCode
 }
 
-// setLastResponse 由 statusCodeCache / responseHeaderCache 拦截器调用。
-func (c *Client) setLastStatusCode(code int) {
+// CacheStatusCode 写入最近一次响应状态码。
+// 给 statusCodeCache 与自定义缓存层：在锁内整体替换 int。
+// 输入 code：HTTP 状态码，0 也是合法写入（表示清掉或尚未有码）。
+// 返回：无。不复制、不加校验。
+func (c *Client) CacheStatusCode(code int) {
 	c.lastMu.Lock()
 	c.lastStatusCode = code
 	c.lastMu.Unlock()
 }
 
-func (c *Client) setLastHeaders(h http.Header) {
+// CacheResponseHeaders 写入最近一次响应头。
+// 给 responseHeaderCache 与自定义缓存层：调用方必须先在锁外建好完整 map，再交给这里整体替换引用。
+// 输入 h：新的 header 引用，可为 nil（表示清空）；本函数不复制、不改 h。
+// 返回：无。
+func (c *Client) CacheResponseHeaders(h http.Header) {
 	c.lastMu.Lock()
 	c.lastHeaders = h
 	c.lastMu.Unlock()
 }
 
-// WithChain 派生一个子客户端：共享同一 HTTPClient 与 HeaderProvider（故会话状态互通），
-// 但用传入的链，且自带独立的「最近一次响应」缓存（新锁，不拷贝父锁）。
-//
-// 典型用途：主链跑业务，派生子链跑一段需要不同处理的流程（禁重定向读 302 Location、
-// 拿原始 HTML 而不做提纯、临时加一层录制）。父客户端的默认链完全不受影响。
-//
-// 父链最外层【连续的】SideChannel 拦截器会被自动前置到子链，让录制/调试 sink 继续生效。
+// WithChain 派生一个子客户端。
+// 给需要换链但不换会话的流程：禁重定向读 302、拿原始 HTML、临时加录制。
+// 输入 chain：子链主体；父链最外层连续 SideChannel 会自动前置到它前面。
+// 返回：新 *Client，共享 HTTPClient 与 HeaderProvider，自带独立响应缓存（新锁，不拷贝父锁）。
+// 例：client.WithChain(interceptor.NoRedirectChain())；chain 为 nil 时子客户端只有继承来的观察层。
 func (c *Client) WithChain(chain Interceptors) *Client {
 	var observers Interceptors
 	for _, it := range c.interceptors {
@@ -267,5 +326,6 @@ func (c *Client) WithChain(chain Interceptors) *Client {
 		interceptors: derived,
 		opts:         c.opts,
 		retry:        c.retry,
+		slowMS:       c.slowMS,
 	}
 }

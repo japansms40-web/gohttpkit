@@ -3,7 +3,7 @@
 //
 //	go run ./examples/quickstart
 //	go run ./examples/quickstart -url https://api.github.com/zen
-//	HTTPKIT_LOG_LEVEL=debug go run ./examples/quickstart          # 看全量 http_transaction 日志
+//	在 main 里 logger.SetConfig(logger.Config{Level: logger.LevelDebug}) 可看全量 event=http.transaction 日志
 //	go run ./examples/quickstart -proxy socks5://127.0.0.1:1080   # 走代理
 package main
 
@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
+	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 	"github.com/japansms40-web/gohttpkit/logger"
 )
 
@@ -51,7 +52,7 @@ func run(out io.Writer, args []string) error {
 
 	// ① 构头器：本库唯一必填的接缝。这里用最简的 StaticHeaders；
 	//    需要 cookie / token / 逐请求变化的头，就自己实现 HeaderProvider（见 examples/fidelity）。
-	client, err := httpx.New(httpx.Options{
+	client, err := interceptor.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{
 			Base: base,
 			Headers: map[string]string{

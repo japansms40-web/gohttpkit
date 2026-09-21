@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
+	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
 // ─────────────────────── 一、按抓包复刻的构头器 ───────────────────────
@@ -191,10 +192,10 @@ func run(out io.Writer, args []string) error {
 	hp := &browserHeaders{base: srv.URL, extraCk: map[string]string{"datr": "captured-datr", "mid": "captured-mid"}}
 
 	var step atomic.Int32
-	chain := httpx.Prepend(httpx.DefaultChain(),
+	chain := httpx.Prepend(interceptor.DefaultChain(),
 		// 整包快照：请求/响应头与体全留档，事后与抓包逐字段对比。
 		// 它被标记为旁路观察层，WithChain 派生子链时会自动跟着走。
-		httpx.NewTransactionInterceptor(func(tx *httpx.Transaction) {
+		interceptor.NewTransactionInterceptor(func(tx *httpx.Transaction) {
 			n := step.Add(1)
 			printTransaction(out, n, tx)
 			if *dumpDir != "" {
@@ -218,7 +219,7 @@ func run(out io.Writer, args []string) error {
 	// ① 抓主页：拿 csrftoken。注意用【禁重定向】的派生子链 —— 这一步真实抓包里是 302，
 	//    跟随重定向会把 Location 与 302 上的 Set-Cookie 一起吃掉。
 	fmt.Fprintln(out, "═══ step 1: GET / （禁重定向，读 302 与 Set-Cookie）═══")
-	noRedirect := client.WithChain(httpx.NoRedirectChain())
+	noRedirect := client.WithChain(interceptor.NoRedirectChain())
 	if _, err := noRedirect.Do(ctx, httpx.RequestSpec{
 		Path:            "/",
 		HeaderWhitelist: endpointFetchPage,

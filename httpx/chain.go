@@ -23,7 +23,7 @@ import (
 
 // Interceptor 链上的单个拦截器。实现 Intercept 时：
 //   - 调用 ch.Proceed() 继续链，在其前后插入自己的逻辑；
-//   - 不调用 Proceed 即为「终端拦截器」（唯一接触网络的那层，见 NewCallServerInterceptor）；
+//   - 不调用 Proceed 即为「终端拦截器」（唯一接触网络的那层，见 interceptor.NewCallServerInterceptor）；
 //   - 可以多次调用 Proceed（重试拦截器正是这么做的）。
 type Interceptor interface {
 	Intercept(*Chain) (*Response, error)
@@ -62,6 +62,24 @@ type SideChannelMarker struct{}
 // 输入：值接收者，无字段、无副作用。
 // 返回：无。例：type rec struct { httpx.SideChannelMarker }。
 func (SideChannelMarker) SideChannel() {}
+
+// Terminal 标记「终端」拦截器：不调用 Proceed，是链上唯一接触网络的那一层。
+//
+// 本库两种 callServer 都内嵌 TerminalMarker。自定义终端（回放、录制）也应内嵌它，
+// 否则 Replace(chain, IsTerminal, …) / InsertBefore(chain, IsTerminal, …) 找不到锚点。
+type Terminal interface {
+	Interceptor
+	Terminal()
+}
+
+// TerminalMarker 内嵌它即把自定义拦截器标记为终端。
+type TerminalMarker struct{}
+
+// Terminal 实现 Terminal 接口的空方法。
+// 给自定义终端：内嵌 TerminalMarker 即被 IsTerminal 识别。
+// 输入：值接收者，无字段、无副作用。
+// 返回：无。例：type replay struct { httpx.TerminalMarker }。
+func (TerminalMarker) Terminal() {}
 
 // Request 一次请求在链上的可变状态。入口 Client.Do 构建，链上各层按需改写。
 // 单次调用内串行使用，无并发访问 —— 拦截器可以放心直接读写字段。
