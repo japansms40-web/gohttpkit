@@ -8,8 +8,9 @@ BASE_REV ?= HEAD~1
 .PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check
 
 # 覆盖率门禁（核心库，排除 examples）：低于 MIN_COVERAGE 直接失败。
-# 目标 ≥98%，只许上调、不许下调——往下调的那一刻门禁就从"防线"变成"摆设"。规范见 docs/TESTING.md。
-MIN_COVERAGE ?= 95
+# 已达标 98%（补齐 interceptor 角度测试后）；100% 为追求，只许上调、不许下调——
+# 往下调的那一刻门禁就从"防线"变成"摆设"。规范见 docs/TESTING.md。
+MIN_COVERAGE ?= 98
 
 build:
 	go build ./...
