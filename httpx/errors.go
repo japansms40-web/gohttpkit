@@ -209,3 +209,38 @@ func (e *ReadResponseBodyError) Unwrap() error {
 	}
 	return e.Err
 }
+
+// TransportError 标记「网络发送本身失败」的错误，只有它才会被 retry 拦截器纳入可重试判断；
+// 其它错误（构建请求失败、构头失败等）原样穿透、立即返回。
+//
+// 自定义终端拦截器必须把 http.Client.Do 的错误包成 *TransportError，否则重试层看不见它。
+//
+// 约束：位于 retry 与终端之间的拦截器不得再包装（wrap）该错误 —— retry 用 errors.As 解包，
+// 多包一层虽仍能识别，但那段区间语义上只应透传。
+type TransportError struct {
+	// Err 底层发送失败（dial / TLS / 被对端重置等）。retry 用 errors.As 解到本类型后再看它。
+	Err error
+}
+
+// Error 透传底层文案，不另加前缀：接入方与关键词表匹配的是对端/代理的原始句子。
+// 输入：接收者可为 nil；Err 也可为 nil。
+// 返回：正常失败是底层 Error()；nil 接收者或空 Err 是 "httpx: transport error <nil>"。
+// 例：(&TransportError{Err: io.EOF}).Error() → "EOF"；
+// (*TransportError)(nil).Error() → "httpx: transport error <nil>"。
+func (e *TransportError) Error() string {
+	if e == nil || e.Err == nil {
+		return "httpx: transport error <nil>"
+	}
+	return e.Err.Error()
+}
+
+// Unwrap 支持 errors.Is / errors.As 解到真正的网络错误。
+// 输入：接收者可为 nil。
+// 返回：底层 Err；nil 接收者或空 Err 返回 nil（不 panic）。
+// 例：errors.Is(&TransportError{Err: io.EOF}, io.EOF) → true。
+func (e *TransportError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}

@@ -94,6 +94,18 @@ func assertContentEncoding(t *testing.T, err error, encoding string, cause error
 	t.Logf("errors.As → *ContentEncodingError Encoding=%q err=%v", got.Encoding, err)
 }
 
+func assertTransportError(t *testing.T, err error, cause error) {
+	t.Helper()
+	var got *httpx.TransportError
+	if !errors.As(err, &got) {
+		t.Fatalf("err = %v (%T), want *httpx.TransportError", err, err)
+	}
+	if !errors.Is(got, cause) {
+		t.Fatalf("cause=%v, want %v", got.Err, cause)
+	}
+	t.Logf("errors.As → *TransportError err=%v", err)
+}
+
 func assertReadResponseBody(t *testing.T, err error, encoding string, cause error) {
 	t.Helper()
 	var got *httpx.ReadResponseBodyError
@@ -314,6 +326,39 @@ func TestReadResponseBodyError_包装后仍可As(t *testing.T) {
 	assertReadResponseBody(t, wrapped, "", cause)
 }
 
+func TestTransportError_文案与解包(t *testing.T) {
+	inner := errors.New("boom")
+	te := &httpx.TransportError{Err: inner}
+	assertTransportError(t, te, inner)
+	t.Logf("Error()=%q Is(inner)=%v", te.Error(), errors.Is(te, inner))
+	if te.Error() != "boom" {
+		t.Fatalf("Error() = %q", te.Error())
+	}
+}
+
+func TestTransportError_nil接收者与空Err(t *testing.T) {
+	t.Logf("nil.Error()=%q empty.Error()=%q", (*httpx.TransportError)(nil).Error(), (&httpx.TransportError{}).Error())
+	if got := (*httpx.TransportError)(nil).Error(); got != "httpx: transport error <nil>" {
+		t.Errorf("nil.Error() = %q", got)
+	}
+	if got := (*httpx.TransportError)(nil).Unwrap(); got != nil {
+		t.Errorf("nil.Unwrap() = %v", got)
+	}
+	empty := &httpx.TransportError{}
+	if got := empty.Error(); got != "httpx: transport error <nil>" {
+		t.Errorf("empty.Error() = %q", got)
+	}
+	if empty.Unwrap() != nil {
+		t.Errorf("empty.Unwrap() = %v", empty.Unwrap())
+	}
+}
+
+func TestTransportError_包装后仍可As(t *testing.T) {
+	cause := errors.New("dial tcp: i/o timeout")
+	wrapped := fmt.Errorf("send: %w", &httpx.TransportError{Err: cause})
+	assertTransportError(t, wrapped, cause)
+}
+
 func TestHttpx错误类型互不误匹配(t *testing.T) {
 	all := []error{
 		&httpx.MissingHeaderProviderError{Field: "Options.Headers"},
@@ -324,6 +369,7 @@ func TestHttpx错误类型互不误匹配(t *testing.T) {
 		&httpx.CreateHTTPRequestError{Method: "GET", Err: errors.New("e")},
 		&httpx.ContentEncodingError{Encoding: "gzip", Err: errors.New("e")},
 		&httpx.ReadResponseBodyError{Encoding: "gzip", Err: errors.New("e")},
+		&httpx.TransportError{Err: errors.New("e")},
 	}
 	newTargets := func() []any {
 		return []any{
@@ -335,6 +381,7 @@ func TestHttpx错误类型互不误匹配(t *testing.T) {
 			new(*httpx.CreateHTTPRequestError),
 			new(*httpx.ContentEncodingError),
 			new(*httpx.ReadResponseBodyError),
+			new(*httpx.TransportError),
 		}
 	}
 	t.Logf("types=%d", len(all))
