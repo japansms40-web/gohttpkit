@@ -47,13 +47,7 @@ func IsSuccessStatus(code int) bool { return ClassifyStatus(code) == ClassSucces
 
 // IsErrorStatus 判定是否应视为出错状态（原 logging 的 >= 400 语义）。
 // 输入 code：任意整数。
-// 返回：4xx / 5xx 为 true；600+ 仍为 true，以保持旧的「>= 400 打全量日志」行为。
+// 返回：>= 400 为 true——即 4xx / 5xx，以及 600+ 这类越界码，以保持旧的
+// 「>= 400 打全量日志」行为不变；<400（含 1xx/2xx/3xx 与非法负数）为 false。
 // 例：IsErrorStatus(http.StatusBadRequest) → true；IsErrorStatus(http.StatusOK) → false。
-func IsErrorStatus(code int) bool {
-	switch ClassifyStatus(code) {
-	case ClassClientError, ClassServerError:
-		return true
-	default:
-		return code >= http.StatusBadRequest
-	}
-}
+func IsErrorStatus(code int) bool { return code >= http.StatusBadRequest }
