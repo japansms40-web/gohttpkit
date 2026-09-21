@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# gohttpkit pre-push 门禁（重活）：并发回归 + 行为锁定 + 覆盖率。
+# 放在 push 而非 commit，避免每次提交都等几十秒。应急绕过：git push --no-verify。
+set -uo pipefail
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+
+root=$(git rev-parse --show-toplevel)
+cd "$root" || exit 1
+
+failed=0
+step() { red "✗ $1 失败"; failed=1; }
+
+echo "pre-push：跑 race / char / cover（可能几十秒）……"
+make race  || step "make race（并发回归）"
+make char  || step "make char（行为锁定）"
+make cover || step "make cover（覆盖率门禁 ≥90%）"
+
+if [ "$failed" -ne 0 ]; then
+  red "pre-push 未通过。修复后重试，或 git push --no-verify 应急绕过（CI 仍会拦）。"
+  exit 1
+fi
+green "pre-push 通过"
+exit 0

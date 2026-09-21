@@ -1,0 +1,24 @@
+# 跨编辑器统一风格（VS Code / GoLand / Cursor / vim 等都识别）。
+# Go 用 tab（gofmt 要求），其余文本用空格。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.go]
+indent_style = tab
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.{yml,yaml,json,md,toml}]
+indent_style = space
+indent_size = 2
+
+[*.sh]
+indent_style = space
+indent_size = 2

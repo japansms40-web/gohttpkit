@@ -1,0 +1,29 @@
+---
+description: httpx 包约定：拦截器链顺序即语义、类型错误非哨兵、常量判定、日志门面
+globs: httpx/**
+alwaysApply: false
+---
+
+# httpx
+
+改这个包按现有链结构写，不要在 `Client` 主体里加 if 分支替代拦截器。规范全文见 `docs/CODE_STANDARDS.md`。
+
+## 拦截器链
+
+顺序即语义，`DefaultChain` 的注释解释了每层为什么在那个位置。改序或插层前先 `make char`（行为锁定），并在 PR 说明行为变化。**业务判断不进默认链**——任何「替调用方对响应下结论」的逻辑都做成可选拦截器。新增横切关注点（限流/打点/签名）实现为新拦截器，不改 `DoRequest` 主体。
+
+## 错误
+
+库错误是**带字段的类型**，不是哨兵：`type XxxError struct` + `Error()`，`return &XxxError{...}`，对比用 `errors.As` 解出字段。禁止 `errors.New` / `var ErrXxx = errors.New(...)` 当身份，禁止扫 `Error()` 文案。网络发送失败必须包成 `*TransportError`，否则 retry 层 `errors.As` 看不见它。retry 与 callServer 之间不得包装错误，原样穿透。
+
+## 常量与魔法值
+
+闭合集合且进 `switch` 的用 `type X string` 枚举 + `String()`（如 `ContentEncoding`、`StatusClass`）；HTTP header 名、结构化日志字段 key 用具名 const，**不套 type**；状态码用 `http.Status*` 或 `StatusClass` / `ClassifyStatus`，禁止裸区间（`code >= 200 && code < 300`）。
+
+## 日志
+
+生产代码走 `logger` 门面（ctx 必传），禁止裸 `fmt.Print` / `slog.*`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度（`slog.Int("..._len", len(b))`）。测试观察走 `t.Log` / `t.Logf`。
+
+## 测试
+
+对外可观察行为（返回值、错误类型与字段、发哪些头、重试次数与退避、缓存时机）的改动必须有 characterization 覆盖，或确认等价重构且 `make char` 全绿。用例名写中文短句，默认 `go test` 不刷屏（`-v` 才出 `t.Logf`）。

@@ -1,0 +1,21 @@
+# gitleaks 配置：继承默认规则集，另加本仓白名单以避免误报。
+# 生产代码与 *_test.go 仍全量扫描——测试里也不许出现真实凭据。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "gohttpkit 白名单：这些路径的字面量不是真实凭据"
+paths = [
+  '''\.githooks/.*''',      # 钩子脚本里含 AKIA.. 等「检测规则」字符串，非真实密钥
+  '''\.gitleaks\.toml''',
+  '''coverage\.out''',
+  '''\.cursor/.*''',
+  '''docs/.*''',            # 文档示例
+  '''examples/.*''',        # 示例里的演示值（非真实）
+]
+# 行内豁免标记：在该行加 gitleaks:allow 或 notsecret 注释即可放行
+regexTarget = "line"
+regexes = [
+  '''gitleaks:allow''',
+  '''notsecret''',
+]

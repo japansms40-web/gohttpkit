@@ -108,8 +108,17 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 
 ## 8. 测试
 
+> 完整测试规范（多角度覆盖表、边界纪律、覆盖率政策、豁免机制、工作流）见 [`TESTING.md`](TESTING.md)。
+> 本节只列硬约束。
+
 - **MUST** 对外行为的改动必须有 characterization 测试覆盖。测的是行为（重试几次、发哪些头、
   什么时机缓存），不是实现细节。范例：`httpx/characterization_test.go`。
+- **MUST** 覆盖率按**角度**驱动，不是凑行 %：对每个函数走查 [`TESTING.md`](TESTING.md) §2 的角度表
+  （边界 / 错误路径 / nil-零值 / 并发 / 契约不变量 / 副作用…），补「能真出错」的角度；判为
+  out-of-scope 的角度要写明理由。**禁止**用「调一次不断言」凑覆盖。
+- **MUST** 边界必测（角度 #2）：`0` / `1` / 空 / 满 / 越限各一条，不是只有一个中间值。
+- **MUST** 错误分支断言「是哪个错」：类型错误 `errors.As` 解字段、哨兵 `errors.Is`，不只判 `err != nil`。
+- **MUST** 核心库（除 `examples/`）行覆盖率过 `make cover` 门禁（`MIN_COVERAGE`，目标 ≥98%，只上不下）。
 - **SHOULD** 用例名写成中文短句，直接说明它锁的是什么行为，失败时不用读代码就知道坏了什么。
 - **SHOULD** 需要网络的测试自带假服务器（`httptest` / 最小协议实现），CI 里不依赖外网。
   范例：`netproxy/proxy_test.go` 里的最小 SOCKS5 服务端。

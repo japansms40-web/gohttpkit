@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,13 +17,15 @@ jobs:
         with:
           go-version: '1.24'
           check-latest: true
+      - name: 跨 agent 指令同源（CLAUDE/GEMINI 必须软链到 AGENTS）
+        run: make agents-sync-check
       - name: build
         run: go build ./...
       - name: vet
         run: go vet ./...
       - name: go mod tidy 无 diff
         run: go mod tidy -diff
-      - name: test + 覆盖率门禁（≥90%）
+      - name: test + 覆盖率门禁（核心库，目标 ≥98%）
         run: make cover
       - name: race（并发回归）
         run: go test -race -count=1 ./...
@@ -40,3 +45,58 @@ jobs:
         with:
           version: latest
           args: --timeout 5m
+
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: govulncheck（依赖漏洞门禁）
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks 密钥扫描
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 私有组织仓库需在仓库 secrets 里配 GITLEAKS_LICENSE；个人/公开仓库免费。
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: "提交标题规范 <type>(<scope>) 冒号 摘要"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base="$BASE_SHA"
+          head="$HEAD_SHA"
+          re='^(feat|fix|refactor|test|docs|perf|build|ci|chore)(\([a-z0-9,_/.-]+\))?!?: .+'
+          fail=0
+          for sha in $(git rev-list "$base".."$head"); do
+            title=$(git log -1 --format=%s "$sha")
+            case "$title" in Merge\ *|Revert\ *|"fixup! "*|"squash! "*) continue ;; esac
+            if ! printf '%s' "$title" | grep -qE "$re"; then
+              echo "::error::提交标题不规范 $sha: $title"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "type 仅限 feat fix refactor test docs perf build ci chore"
+            exit 1
+          fi
+          echo "所有提交标题符合规范 ✓"

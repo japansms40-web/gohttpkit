@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# gohttpkit commit-msg 门禁：校验提交标题遵循 <type>(<scope>): <摘要> 约定。
+# 装载：make hooks。应急绕过：git commit --no-verify。
+set -uo pipefail
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
+
+title=$(grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$' | head -1)
+
+# merge / revert / fixup / squash 提交放行（由工具生成，不受约束）
+case "$title" in
+  Merge\ *|Revert\ *|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
+
+types='feat|fix|refactor|test|docs|perf|build|ci|chore'
+if ! printf '%s' "$title" | grep -qE "^(${types})(\([a-z0-9,_/.-]+\))?!?: .{1,}$"; then
+  red "✗ 提交标题不符合规范：$title"
+  red "  要求：<type>(<scope>): <中文摘要>"
+  red "  type 仅限：feat fix refactor test docs perf build ci chore"
+  red "  例：feat(httpx): 拦截器链支持自定义退避策略"
+  red "  （应急绕过：git commit --no-verify）"
+  exit 1
+fi
+
+# 标题过长只警告不拦（GitHub 列表约 72 列后截断）
+len=${#title}
+if [ "$len" -gt 72 ]; then
+  yellow "· 提示：标题 ${len} 字符，超过 72，GitHub 列表会截断。"
+fi
+exit 0

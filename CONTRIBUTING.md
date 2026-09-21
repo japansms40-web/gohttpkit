@@ -6,7 +6,7 @@
 
 本地请按顺序跑（或一条 `make ci` 对齐 CI）：
 
-- [ ] `make check` —— build + vet + cover（≥90%）+ tidy
+- [ ] `make check` —— build + vet + cover（核心库 ≥ `MIN_COVERAGE`，目标 98%）+ tidy
 - [ ] `make lint-new` —— 只对增量严格（`golangci-lint --new-from-rev`）
 - [ ] `make race` —— 并发回归（需要 C 编译器）
 - [ ] `make char` —— 对外行为锁定；改拦截器链 / 发头 / 解压 / 状态语义之前必跑
@@ -21,7 +21,8 @@
 4. **错误处理**：本库错误必须是带字段的类型，对比用 `errors.As`，禁止哨兵冒充身份。
 5. **日志**：生产代码走 `logger` 门面；协议 body 经 `TruncateBodyForLog`。
 6. **注释**：输入 / 返回写清；导出符号写给谁用。
-7. **测试**：对外行为改动必须有 characterization；测试日志用 `t.Log`。
+7. **测试**：对外行为改动必须有 characterization；按角度补测（边界 / 错误路径 / nil / 并发…），
+   错误分支断言「是哪个错」，覆盖率过门禁。完整规范见 [`docs/TESTING.md`](docs/TESTING.md)；测试日志用 `t.Log`。
 8. **常量、枚举与魔法值**：闭合集合用 `type` 枚举；header 名 / 日志 key 用具名 const；状态码用 `StatusClass` 或 stdlib 常量。禁止在分支、拼装、打点处再写同名字面量。
 
 ## 破坏性变更

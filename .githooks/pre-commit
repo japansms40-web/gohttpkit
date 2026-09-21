@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# gohttpkit pre-commit 门禁（秒级，只查本次改动）。
+# 装载：make hooks（设置 core.hooksPath=.githooks）。应急绕过：git commit --no-verify（禁止常规使用）。
+set -uo pipefail
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+gray() { printf '\033[90m%s\033[0m\n' "$*"; }
+
+failed=0
+fail() { red "✗ $1"; failed=1; }
+
+# 本次暂存的 Go 文件（新增/改动/复制，排除删除）。用字符串而非数组，兼容 macOS 自带 bash 3.2（无 mapfile）。
+staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+
+# 1) gofmt：暂存的 Go 文件必须已格式化
+if [ -n "$staged_go" ]; then
+  unformatted=$(printf '%s\n' "$staged_go" | tr '\n' '\0' | xargs -0 gofmt -l 2>/dev/null)
+  if [ -n "$unformatted" ]; then
+    fail "以下文件未 gofmt（跑 gofmt -w 后重新 add）："
+    echo "$unformatted" | sed 's/^/    /'
+  else
+    green "✓ gofmt"
+  fi
+
+  # 2) go vet：可疑构造
+  if go vet ./... 2>/tmp/gohttpkit_vet.$$; then
+    green "✓ go vet"
+  else
+    fail "go vet 失败："; sed 's/^/    /' /tmp/gohttpkit_vet.$$
+  fi
+  rm -f /tmp/gohttpkit_vet.$$
+
+  # 3) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
+  if command -v golangci-lint >/dev/null 2>&1; then
+    if git rev-parse --verify -q HEAD >/dev/null; then
+      if golangci-lint run --timeout 5m --new-from-rev=HEAD 2>/tmp/gohttpkit_lint.$$; then
+        green "✓ golangci-lint（增量）"
+      else
+        fail "golangci-lint 增量告警："; sed 's/^/    /' /tmp/gohttpkit_lint.$$
+      fi
+      rm -f /tmp/gohttpkit_lint.$$
+    fi
+  else
+    gray "· golangci-lint 未装，跳过增量 lint（建议：go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest）"
+  fi
+
+  # 4) go.mod 整洁
+  if go mod tidy -diff >/dev/null 2>&1; then
+    green "✓ go mod tidy"
+  else
+    fail "go.mod/go.sum 不整洁：跑 go mod tidy 后重新 add"
+  fi
+fi
+
+# 5) 密钥扫描：有 gitleaks 用 gitleaks，否则退回内建规则
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks protect --staged --redact --no-banner >/dev/null 2>&1; then
+    green "✓ gitleaks 密钥扫描"
+  else
+    fail "gitleaks 命中疑似凭据（详情：gitleaks protect --staged --verbose）"
+  fi
+else
+  # 内建规则：扫暂存新增行里的高置信凭据。行内带 gitleaks:allow 或 notsecret 可豁免。
+  # 关键词后允许 Bearer/Basic/Token 方案词，再接 12+ 位值。大小写不敏感（真实头常是大写 Authorization）。
+  patt='(-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|(https?://)[^/[:space:]:]+:[^/[:space:]@]+@|(sessionid|csrftoken|ds_user_id|authorization|api[_-]?key|access[_-]?key|secret|passwd|password|token)["'"'"' ]*[:=][[:space:]]*(bearer |basic |token )?["'"'"']?[A-Za-z0-9/+_.=-]{12,})'
+  hits=$(git diff --cached -U0 --diff-filter=ACM \
+    | grep -E '^\+' | grep -vE '^\+\+\+' \
+    | grep -viE 'gitleaks:allow|notsecret' \
+    | grep -niEo "$patt" 2>/dev/null)
+  if [ -n "$hits" ]; then
+    fail "内建扫描命中疑似凭据（确属误报可在该行加 // notsecret 或 gitleaks:allow）："
+    echo "$hits" | sed 's/^/    /'
+    gray "  （建议装 gitleaks 获得更准的扫描：https://github.com/gitleaks/gitleaks）"
+  else
+    green "✓ 密钥扫描（内建规则）"
+  fi
+fi
+
+if [ "$failed" -ne 0 ]; then
+  red "pre-commit 未通过。修复后重试，或 git commit --no-verify 应急绕过（CI 仍会拦）。"
+  exit 1
+fi
+green "pre-commit 通过"
+exit 0
