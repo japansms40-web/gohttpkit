@@ -98,12 +98,11 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
   范例：`geo.TimezoneOffsetForCountry`（`0` 是合法 GMT+0，必须看 error）、
   `geo.lookupCountry`、`geo.BuildChromeAcceptLanguageForCountry`。
 - **SHOULD** 导出函数再写一行 `例：调用 → 结果`，至少覆盖最常见成功路径和一条失败路径。
-  范例：`geo.WebAcceptLanguageForCountry`、`geo.ParseCountryFromProxyURL`。
+  范例：`geo.WebAcceptLanguageForCountry`、`geo.MobileLocaleForCountry`。
 - **MUST** 导出符号还要写「给谁用、什么场景」（见第 2 节）。
 - **MUST** 「为什么」写在输入 / 返回之后，不复述「是什么」。看起来能简化但不能动的地方，
   写明踩过什么坑，否则下一个人会「顺手优化掉」。
-  范例：`httpx/transport.go` 的 transport 参数、`geo/proxy_country.go` 的密码段兜底、
-  `geo.expandChromeLanguageList` 的前瞻规则。
+  范例：`httpx/transport.go` 的 transport 参数、`geo.expandChromeLanguageList` 的前瞻规则。
 - **MUST** 行为怪异但有意保留的地方显式标注，并在 characterization 测试里锁定。
 - **MUST NOT** 注释只复述函数名或实现步骤（「遍历切片然后返回」）。
 
@@ -115,7 +114,7 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 - **SHOULD** 需要网络的测试自带假服务器（`httptest` / 最小协议实现），CI 里不依赖外网。
   范例：`netproxy/proxy_test.go` 里的最小 SOCKS5 服务端。
 - **SHOULD** 测试文件与源文件同名：`foo.go` → `foo_test.go`。fuzz 用 `foo_fuzz_test.go`。
-  范例：`geo/locale_web_test.go`、`geo/proxy_country_fuzz_test.go`。不写 `example_test.go`
+  范例：`geo/locale_web_test.go`、`netproxy/proxy_fuzz_test.go`。不写 `example_test.go`
   当说明书。
 
 ### 8.1 测试日志
@@ -128,7 +127,7 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
   只看拼装：`go test -v ./geo/ -run TestBuildChromeAcceptLanguage`。
 - **SHOULD** 表驱动每条在断言前打一行，写清输入和结果：
   `t.Logf("country=%q → %q err=%v", country, got, err)`。
-  范例：`geo/locale_web_test.go`、`geo/proxy_country_test.go`。
+  范例：`geo/locale_web_test.go`、`geo/lookup_test.go`。
 - **SHOULD** 全表扫描按 key 排序后再 `Log`，map 遍历顺序不稳定，排过才方便对表。
   范例：`geo/locale_web_test.go` 的 `TestCountryToWebAcceptTag_值不含下划线`。
 - **MAY** 错误路径再打 `errors.As` 解出的类型和字段，方便核对类型错误而不是文案。

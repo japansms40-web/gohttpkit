@@ -52,7 +52,8 @@ lint-new:
 tidy-check:
 	go mod tidy -diff
 
-# 三个示例都能跑起来（fidelity/customchain 自带假服务器，不需要外网）
+# 两个离线示例（fidelity/customchain 自带假服务器，不需要外网）。
+# quickstart 默认请求真实 URL（httpbin.org），需要外网，故不在这里跑：go run ./examples/quickstart
 examples:
 	go run ./examples/customchain
 	go run ./examples/fidelity

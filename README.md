@@ -101,7 +101,7 @@ interceptor.NewClient(httpx.Options{Headers: hp,
     Retry: httpx.WithRetry(5, 100*time.Millisecond, time.Second)})
 ```
 
-`Options.Retry` 是**指针**：nil 走默认值（可被 env 覆盖），非 nil 则每个字段字面生效 ——
+`Options.Retry` 是**指针**：nil 走代码默认值，非 nil 则每个字段字面生效 ——
 包括 `MaxRetries: 0`（就是不重试）。用值类型加「零值即未配」的话，
 分不清「没配」和「明确要求不重试」，后者会被静默改成重试 3 次。
 
@@ -207,20 +207,21 @@ make ci          # 合入口径聚合：check + lint-new + race + char（race �
 make char        # 行为锁定套件：改拦截器链之前先跑它
 make cover       # 覆盖率报告 + 门禁；make cover-html 看逐行
 make race        # 并发回归（需要 C 编译器）
-make examples    # 三个示例跑一遍
+make examples    # 跑两个离线示例（customchain / fidelity）；quickstart 请求真实 URL，需外网，单独跑
 ```
 
-合入前请跑 `make check`，以及 `make lint-new` 与 `make race`（CI 已覆盖这两项）。想一条命令对齐 CI，用 `make ci`。
+合入前请跑 `make check`，以及 `make lint-new` 与 `make race`（CI 已覆盖这两项）。想一条命令跑合入门禁，用 `make ci`。注意与 CI 的差异：CI 上 `lint` 是**全量** `golangci-lint run`，本地 `lint-new` 只查相对 `BASE_REV` 的增量；`make ci` 不跑 examples，CI 会另跑 `customchain` / `fidelity`。
 
 覆盖率门禁在 `make cover` 里，低于 90% 直接失败（`MIN_COVERAGE` 可调高，不要调低）。
-当前 **97.9%**，每个包都在 93% 以上：
+当前总覆盖率 **95.0%**（≥ 90% 门禁）。多数包在 97% 以上，`httpx/interceptor` 目前 80.3%，是后续要补测的重点：
 
 | 包 | 覆盖率 | | 包 | 覆盖率 |
 |---|---|---|---|---|
-| `errors` | 100% | | `httpx` | 98.9% |
-| `traffic` | 100% | | `geo` | 98.8% |
-| `versionreg` | 100% | | `netproxy` | 98.4% |
-| `logger` | 97.3% | | `examples/*` | 93~96% |
+| `errors` | 100% | | `httpx` | 99.3% |
+| `traffic` | 100% | | `logger` | 99.4% |
+| `versionreg` | 100% | | `netproxy` | 97.1% |
+| `geo` | 100% | | `examples/*` | 93~96% |
+| `httpx/interceptor` | 80.3% | | | |
 
 测试分三层，各管各的：
 

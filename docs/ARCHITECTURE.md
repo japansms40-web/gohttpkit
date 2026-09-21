@@ -98,7 +98,7 @@ flowchart TD
 | `errors` | 判断瞬时网络错误，包装重试耗尽错误和 HTTP 状态错误 | `errors/errors.go` |
 | `netproxy` | 校验代理 URL，把 SOCKS5 或 HTTP(S) 代理接到 `http.Transport` | `netproxy/proxy.go` |
 | `traffic` | 在 `net.Conn.Read/Write` 层按增量统计字节，由调用方注入全局 Hook | `traffic/traffic.go` |
-| `geo` | 国家码查 locale / 时区，代理 URL 解析出口国，按 Chromium 规则拼 Accept-Language | `geo/locale_web.go`、`geo/locale_mobile.go`、`geo/lookup.go`、`geo/timezone.go`、`geo/timezone_iana.go`、`geo/proxy_country.go`、`geo/errors.go` |
+| `geo` | 国家码查 locale / 时区，按 Chromium 规则拼 Accept-Language | `geo/locale_web.go`、`geo/locale_mobile.go`、`geo/lookup.go`、`geo/timezone.go`、`geo/timezone_iana.go`、`geo/errors.go` |
 | `versionreg` | 隔离不同协议版本，按版本注册配置，并按端点保存头白名单和接口标识 | `versionreg/registry.go`、`versionreg/endpoints.go` |
 
 ### 5.1 `httpx` 的核心设计
@@ -253,10 +253,6 @@ Accept-Language 两条入口，调用方只走其中一条：
   → BuildChromeAcceptLanguageForCountry(cc, extra, rng)  内部抽样后再拼，不必再调上一行
       extra<0 → *InvalidExtraLanguageCountError
       extra 超出候选 → *ExtraLanguageCountExceedsPoolError
-
-代理 URL
-  → ParseCountryFromProxyURL        geo/proxy_country.go
-  → 再喂给上面的查表（本函数不保证两位字母合法）
 ```
 
 查表函数不偷偷改成 Accept-Language。语言列表优先级由调用方组合。
@@ -394,7 +390,7 @@ classDiagram
 |---|---|---|
 | `netproxy.ApplyProxyToTransport` / `ParseProxyURL` | 配置代理或取得 SOCKS5 Dialer | `netproxy/proxy.go` |
 | `traffic.SetHook` / `WrapConn` | 注入字节统计回调、包装连接 | `traffic/traffic.go` |
-| `geo.WebAcceptLanguageForCountry` / `BuildChromeAcceptLanguage*` / `MobileLocaleForCountry` / `TimezoneOffsetForCountry` / `IANATimezoneForCountry` / `ParseCountryFromProxyURL` | 查 Chrome 码或 Android locale、按 Chromium 拼 Accept-Language、派生时区、从代理 URL 解析出口国 | `geo/locale_web.go`、`geo/locale_mobile.go`、`geo/timezone.go`、`geo/timezone_iana.go`、`geo/proxy_country.go` |
+| `geo.WebAcceptLanguageForCountry` / `BuildChromeAcceptLanguage*` / `MobileLocaleForCountry` / `TimezoneOffsetForCountry` / `IANATimezoneForCountry` | 查 Chrome 码或 Android locale、按 Chromium 拼 Accept-Language、派生时区 | `geo/locale_web.go`、`geo/locale_mobile.go`、`geo/timezone.go`、`geo/timezone_iana.go` |
 | `versionreg.New` / `Registry.MustRegister` / `Registry.Get` | 创建并访问版本注册表 | `versionreg/registry.go` |
 | `logger.WithTraceID` / `StartSpan` / `Info` 等 | 关联和输出结构化日志 | `logger/context.go`、`logger/span.go`、`logger/logger.go` |
 
@@ -406,7 +402,6 @@ classDiagram
 
 - 目标 HTTP 服务由 `HeaderProvider.BaseURL()` 或 `RequestSpec.Path` 的绝对 URL 决定；
 - 代理服务由调用方通过 `Options.ProxyURL` 传入；
-- `geo/proxy_country.go` 能识别代理凭据中的 `country-xx` 标签，但不会调用代理商 API；
 - `examples/quickstart/main.go` 默认请求 `https://httpbin.org/get`，这只是可替换的演示地址；
 - 另外两个示例和绝大多数网络测试使用本地 `httptest` 假服务，不依赖外网。
 

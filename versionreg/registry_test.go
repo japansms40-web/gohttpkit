@@ -26,10 +26,10 @@ func TestRegistry_注册与取用(t *testing.T) {
 	))
 
 	cfg, err := r.Get("v1")
-	t.Logf("Get(v1) → ua=%q app_id=%q doc=%q err=%v", cfg.UserAgent, cfg.Param("app_id"), cfg.DocID("user.profile"), err)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("Get(v1) → ua=%q app_id=%q doc=%q", cfg.UserAgent, cfg.Param("app_id"), cfg.DocID("user.profile"))
 	if cfg.UserAgent != "ua/1" || cfg.Param("app_id") != "123" || cfg.DocID("user.profile") != "doc-9" {
 		t.Fatalf("cfg = %+v", cfg)
 	}
