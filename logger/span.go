@@ -37,7 +37,7 @@ func NewSpanID() string { return newRandomHex(4, 8) }
 // 例：DurationMs(1500*time.Millisecond) 的值为 1500。
 // 供非 span 场景（HTTP/WSS）直接使用，保证全项目耗时字段同名同单位。
 func DurationMs(d time.Duration) slog.Attr {
-	return slog.Int64("duration_ms", d.Milliseconds())
+	return slog.Int64(FieldDurationMS, d.Milliseconds())
 }
 
 // StartSpan 开启一个业务 span。
@@ -59,16 +59,16 @@ func StartSpan(ctx context.Context, name string, attrs ...slog.Attr) (context.Co
 
 	// span_id 由 handler 从 ctx 自动附加，这里不重复加；只补 span_name 与父链。
 	startAttrs := make([]slog.Attr, 0, len(attrs)+2)
-	startAttrs = append(startAttrs, slog.String("span_name", name))
+	startAttrs = append(startAttrs, slog.String(FieldSpanName, name))
 	if parent != "" {
-		startAttrs = append(startAttrs, slog.String("parent_span_id", parent))
+		startAttrs = append(startAttrs, slog.String(FieldParentSpanID, parent))
 	}
 	startAttrs = append(startAttrs, attrs...)
 	InfoEvent(ctx, EventSpanStart, startAttrs...)
 
 	end := func(endAttrs ...slog.Attr) {
 		final := make([]slog.Attr, 0, len(endAttrs)+2)
-		final = append(final, slog.String("span_name", name), DurationMs(time.Since(start)))
+		final = append(final, slog.String(FieldSpanName, name), DurationMs(time.Since(start)))
 		final = append(final, endAttrs...)
 		InfoEvent(ctx, EventSpanEnd, final...)
 	}

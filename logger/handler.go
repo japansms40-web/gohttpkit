@@ -45,10 +45,10 @@ func (h *ctxHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 	r2 := r.Clone()
 	if tid != "" {
-		r2.AddAttrs(slog.String("trace_id", tid))
+		r2.AddAttrs(slog.String(FieldTraceID, tid))
 	}
 	if sid != "" {
-		r2.AddAttrs(slog.String("span_id", sid))
+		r2.AddAttrs(slog.String(FieldSpanID, sid))
 	}
 	r2.AddAttrs(extra...)
 	return h.inner.Handle(ctx, r2)

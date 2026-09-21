@@ -39,9 +39,9 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		if err == nil {
 			if attempt > 0 {
 				logger.InfoEvent(req.Ctx, httpx.EventHTTPRetrySucceeded,
-					slog.String("method", req.Method),
-					slog.String("url", req.FullURL),
-					slog.Int("attempt", attempt+1),
+					slog.String(httpx.LogFieldMethod, req.Method),
+					slog.String(httpx.LogFieldURL, req.FullURL),
+					slog.Int(httpx.LogFieldAttempt, attempt+1),
 					logger.DurationMs(time.Since(retryStart)),
 				)
 			}
@@ -69,16 +69,16 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		}
 
 		logger.WarnEvent(req.Ctx, httpx.EventHTTPRetry,
-			slog.String("method", req.Method),
-			slog.String("url", req.FullURL),
-			slog.Any("req_headers", req.ReqHeaders),
-			slog.Any("req_params", req.Params),
-			slog.String("req_body", string(httpx.TruncateBodyForLog(req.Body, ch.Client().LogBodyLimit()))),
-			slog.Int("req_body_len", len(req.Body)),
-			slog.Int("attempt", attempt+1),
-			slog.Int("max_retries", policy.MaxRetries),
-			slog.Duration("backoff", backoff),
-			slog.String("err_type", fmt.Sprintf("%T", doErr)),
+			slog.String(httpx.LogFieldMethod, req.Method),
+			slog.String(httpx.LogFieldURL, req.FullURL),
+			slog.Any(httpx.LogFieldReqHeaders, req.ReqHeaders),
+			slog.Any(httpx.LogFieldReqParams, req.Params),
+			slog.String(httpx.LogFieldReqBody, string(httpx.TruncateBodyForLog(req.Body, ch.Client().LogBodyLimit()))),
+			slog.Int(httpx.LogFieldReqBodyLen, len(req.Body)),
+			slog.Int(httpx.LogFieldAttempt, attempt+1),
+			slog.Int(httpx.LogFieldMaxRetries, policy.MaxRetries),
+			slog.Duration(httpx.LogFieldBackoff, backoff),
+			slog.String(httpx.LogFieldErrType, fmt.Sprintf("%T", doErr)),
 			logger.Err(doErr),
 		)
 

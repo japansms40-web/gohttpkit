@@ -22,15 +22,15 @@ func (i *tracingInterceptor) Intercept(ch *httpx.Chain) (resp *httpx.Response, e
 	req := ch.Request()
 	parentCtx := req.Ctx
 	spanCtx, end := logger.StartSpan(parentCtx, httpx.SpanHTTPRequest,
-		slog.String("method", req.Method),
-		slog.String("url", req.FullURL))
+		slog.String(httpx.LogFieldMethod, req.Method),
+		slog.String(httpx.LogFieldURL, req.FullURL))
 	req.Ctx = spanCtx
 
 	defer func() {
 		req.Ctx = parentCtx
 		attrs := make([]slog.Attr, 0, 2)
 		if resp != nil {
-			attrs = append(attrs, slog.Int("status", resp.StatusCode))
+			attrs = append(attrs, slog.Int(httpx.LogFieldStatus, resp.StatusCode))
 		}
 		if err != nil {
 			attrs = append(attrs, logger.Err(err))

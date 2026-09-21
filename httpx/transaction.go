@@ -1,6 +1,7 @@
 package httpx
 
 // Transaction 一次请求/响应的完整快照（含请求头与体、响应头与体），供调试落盘。
+// json tag 与 log_fields.go 的 LogField* 同值；struct tag 不能引用 const，改字段名时两处一起改。
 //
 // cookie / authorization 原样保留，用途是与真实抓包逐字段对比。
 // 别把它写到会被共享或长期留存的地方。

@@ -36,9 +36,9 @@ func NewEvent(name string) Event { return namedEvent(name) }
 
 // EventAttr 把字符串事件名转为 key 固定为 event 的 slog.Attr。
 // 输入：name 按字面使用，可为空。
-// 返回：slog.String("event", name)。
+// 返回：slog.String(FieldEvent, name)。
 // 例：Info(ctx, "给人看的文案", EventAttr("demo.finished")) 的 msg 仍是人类文案。
-func EventAttr(name string) slog.Attr { return slog.String("event", name) }
+func EventAttr(name string) slog.Attr { return slog.String(FieldEvent, name) }
 
 // Attr 把 Event 转为 slog.Attr；nil 接口输出 event=""。
 // 输入：e 可为 nil 接口；typed-nil 由其 Name 实现负责。

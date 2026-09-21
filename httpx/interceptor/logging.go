@@ -37,32 +37,32 @@ func (i *loggingInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error)
 
 	if resp.StatusCode >= 400 || !c.Options().LogSummaryOnly {
 		attrs := []slog.Attr{
-			slog.String("method", req.Method),
-			slog.String("url", req.FullURL),
-			slog.String("proxy", c.Options().ProxyURL),
-			slog.String("exit_ip", c.Options().ExitIP),
-			slog.String("asn", c.Options().ASN),
-			slog.Any("req_headers", req.ReqHeaders),
-			slog.Any("req_params", req.Params),
-			slog.String("req_body", string(httpx.TruncateBodyForLog(req.Body, limit))),
-			slog.Int("req_body_len", len(req.Body)),
-			slog.Int("status", resp.StatusCode),
-			slog.String("proto", resp.Proto),
-			slog.Int("proto_major", resp.ProtoMajor),
-			slog.Any("resp_headers", resp.Header),
-			slog.String("resp_body", string(httpx.TruncateBodyForLog(resp.Body, limit))),
-			slog.Int("resp_body_len", len(resp.Body)),
-			slog.Int64("duration_ms", durMs),
+			slog.String(httpx.LogFieldMethod, req.Method),
+			slog.String(httpx.LogFieldURL, req.FullURL),
+			slog.String(httpx.LogFieldProxy, c.Options().ProxyURL),
+			slog.String(httpx.LogFieldExitIP, c.Options().ExitIP),
+			slog.String(httpx.LogFieldASN, c.Options().ASN),
+			slog.Any(httpx.LogFieldReqHeaders, req.ReqHeaders),
+			slog.Any(httpx.LogFieldReqParams, req.Params),
+			slog.String(httpx.LogFieldReqBody, string(httpx.TruncateBodyForLog(req.Body, limit))),
+			slog.Int(httpx.LogFieldReqBodyLen, len(req.Body)),
+			slog.Int(httpx.LogFieldStatus, resp.StatusCode),
+			slog.String(httpx.LogFieldProto, resp.Proto),
+			slog.Int(httpx.LogFieldProtoMajor, resp.ProtoMajor),
+			slog.Any(httpx.LogFieldRespHeaders, resp.Header),
+			slog.String(httpx.LogFieldRespBody, string(httpx.TruncateBodyForLog(resp.Body, limit))),
+			slog.Int(httpx.LogFieldRespBodyLen, len(resp.Body)),
+			slog.Int64(httpx.LogFieldDurationMS, durMs),
 		}
 		emit(req.Ctx, slow, attrs)
 	} else {
 		attrs := []slog.Attr{
-			slog.String("method", req.Method),
-			slog.String("url", req.FullURL),
-			slog.Int("status", resp.StatusCode),
-			slog.Int("req_body_len", len(req.Body)),
-			slog.Int("resp_body_len", len(resp.Body)),
-			slog.Int64("duration_ms", durMs),
+			slog.String(httpx.LogFieldMethod, req.Method),
+			slog.String(httpx.LogFieldURL, req.FullURL),
+			slog.Int(httpx.LogFieldStatus, resp.StatusCode),
+			slog.Int(httpx.LogFieldReqBodyLen, len(req.Body)),
+			slog.Int(httpx.LogFieldRespBodyLen, len(resp.Body)),
+			slog.Int64(httpx.LogFieldDurationMS, durMs),
 		}
 		emit(req.Ctx, slow, attrs)
 	}
@@ -71,7 +71,7 @@ func (i *loggingInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error)
 
 func emit(ctx context.Context, slow bool, attrs []slog.Attr) {
 	if slow {
-		logger.WarnEvent(ctx, httpx.EventHTTPTransaction, append(slices.Clone(attrs), slog.Bool("slow", true))...)
+		logger.WarnEvent(ctx, httpx.EventHTTPTransaction, append(slices.Clone(attrs), slog.Bool(httpx.LogFieldSlow, true))...)
 		return
 	}
 	logger.InfoEvent(ctx, httpx.EventHTTPTransaction, attrs...)

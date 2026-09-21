@@ -119,7 +119,7 @@ func log(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) 
 // 返回：键名固定 "error"，值是 err.Error()。
 // 例：Err(io.EOF) → slog.String("error", "EOF")；Err(nil) → slog.Attr{}。
 func Err(err error) slog.Attr {
-	return NamedErr("error", err)
+	return NamedErr(FieldError, err)
 }
 
 // NamedErr 自定义键名的错误字段（替代 zap.NamedError）。
