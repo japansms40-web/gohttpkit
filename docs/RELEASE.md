@@ -76,5 +76,5 @@ go mod init smoke && go get github.com/japansms40-web/gohttpkit@vX.Y.Z && go bui
 
 ## 7. Go 版本支持
 
-- **MUST** 支持 Go 官方仍维护的两个 minor 版本中、不低于 `go.mod` `go` 指令的那些；CI 矩阵覆盖它们（待落地）。
-- **MUST** 上调 `go.mod` 的 `go` 指令按 minor 发布，并在 CHANGELOG 写明。
+- **MUST** 只使用当前最新稳定版 Go。`go.mod` 的 `go` 指令与 CI（`go-version: stable`）保持为这一版；官方放出新的稳定版就上调，不保留上一档 minor。
+- **MUST** 上调 `go.mod` 的 `go` 指令按 minor 发布，并在 CHANGELOG 写明。直接依赖同样保持最新稳定版，用模块工具升级，不手写过期版本。

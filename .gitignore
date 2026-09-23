@@ -1,5 +1,6 @@
 # 覆盖率报告
 coverage.out
+coverage.out.*
 
 # 构建产物
 /dist/

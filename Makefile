@@ -31,14 +31,25 @@ char:
 race:
 	CGO_ENABLED=1 go test -race -count=1 ./...
 
-# 覆盖率报告 + 门禁（核心库，排除 examples）
+# 覆盖率报告 + 门禁（核心库，排除 examples）。
+# profile 先写临时文件：Cursor 会同时跑项目钩子和 Claude 钩子的 stop，
+# 两路 make check 若共用 coverage.out，go tool cover 会读到写了一半的行。
+# 落盘时先写同目录临时文件再 mv（同文件系统 rename 是原子的），读方只会看到完整文件。
 cover:
-	@go test -count=1 -coverprofile=coverage.out $$(go list ./... | grep -v '/examples/') > /dev/null
-	@go tool cover -func=coverage.out | tail -1
-	@total=$$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+'); \
-	 pass=$$(awk -v t="$$total" -v m="$(MIN_COVERAGE)" 'BEGIN{print (t+0 >= m+0) ? "1" : "0"}'); \
-	 if [ "$$pass" != "1" ]; then echo "覆盖率 $$total% 低于门禁 $(MIN_COVERAGE)%"; exit 1; fi; \
-	 echo "覆盖率 $$total% ≥ 门禁 $(MIN_COVERAGE)% ✓"
+	@set -eu; \
+	dir=$$(mktemp -d "$${TMPDIR:-/tmp}/gohttpkit-cover.XXXXXX"); \
+	out=$$(mktemp coverage.out.XXXXXX); \
+	trap 'rm -rf "$$dir" "$$out"' EXIT; \
+	go test -count=1 -coverprofile="$$dir/coverage.out" $$(go list ./... | grep -v '/examples/') > /dev/null; \
+	go tool cover -func="$$dir/coverage.out" > "$$dir/func.txt"; \
+	summary=$$(tail -1 "$$dir/func.txt"); \
+	printf '%s\n' "$$summary"; \
+	total=$$(printf '%s\n' "$$summary" | grep -oE '[0-9]+\.[0-9]+' || true); \
+	cp "$$dir/coverage.out" "$$out"; \
+	mv -f "$$out" coverage.out; \
+	pass=$$(awk -v t="$$total" -v m="$(MIN_COVERAGE)" 'BEGIN{print (t+0 >= m+0) ? "1" : "0"}'); \
+	if [ "$$pass" != "1" ]; then echo "覆盖率 $${total}% 低于门禁 $(MIN_COVERAGE)%"; exit 1; fi; \
+	echo "覆盖率 $${total}% ≥ 门禁 $(MIN_COVERAGE)% ✓"
 
 # 逐包覆盖率：定位哪个包是短板（排除 examples）。规范见 docs/TESTING.md §5。
 cover-pkg:

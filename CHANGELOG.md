@@ -7,7 +7,7 @@
 
 ### 破坏
 
-- 最低 Go 版本从 1.24 升到 1.25。使用本库的模块须升级到 Go 1.25 或更高才能编译。
+- 最低 Go 版本从 1.25.0 上调到 1.27.1（仓库工具 `tools/agentguard` 从 1.24.0 同步上调）。使用本库的模块须升级到 Go 1.27.1 或更高才能编译。CI 改为 `go-version: stable`，golangci-lint 改用 `latest`（`golangci-lint-action` 升到 v9）。
 
 ### 新增
 
@@ -17,7 +17,7 @@
 
 ### 安全
 
-- 升级 `golang.org/x/net` 到 v0.55.0，修复经 `httpx.ExtractHTMLText` → `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
+- 直接依赖升级：`golang.org/x/net` v0.55.0 → v0.59.0、`github.com/andybalholm/brotli` v1.2.1 → v1.2.4、`github.com/klauspost/compress` v1.18.6 → v1.20.0。其中 `x/net` 修复经 `httpx.ExtractHTMLText` → `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
 
 ## [v0.3.1] - 2026-09-23
 

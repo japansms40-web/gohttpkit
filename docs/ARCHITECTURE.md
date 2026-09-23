@@ -416,13 +416,13 @@ classDiagram
 
 ### 10.2 Go 第三方库
 
-直接依赖以 `go.mod` 为准：
+直接依赖以 `go.mod` 为准，并保持各模块最新稳定版（用 IDE「更新直接依赖项 / 更新所有依赖项」或 `go get -u` 升级，不在这里钉死版本号）：
 
-| 依赖 | 当前版本 | 用途 |
-|---|---:|---|
-| `github.com/andybalholm/brotli` | `v1.2.1` | 解压 Brotli 响应体 |
-| `github.com/klauspost/compress` | `v1.18.6` | 解压 Zstandard 响应体 |
-| `golang.org/x/net` | `v0.50.0` | HTML 解析和 SOCKS5 代理 |
+| 依赖 | 用途 |
+|---|---|
+| `github.com/andybalholm/brotli` | 解压 Brotli 响应体 |
+| `github.com/klauspost/compress` | 解压 Zstandard 响应体 |
+| `golang.org/x/net` | HTML 解析和 SOCKS5 代理 |
 
 HTTP、TLS、日志、并发和基础压缩能力主要使用 Go 标准库。
 

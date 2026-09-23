@@ -131,9 +131,9 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 **CI 供应链规范**：
 
 - **MUST** 第三方 action 钉到完整 commit SHA（注释写版本号），不用浮动 `@v4`；由 Dependabot 升级。（待落地）
-- **MUST** 工具版本钉死（`golangci-lint`、`govulncheck`、`gitleaks`），不用 `latest`——同一提交重跑结果必须一致。（待落地）
+- **MUST** CI 的 Go 使用 `stable`（当前最新稳定版，`check-latest: true`）。`golangci-lint` 用 `latest`，`govulncheck` 用 `@latest`。不把 Go 或这些工具钉在旧版本上。
 - **MUST** workflow 默认 `permissions: contents: read`，job 需要更多权限时单独声明。（✅ 已满足）
-- **SHOULD** Go 版本矩阵覆盖 RELEASE §7 规定的支持版本；race 至少在 Linux 跑。
+- **MUST** race 至少在 Linux 跑。Go 只跑当前最新稳定版，不保留旧 minor 矩阵（见 RELEASE §7）。
 
 ## 7. 待落地清单（规范已定义，工具未实现）
 
@@ -146,8 +146,8 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 5. **commit-msg** 校验 `feat`/`fix`/`refactor`/`perf` 正文含 `测试：` 行。
 6. **goleak** 接入 `httpx`、`netproxy`、`traffic`、`logger` 的 `TestMain`（新增测试依赖，需确认）。
 7. **apidiff** CI job（PR 对比最近 tag，破坏性变化且未升 minor 时失败）+ **release workflow**（tag 触发：全量门禁 → GitHub Release）。
-8. **供应链**：actions 钉 SHA、工具钉版本、`.github/dependabot.yml`（gomod + github-actions，每周）、`go-licenses check`。
-9. **CI Go 版本矩阵** + nightly 长时 fuzz。
+8. **供应链**：actions 钉 SHA、`.github/dependabot.yml`（gomod + github-actions，每周）、`go-licenses check`。Go 与直接依赖、CI 的 Go / golangci-lint / govulncheck 跟最新稳定版，不钉死。
+9. nightly 长时 fuzz。CI 不建旧 Go 版本矩阵。
 10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）；`versionreg.Registry.Register` 的裸字符串 panic 改为类型错误（CS §11）。
 11. **治理守卫扩展**：检测新增 `var Err… = errors.New(` 生产代码（CS §5）。
 

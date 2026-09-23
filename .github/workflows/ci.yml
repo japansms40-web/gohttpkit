@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: stable
           check-latest: true
       - name: 跨 agent 指令同源（CLAUDE/GEMINI 必须软链到 AGENTS）
         run: make agents-sync-check
@@ -44,7 +44,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: stable
+          check-latest: true
       - name: agentguard 自测（vet + test）
         run: make tools-check
       - name: 治理守卫（覆盖率棘轮 / lint 放宽 / char 删改 / 新增 t.Skip）
@@ -61,13 +62,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
-      - uses: golangci/golangci-lint-action@v6
+          go-version: stable
+          check-latest: true
+      - uses: golangci/golangci-lint-action@v9
         with:
-          # latest（当前 v2.13.2）的 go.mod 要求 Go >= 1.26。本 job 是 Go 1.25，
-          # latest 会以退出码 3 失败（工具自身失败，不是查出代码问题）。
-          # 钉在已于 Go 1.25 全绿的 v2.12.2。
-          version: v2.12.2
+          version: latest
           args: --timeout 5m
 
   vuln:
@@ -76,7 +75,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: stable
+          check-latest: true
       - name: govulncheck（依赖漏洞门禁）
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest

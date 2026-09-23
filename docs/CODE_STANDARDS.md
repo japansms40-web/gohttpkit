@@ -202,6 +202,9 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 
 ## 12. 依赖管理
 
+- **MUST** `go.mod`（含 `tools/agentguard`）的 `go` 指令保持为当前最新稳定版。官方放出新的稳定版就上调，不停留在旧 minor 或旧补丁。
+- **MUST** 直接依赖保持各模块最新稳定版。升级用模块工具（IDE「更新直接依赖项 / 更新所有依赖项」，等价于 `go get -u`），不手写过期版本号。
+- **MUST** CI 的 Go 使用 `stable`（当前最新稳定版，并 `check-latest: true`）；`golangci-lint` 与 `govulncheck` 用最新版，不因旧 Go 钉死工具版本。
 - **MUST** 新增直接依赖须在 PR 写明：为什么标准库 / 现有依赖不够、许可证、维护活跃度、引入的传递依赖数。
   AI 代理新增依赖须先获用户确认（见 `AGENTS.md` 禁止事项）。
 - **MUST** 许可证仅限 MIT / BSD-2/3 / Apache-2.0 / ISC；GPL / AGPL / 无许可证一律不引入。
