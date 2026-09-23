@@ -36,6 +36,25 @@ jobs:
           go run ./examples/customchain
           go run ./examples/fidelity
 
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: agentguard 自测（vet + test）
+        run: make tools-check
+      - name: 治理守卫（覆盖率棘轮 / lint 放宽 / char 删改 / 新增 t.Skip）
+        env:
+          # PR 对比目标分支；push 对比推送前的提交（新分支首推为全零，守卫自动跳过）
+          GOVERNANCE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # PR 标题与正文里的「治理豁免: 理由」/「行为变更」同样生效
+          GOVERNANCE_OVERRIDE_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
+        run: make governance
+
   lint:
     runs-on: ubuntu-latest
     steps:

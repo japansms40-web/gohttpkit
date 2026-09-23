@@ -1,0 +1,33 @@
+# tools/agentguard 独立子模块的 lint 配置（golangci-lint 取离 cwd 最近的配置）。
+# 与根配置同源，差异只有两处，理由见行内注释；根 .golangci.yml 受治理守卫保护，不在这里放宽它。
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gocyclo
+    - misspell
+    - unconvert
+    - unparam
+    - gosec
+    - revive
+    - nolintlint
+    # 不启用 forbidigo：这是命令行工具，stdout / stderr 就是它的输出协议（钩子 JSON、检查报告），不走 logger 门面。
+    # 不启用 goconst：YAML 路径段（"linters"、"settings"…）与 git 子命令参数是数据，提常量反而难读。
+  settings:
+    gocyclo:
+      min-complexity: 20
+    nolintlint:
+      require-specific: true
+      require-explanation: true
+      allow-unused: false
+    gosec:
+      excludes:
+        - G204 # 子进程：只调用固定的 git / gofmt / go / make，参数来自仓库状态而非外部输入
+        - G702 # 同 G204（taint 版本）
+        - G304 # 读文件：路径都在仓库根之内，由 git 列出或是固定文件名
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gocyclo, gosec, errcheck]

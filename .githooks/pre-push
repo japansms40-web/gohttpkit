@@ -12,7 +12,8 @@ cd "$root" || exit 1
 failed=0
 step() { red "✗ $1 失败"; failed=1; }
 
-echo "pre-push：跑 race / char / cover（可能几十秒）……"
+echo "pre-push：跑 governance / race / char / cover（可能几十秒）……"
+make governance || step "make governance（治理守卫）"
 make race  || step "make race（并发回归）"
 make char  || step "make char（行为锁定）"
 make cover || step "make cover（覆盖率门禁 ≥ MIN_COVERAGE）"

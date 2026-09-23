@@ -5,7 +5,7 @@
 
 BASE_REV ?= HEAD~1
 
-.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check
+.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check
 
 # 覆盖率门禁（核心库，排除 examples）：低于 MIN_COVERAGE 直接失败。
 # 已达标 98%（补齐 interceptor 角度测试后）；100% 为追求，只许上调、不许下调——
@@ -68,7 +68,7 @@ examples:
 check: build vet cover tidy-check
 
 # 本地「我要完整跑」与 CI 对齐的聚合目标。race 需要 C 编译器。
-ci: check lint-new race char agents-sync-check
+ci: check lint-new race char agents-sync-check governance tools-check
 
 # 一键安装本地 git 门禁（零第三方依赖，走 .githooks + core.hooksPath）。
 # clone 后跑一次即可；升级钩子脚本后无需重装。
@@ -86,3 +86,13 @@ agents-sync-check:
 	  [ "$$(readlink "$$f")" = "AGENTS.md" ] || { echo "$$f 未指向 AGENTS.md"; exit 1; }; \
 	done
 	@echo "AGENTS.md / CLAUDE.md / GEMINI.md 同源 ✓"
+
+# 治理守卫：拦 MIN_COVERAGE 下调、.golangci.yml 放宽、char 用例删改、新增 t.Skip。
+# 对比基线默认 merge-base(HEAD, origin/main)；可用 GOVERNANCE_BASE=<rev> 覆盖。
+# 有意为之时在提交说明写「治理豁免: <理由>」或「行为变更」。规范见 docs/ENGINEERING_GOVERNANCE.md §4。
+governance:
+	@go run -C tools/agentguard . governance
+
+# tools/agentguard 是独立子模块（不进核心库覆盖率），单独 vet + test。
+tools-check:
+	cd tools/agentguard && go vet ./... && go test -count=1 ./...
