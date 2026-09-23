@@ -1,0 +1,268 @@
+package localemobile
+
+// device_languages.go —— 国家码 → X-IG-Device-Languages。
+// 依据 IG Android 429 LX/0BI7.A00（门控 0x810a02000039a8 打开时才发送）：
+// system_languages 是 LocaleList.getDefault() 逐项经 LX/03fj.A00 格式化后用 ", " 连接；
+// keyboard_language 是当前输入法 subtype 的 getLanguageTag()。
+// 本表假设系统语言列表只有该国一项、键盘语言与之相同、keyboard_languages 门控关闭，
+// 键顺序与 Android JSONObject 插入顺序一致。
+// 值按上述规则算过一次，写进字面量；运行期不再判断。
+
+// countryToDeviceLanguages 国家码 → 设备语言 JSON。例：JP → {"system_languages":"ja-JP","keyboard_language":"ja-JP"}。
+var countryToDeviceLanguages = map[string]string{ //nolint:gosec // G101 误报：值是语言标签，不是凭据
+	// 英语主导（北美、UK、印太、撒哈拉以南非洲英语主语言国家、加勒比英语小岛、印度洋英语）
+	"US": `{"system_languages":"en-US","keyboard_language":"en-US"}`,
+	"GB": `{"system_languages":"en-GB","keyboard_language":"en-GB"}`,
+	"CA": `{"system_languages":"en-CA","keyboard_language":"en-CA"}`,
+	"AU": `{"system_languages":"en-AU","keyboard_language":"en-AU"}`,
+	"NZ": `{"system_languages":"en-NZ","keyboard_language":"en-NZ"}`,
+	"IE": `{"system_languages":"en-IE","keyboard_language":"en-IE"}`,
+	"IN": `{"system_languages":"en-IN","keyboard_language":"en-IN"}`,
+	"SG": `{"system_languages":"en-SG","keyboard_language":"en-SG"}`,
+	"PH": `{"system_languages":"en-PH","keyboard_language":"en-PH"}`,
+	"ZA": `{"system_languages":"en-ZA","keyboard_language":"en-ZA"}`,
+	"NG": `{"system_languages":"en-NG","keyboard_language":"en-NG"}`,
+	"GH": `{"system_languages":"en-GH","keyboard_language":"en-GH"}`,
+	"PK": `{"system_languages":"en-PK","keyboard_language":"en-PK"}`,
+	"JM": `{"system_languages":"en-JM","keyboard_language":"en-JM"}`,
+	"TT": `{"system_languages":"en-TT","keyboard_language":"en-TT"}`,
+	"MT": `{"system_languages":"en-MT","keyboard_language":"en-MT"}`,
+	"BS": `{"system_languages":"en-BS","keyboard_language":"en-BS"}`,
+	"AI": `{"system_languages":"en-AI","keyboard_language":"en-AI"}`,
+	"BM": `{"system_languages":"en-BM","keyboard_language":"en-BM"}`,
+	"DM": `{"system_languages":"en-DM","keyboard_language":"en-DM"}`,
+	"GY": `{"system_languages":"en-GY","keyboard_language":"en-GY"}`,
+	"VC": `{"system_languages":"en-VC","keyboard_language":"en-VC"}`,
+	"MU": `{"system_languages":"en-MU","keyboard_language":"en-MU"}`,
+	"MV": `{"system_languages":"en-MV","keyboard_language":"en-MV"}`,
+	"MW": `{"system_languages":"en-MW","keyboard_language":"en-MW"}`,
+	"NA": `{"system_languages":"en-NA","keyboard_language":"en-NA"}`,
+	"SC": `{"system_languages":"en-SC","keyboard_language":"en-SC"}`,
+	"SL": `{"system_languages":"en-SL","keyboard_language":"en-SL"}`,
+	"ZW": `{"system_languages":"en-ZW","keyboard_language":"en-ZW"}`,
+	// 加勒比英语 / 北美附属
+	"AG": `{"system_languages":"en-AG","keyboard_language":"en-AG"}`,
+	"BB": `{"system_languages":"en-BB","keyboard_language":"en-BB"}`,
+	"BZ": `{"system_languages":"en-BZ","keyboard_language":"en-BZ"}`,
+	"GD": `{"system_languages":"en-GD","keyboard_language":"en-GD"}`,
+	"KN": `{"system_languages":"en-KN","keyboard_language":"en-KN"}`,
+	"KY": `{"system_languages":"en-KY","keyboard_language":"en-KY"}`,
+	"LC": `{"system_languages":"en-LC","keyboard_language":"en-LC"}`,
+	"TC": `{"system_languages":"en-TC","keyboard_language":"en-TC"}`,
+	"VG": `{"system_languages":"en-VG","keyboard_language":"en-VG"}`,
+	"VI": `{"system_languages":"en-VI","keyboard_language":"en-VI"}`,
+	// 大洋洲 / 太平洋英语
+	"FJ": `{"system_languages":"en-FJ","keyboard_language":"en-FJ"}`,
+	"GU": `{"system_languages":"en-GU","keyboard_language":"en-GU"}`,
+	"PG": `{"system_languages":"en-PG","keyboard_language":"en-PG"}`,
+	"PW": `{"system_languages":"en-PW","keyboard_language":"en-PW"}`,
+	"WS": `{"system_languages":"en-WS","keyboard_language":"en-WS"}`,
+	// 不列颠群岛附属
+	"GG": `{"system_languages":"en-GG","keyboard_language":"en-GG"}`,
+	"IM": `{"system_languages":"en-IM","keyboard_language":"en-IM"}`,
+	"JE": `{"system_languages":"en-JE","keyboard_language":"en-JE"}`,
+	// 直布罗陀
+	"GI": `{"system_languages":"en-GI","keyboard_language":"en-GI"}`,
+	// 撒哈拉以南非洲英语扩展
+	"BW": `{"system_languages":"en-BW","keyboard_language":"en-BW"}`,
+	"GM": `{"system_languages":"en-GM","keyboard_language":"en-GM"}`,
+	"LR": `{"system_languages":"en-LR","keyboard_language":"en-LR"}`,
+	"LS": `{"system_languages":"en-LS","keyboard_language":"en-LS"}`,
+	"SS": `{"system_languages":"en-SS","keyboard_language":"en-SS"}`,
+	"SZ": `{"system_languages":"en-SZ","keyboard_language":"en-SZ"}`,
+	"ZM": `{"system_languages":"en-ZM","keyboard_language":"en-ZM"}`,
+
+	// 东亚
+	"CN": `{"system_languages":"zh-CN","keyboard_language":"zh-CN"}`,
+	"TW": `{"system_languages":"zh-TW","keyboard_language":"zh-TW"}`,
+	"HK": `{"system_languages":"zh-HK","keyboard_language":"zh-HK"}`,
+	"MO": `{"system_languages":"zh-MO","keyboard_language":"zh-MO"}`,
+	"JP": `{"system_languages":"ja-JP","keyboard_language":"ja-JP"}`,
+	"KR": `{"system_languages":"ko-KR","keyboard_language":"ko-KR"}`,
+	"MN": `{"system_languages":"mn-MN","keyboard_language":"mn-MN"}`,
+
+	// 东南亚
+	"ID": `{"system_languages":"id-ID","keyboard_language":"id-ID"}`,
+	"TH": `{"system_languages":"th-TH","keyboard_language":"th-TH"}`,
+	"VN": `{"system_languages":"vi-VN","keyboard_language":"vi-VN"}`,
+	"MY": `{"system_languages":"ms-MY","keyboard_language":"ms-MY"}`,
+	"KH": `{"system_languages":"km-KH","keyboard_language":"km-KH"}`,
+	"LA": `{"system_languages":"lo-LA","keyboard_language":"lo-LA"}`,
+	"MM": `{"system_languages":"my-MM","keyboard_language":"my-MM"}`,
+	"BN": `{"system_languages":"ms-BN","keyboard_language":"ms-BN"}`,
+
+	// 南亚（IN 已在英语区）
+	"BD": `{"system_languages":"bn-BD","keyboard_language":"bn-BD"}`,
+	"LK": `{"system_languages":"si-LK","keyboard_language":"si-LK"}`,
+	"NP": `{"system_languages":"ne-NP","keyboard_language":"ne-NP"}`,
+	"AF": `{"system_languages":"ps-AF","keyboard_language":"ps-AF"}`,
+	"BT": `{"system_languages":"dz-BT","keyboard_language":"dz-BT"}`,
+
+	// 西欧
+	"FR": `{"system_languages":"fr-FR","keyboard_language":"fr-FR"}`,
+	"DE": `{"system_languages":"de-DE","keyboard_language":"de-DE"}`,
+	"IT": `{"system_languages":"it-IT","keyboard_language":"it-IT"}`,
+	"ES": `{"system_languages":"es-ES","keyboard_language":"es-ES"}`,
+	"PT": `{"system_languages":"pt-PT","keyboard_language":"pt-PT"}`,
+	"NL": `{"system_languages":"nl-NL","keyboard_language":"nl-NL"}`,
+	"BE": `{"system_languages":"nl-BE","keyboard_language":"nl-BE"}`,
+	"LU": `{"system_languages":"fr-LU","keyboard_language":"fr-LU"}`,
+	"CH": `{"system_languages":"de-CH","keyboard_language":"de-CH"}`,
+	"AT": `{"system_languages":"de-AT","keyboard_language":"de-AT"}`,
+	"LI": `{"system_languages":"de-LI","keyboard_language":"de-LI"}`,
+	"MC": `{"system_languages":"fr-MC","keyboard_language":"fr-MC"}`,
+	"AD": `{"system_languages":"ca-AD","keyboard_language":"ca-AD"}`,
+	"SM": `{"system_languages":"it-SM","keyboard_language":"it-SM"}`,
+	"VA": `{"system_languages":"it-VA","keyboard_language":"it-VA"}`,
+	"CW": `{"system_languages":"nl-CW","keyboard_language":"nl-CW"}`,
+	"AW": `{"system_languages":"nl-AW","keyboard_language":"nl-AW"}`,
+	"SX": `{"system_languages":"nl-SX","keyboard_language":"nl-SX"}`,
+	"BQ": `{"system_languages":"nl-BQ","keyboard_language":"nl-BQ"}`,
+	// 荷语苏里南
+	"SR": `{"system_languages":"nl-SR","keyboard_language":"nl-SR"}`,
+
+	// 拉美
+	"BR": `{"system_languages":"pt-BR","keyboard_language":"pt-BR"}`,
+	"MX": `{"system_languages":"es-MX","keyboard_language":"es-MX"}`,
+	"AR": `{"system_languages":"es-AR","keyboard_language":"es-AR"}`,
+	"CL": `{"system_languages":"es-CL","keyboard_language":"es-CL"}`,
+	"CO": `{"system_languages":"es-CO","keyboard_language":"es-CO"}`,
+	"PE": `{"system_languages":"es-PE","keyboard_language":"es-PE"}`,
+	"VE": `{"system_languages":"es-VE","keyboard_language":"es-VE"}`,
+	"EC": `{"system_languages":"es-EC","keyboard_language":"es-EC"}`,
+	"BO": `{"system_languages":"es-BO","keyboard_language":"es-BO"}`,
+	"UY": `{"system_languages":"es-UY","keyboard_language":"es-UY"}`,
+	"PY": `{"system_languages":"es-PY","keyboard_language":"es-PY"}`,
+	"CR": `{"system_languages":"es-CR","keyboard_language":"es-CR"}`,
+	"DO": `{"system_languages":"es-DO","keyboard_language":"es-DO"}`,
+	"GT": `{"system_languages":"es-GT","keyboard_language":"es-GT"}`,
+	"HN": `{"system_languages":"es-HN","keyboard_language":"es-HN"}`,
+	"NI": `{"system_languages":"es-NI","keyboard_language":"es-NI"}`,
+	"PA": `{"system_languages":"es-PA","keyboard_language":"es-PA"}`,
+	"SV": `{"system_languages":"es-SV","keyboard_language":"es-SV"}`,
+	"CU": `{"system_languages":"es-CU","keyboard_language":"es-CU"}`,
+	"PR": `{"system_languages":"es-PR","keyboard_language":"es-PR"}`,
+
+	// 法属海外（加勒比 / 南美 / 北大西洋 / 太平洋）
+	"GF": `{"system_languages":"fr-GF","keyboard_language":"fr-GF"}`,
+	"GP": `{"system_languages":"fr-GP","keyboard_language":"fr-GP"}`,
+	"HT": `{"system_languages":"fr-HT","keyboard_language":"fr-HT"}`,
+	"MF": `{"system_languages":"fr-MF","keyboard_language":"fr-MF"}`,
+	"MQ": `{"system_languages":"fr-MQ","keyboard_language":"fr-MQ"}`,
+	"PM": `{"system_languages":"fr-PM","keyboard_language":"fr-PM"}`,
+	"NC": `{"system_languages":"fr-NC","keyboard_language":"fr-NC"}`,
+	"PF": `{"system_languages":"fr-PF","keyboard_language":"fr-PF"}`,
+	"WF": `{"system_languages":"fr-WF","keyboard_language":"fr-WF"}`,
+
+	// 北欧
+	"DK": `{"system_languages":"da-DK","keyboard_language":"da-DK"}`,
+	"SE": `{"system_languages":"sv-SE","keyboard_language":"sv-SE"}`,
+	"NO": `{"system_languages":"nb-NO","keyboard_language":"nb-NO"}`,
+	"FI": `{"system_languages":"fi-FI","keyboard_language":"fi-FI"}`,
+	"IS": `{"system_languages":"is-IS","keyboard_language":"is-IS"}`,
+	"FO": `{"system_languages":"fo-FO","keyboard_language":"fo-FO"}`,
+	"GL": `{"system_languages":"kl-GL","keyboard_language":"kl-GL"}`,
+
+	// 东欧 / 巴尔干 / 波罗的海
+	"RU": `{"system_languages":"ru-RU","keyboard_language":"ru-RU"}`,
+	"UA": `{"system_languages":"uk-UA","keyboard_language":"uk-UA"}`,
+	"BY": `{"system_languages":"be-BY","keyboard_language":"be-BY"}`,
+	"PL": `{"system_languages":"pl-PL","keyboard_language":"pl-PL"}`,
+	"CZ": `{"system_languages":"cs-CZ","keyboard_language":"cs-CZ"}`,
+	"SK": `{"system_languages":"sk-SK","keyboard_language":"sk-SK"}`,
+	"HU": `{"system_languages":"hu-HU","keyboard_language":"hu-HU"}`,
+	"RO": `{"system_languages":"ro-RO","keyboard_language":"ro-RO"}`,
+	"MD": `{"system_languages":"ro-MD","keyboard_language":"ro-MD"}`,
+	"BG": `{"system_languages":"bg-BG","keyboard_language":"bg-BG"}`,
+	"GR": `{"system_languages":"el-GR","keyboard_language":"el-GR"}`,
+	"CY": `{"system_languages":"el-CY","keyboard_language":"el-CY"}`,
+	"HR": `{"system_languages":"hr-HR","keyboard_language":"hr-HR"}`,
+	"RS": `{"system_languages":"sr-RS","keyboard_language":"sr-RS"}`,
+	"SI": `{"system_languages":"sl-SI","keyboard_language":"sl-SI"}`,
+	"BA": `{"system_languages":"bs-BA","keyboard_language":"bs-BA"}`,
+	"MK": `{"system_languages":"mk-MK","keyboard_language":"mk-MK"}`,
+	"AL": `{"system_languages":"sq-AL","keyboard_language":"sq-AL"}`,
+	"ME": `{"system_languages":"sr-ME","keyboard_language":"sr-ME"}`,
+	"XK": `{"system_languages":"sq-XK","keyboard_language":"sq-XK"}`,
+	"LT": `{"system_languages":"lt-LT","keyboard_language":"lt-LT"}`,
+	"LV": `{"system_languages":"lv-LV","keyboard_language":"lv-LV"}`,
+	"EE": `{"system_languages":"et-EE","keyboard_language":"et-EE"}`,
+
+	// 中东 / 高加索
+	"TR": `{"system_languages":"tr-TR","keyboard_language":"tr-TR"}`,
+	"IL": `{"system_languages":"he-IL","keyboard_language":"he-IL"}`,
+	"IR": `{"system_languages":"fa-IR","keyboard_language":"fa-IR"}`,
+	"SA": `{"system_languages":"ar-SA","keyboard_language":"ar-SA"}`,
+	"AE": `{"system_languages":"ar-AE","keyboard_language":"ar-AE"}`,
+	"EG": `{"system_languages":"ar-EG","keyboard_language":"ar-EG"}`,
+	"MA": `{"system_languages":"ar-MA","keyboard_language":"ar-MA"}`,
+	"DZ": `{"system_languages":"ar-DZ","keyboard_language":"ar-DZ"}`,
+	"TN": `{"system_languages":"ar-TN","keyboard_language":"ar-TN"}`,
+	"JO": `{"system_languages":"ar-JO","keyboard_language":"ar-JO"}`,
+	"LB": `{"system_languages":"ar-LB","keyboard_language":"ar-LB"}`,
+	"KW": `{"system_languages":"ar-KW","keyboard_language":"ar-KW"}`,
+	"QA": `{"system_languages":"ar-QA","keyboard_language":"ar-QA"}`,
+	"BH": `{"system_languages":"ar-BH","keyboard_language":"ar-BH"}`,
+	"OM": `{"system_languages":"ar-OM","keyboard_language":"ar-OM"}`,
+	"IQ": `{"system_languages":"ar-IQ","keyboard_language":"ar-IQ"}`,
+	"YE": `{"system_languages":"ar-YE","keyboard_language":"ar-YE"}`,
+	"LY": `{"system_languages":"ar-LY","keyboard_language":"ar-LY"}`,
+	"SD": `{"system_languages":"ar-SD","keyboard_language":"ar-SD"}`,
+	"SY": `{"system_languages":"ar-SY","keyboard_language":"ar-SY"}`,
+	"PS": `{"system_languages":"ar-PS","keyboard_language":"ar-PS"}`,
+	"AM": `{"system_languages":"hy-AM","keyboard_language":"hy-AM"}`,
+	"AZ": `{"system_languages":"az-AZ","keyboard_language":"az-AZ"}`,
+	"GE": `{"system_languages":"ka-GE","keyboard_language":"ka-GE"}`,
+	// 毛里塔尼亚阿语
+	"MR": `{"system_languages":"ar-MR","keyboard_language":"ar-MR"}`,
+
+	// 中亚
+	"KZ": `{"system_languages":"kk-KZ","keyboard_language":"kk-KZ"}`,
+	"UZ": `{"system_languages":"uz-UZ","keyboard_language":"uz-UZ"}`,
+	"KG": `{"system_languages":"ky-KG","keyboard_language":"ky-KG"}`,
+	"TJ": `{"system_languages":"tg-TJ","keyboard_language":"tg-TJ"}`,
+	"TM": `{"system_languages":"tk-TM","keyboard_language":"tk-TM"}`,
+
+	// 撒哈拉以南非洲（英语国家已上面列）
+	"KE": `{"system_languages":"sw-KE","keyboard_language":"sw-KE"}`,
+	"TZ": `{"system_languages":"sw-TZ","keyboard_language":"sw-TZ"}`,
+	"UG": `{"system_languages":"sw-UG","keyboard_language":"sw-UG"}`,
+	"ET": `{"system_languages":"am-ET","keyboard_language":"am-ET"}`,
+	"RW": `{"system_languages":"rw-RW","keyboard_language":"rw-RW"}`,
+	"SN": `{"system_languages":"fr-SN","keyboard_language":"fr-SN"}`,
+	"CI": `{"system_languages":"fr-CI","keyboard_language":"fr-CI"}`,
+	"CM": `{"system_languages":"fr-CM","keyboard_language":"fr-CM"}`,
+	"MG": `{"system_languages":"mg-MG","keyboard_language":"mg-MG"}`,
+	"BF": `{"system_languages":"fr-BF","keyboard_language":"fr-BF"}`,
+	"BJ": `{"system_languages":"fr-BJ","keyboard_language":"fr-BJ"}`,
+	"CD": `{"system_languages":"fr-CD","keyboard_language":"fr-CD"}`,
+	"CG": `{"system_languages":"fr-CG","keyboard_language":"fr-CG"}`,
+	"GN": `{"system_languages":"fr-GN","keyboard_language":"fr-GN"}`,
+	"ML": `{"system_languages":"fr-ML","keyboard_language":"fr-ML"}`,
+	"AO": `{"system_languages":"pt-AO","keyboard_language":"pt-AO"}`,
+	"CV": `{"system_languages":"pt-CV","keyboard_language":"pt-CV"}`,
+	"MZ": `{"system_languages":"pt-MZ","keyboard_language":"pt-MZ"}`,
+	"ST": `{"system_languages":"pt-ST","keyboard_language":"pt-ST"}`,
+	// 法语非洲扩展 / 西葡非洲 / 索马里语 / 印度洋法语
+	"BI": `{"system_languages":"fr-BI","keyboard_language":"fr-BI"}`,
+	"CF": `{"system_languages":"fr-CF","keyboard_language":"fr-CF"}`,
+	"DJ": `{"system_languages":"fr-DJ","keyboard_language":"fr-DJ"}`,
+	"GA": `{"system_languages":"fr-GA","keyboard_language":"fr-GA"}`,
+	"NE": `{"system_languages":"fr-NE","keyboard_language":"fr-NE"}`,
+	"TD": `{"system_languages":"fr-TD","keyboard_language":"fr-TD"}`,
+	"TG": `{"system_languages":"fr-TG","keyboard_language":"fr-TG"}`,
+	"GQ": `{"system_languages":"es-GQ","keyboard_language":"es-GQ"}`,
+	"GW": `{"system_languages":"pt-GW","keyboard_language":"pt-GW"}`,
+	"SO": `{"system_languages":"so-SO","keyboard_language":"so-SO"}`,
+	"KM": `{"system_languages":"fr-KM","keyboard_language":"fr-KM"}`,
+	"RE": `{"system_languages":"fr-RE","keyboard_language":"fr-RE"}`,
+	"YT": `{"system_languages":"fr-YT","keyboard_language":"fr-YT"}`,
+}
+
+// DeviceLanguagesForCountry 按国家代码查设备语言 JSON。
+// 输入 country：ISO 3166-1 alpha-2，大小写不敏感，自动 trim。
+// 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
+// 例："cn" → (`{"system_languages":"zh-CN","keyboard_language":"zh-CN"}`, nil)。
+func DeviceLanguagesForCountry(country string) (string, error) {
+	return lookupCountry(countryToDeviceLanguages, country)
+}

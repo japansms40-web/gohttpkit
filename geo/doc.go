@@ -14,6 +14,8 @@
 //     Accept-Language 由 BuildChromeAcceptLanguage / BuildChromeAcceptLanguageForCountry
 //     按 Chromium 前瞻展开和 q 值规则构建。调用方传入的 *rand.Rand 不能被多个
 //     goroutine 共享，若共享须自行加锁；rng == nil 时用 math/rand/v2 顶层源，可并发。
+//   - Android 端（Meta 系 App）五个 locale header 按国家取值在子包 geo/locale_mobile（包名
+//     localemobile），一个 header 一个文件：一张字面量表 + 一个 XxxForCountry，keyset 与本包对齐。
 //   - 查表公用函数在 lookup.go。显式 locale / country 的优先级由调用方组合。
 //   - 查表未命中是 *UnknownCountryError；extra 负数是 *InvalidExtraLanguageCountError；
 //     extra 超出候选是 *ExtraLanguageCountExceedsPoolError。上层一律 errors.As，不要扫文案。

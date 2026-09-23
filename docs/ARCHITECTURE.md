@@ -248,6 +248,14 @@ Options.ProxyURL                              httpx/options.go
   → TimezoneOffsetForCountry        冬令时偏移秒（0 合法）     timezone.go
   → IANATimezoneForCountry          IANA 名（未收录 → false）  timezone_iana.go
 
+Android（Meta 系 App）locale header 子包 geo/locale_mobile（package localemobile），
+一个 header 一个文件，keyset 与上面三表对齐：
+  → AcceptLanguageForCountry        zh-CN, en-US               accept_language.go
+  → AppLocaleForCountry             zh_CN_#Hans                app_locale.go
+  → DeviceLocaleForCountry          zh_CN_#Hans                device_locale.go
+  → MappedLocaleForCountry          zh_CN                      mapped_locale.go
+  → DeviceLanguagesForCountry       {"system_languages":…}     device_languages.go
+
 Accept-Language 两条入口，调用方只走其中一条：
   → BuildChromeAcceptLanguage(tags)                      已排好序的 data-code
   → BuildChromeAcceptLanguageForCountry(cc, extra, rng)  内部抽样后再拼，不必再调上一行
@@ -391,6 +399,7 @@ classDiagram
 | `netproxy.ApplyProxyToTransport` / `ParseProxyURL` | 配置代理或取得 SOCKS5 Dialer | `netproxy/proxy.go` |
 | `traffic.SetHook` / `WrapConn` | 注入字节统计回调、包装连接 | `traffic/traffic.go` |
 | `geo.WebAcceptLanguageForCountry` / `BuildChromeAcceptLanguage*` / `MobileLocaleForCountry` / `TimezoneOffsetForCountry` / `IANATimezoneForCountry` | 查 Chrome 码或 Android locale、按 Chromium 拼 Accept-Language、派生时区 | `geo/locale_web.go`、`geo/locale_mobile.go`、`geo/timezone.go`、`geo/timezone_iana.go` |
+| `localemobile.AcceptLanguageForCountry` / `AppLocaleForCountry` / `DeviceLocaleForCountry` / `MappedLocaleForCountry` / `DeviceLanguagesForCountry` | 按国家查 Android 端五个 locale header 的值 | `geo/locale_mobile/*.go` |
 | `versionreg.New` / `Registry.MustRegister` / `Registry.Get` | 创建并访问版本注册表 | `versionreg/registry.go` |
 | `logger.WithTraceID` / `StartSpan` / `Info` 等 | 关联和输出结构化日志 | `logger/context.go`、`logger/span.go`、`logger/logger.go` |
 

@@ -4,6 +4,13 @@
 
 依赖：`go.mod` 不因治理类重构变动。打 tag 用 `vMAJOR.MINOR.PATCH`（如 `v0.3.0`）。
 
+## v0.4.0（未发布，相对 v0.3.0）
+
+新增（不破坏现有签名）：
+
+- 子包 `geo/locale_mobile`（package `localemobile`）：`AcceptLanguageForCountry`、`AppLocaleForCountry`、
+  `DeviceLocaleForCountry`、`MappedLocaleForCountry`、`DeviceLanguagesForCountry`，未命中返回 `*geo.UnknownCountryError`。
+
 ## v0.3.0（相对 v0.2.0）
 
 破坏点：
