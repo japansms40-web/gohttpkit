@@ -64,7 +64,10 @@ jobs:
           go-version: '1.25'
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # latest（当前 v2.13.2）的 go.mod 要求 Go >= 1.26。本 job 是 Go 1.25，
+          # latest 会以退出码 3 失败（工具自身失败，不是查出代码问题）。
+          # 钉在已于 Go 1.25 全绿的 v2.12.2。
+          version: v2.12.2
           args: --timeout 5m
 
   vuln:
