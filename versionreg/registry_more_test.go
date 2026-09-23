@@ -145,7 +145,7 @@ func TestMustRegister_失败不写入(t *testing.T) {
 	}
 }
 
-var boomValidate = errors.New("boom")
+var errBoomValidate = errors.New("boom")
 
 func TestMustRegister_Validate任意错误仍包装可Is(t *testing.T) {
 	err := mustPanicError(t, func() {
@@ -153,7 +153,7 @@ func TestMustRegister_Validate任意错误仍包装可Is(t *testing.T) {
 		r.MustRegister(boomCfg{})
 	})
 	t.Logf("自定义 Validate 错误包装后 %v", err)
-	if !errors.Is(err, boomValidate) {
+	if !errors.Is(err, errBoomValidate) {
 		t.Fatalf("Validate 错误应以 %%w 包装，errors.Is 应命中原因，得到 %v", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestMustRegister_Validate任意错误仍包装可Is(t *testing.T) {
 type boomCfg struct{}
 
 func (boomCfg) VersionID() versionreg.ID { return "v1" }
-func (boomCfg) Validate() error          { return boomValidate }
+func (boomCfg) Validate() error          { return errBoomValidate }
 
 func TestMustRegister_指针身份共享实例(t *testing.T) {
 	r := newReg(t)

@@ -263,9 +263,6 @@ func TestBridge_POST体与白名单与空ExtraHeaders(t *testing.T) {
 	if last.ContentLength != 7 {
 		t.Fatalf("合法 content-length 应写入 Request.ContentLength，got %d", last.ContentLength)
 	}
-	if last.Header.Get("user-agent") != "" && last.Header.Get("User-Agent") != "" {
-		// 严格白名单无 UA：applySpecialHeaders 塞空 canonical UA，避免泄漏 Go 默认值
-	}
 	if ua := last.Header.Get("User-Agent"); ua != "" && ua != "kit-test/1.0" {
 		// 严格模式应抑制 Go 默认 UA（Go-http-client/1.1）
 		if strings.Contains(ua, "Go-http-client") {

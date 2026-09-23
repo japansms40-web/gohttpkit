@@ -20,13 +20,13 @@ func FuzzRegistryGet(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		cfg, err := r.Get(versionreg.ID(s))
-		switch {
-		case s == "":
+		switch s {
+		case "":
 			if cfg != nil {
 				t.Fatal("空 ID 失败应返回零值")
 			}
 			assertEmptyVersion(t, err, "fuzz", []versionreg.ID{"v1"})
-		case s == "v1":
+		case "v1":
 			if err != nil {
 				t.Fatalf("已注册却失败: %v", err)
 			}

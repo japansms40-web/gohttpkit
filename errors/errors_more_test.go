@@ -16,7 +16,7 @@ func TestRetryableError_Unwrap与As字段(t *testing.T) {
 	last := stderrors.New("i/o timeout")
 	err := &kiterrors.RetryableError{Err: cause, Attempts: 3, LastError: last}
 
-	if stderrors.Unwrap(err) != cause {
+	if stderrors.Unwrap(err) != cause { //nolint:errorlint // 断言 Unwrap 返回放入的同一个 cause 指针，不是错误链匹配
 		t.Fatalf("Unwrap() = %v, want cause", stderrors.Unwrap(err))
 	}
 	if !stderrors.Is(err, cause) {
@@ -27,7 +27,7 @@ func TestRetryableError_Unwrap与As字段(t *testing.T) {
 		t.Fatal("errors.As 应解出 *RetryableError")
 	}
 	t.Logf("As Attempts=%d Err=%v Last=%v", got.Attempts, got.Err, got.LastError)
-	if got.Attempts != 3 || got.Err != cause || got.LastError != last {
+	if got.Attempts != 3 || got.Err != cause || got.LastError != last { //nolint:errorlint // 断言字段保存的是当初放入的同一个 error 指针
 		t.Fatalf("字段不对: %+v", got)
 	}
 	msg := err.Error()

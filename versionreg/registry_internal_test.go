@@ -17,7 +17,10 @@ func TestCopyIDsLocked_空表是长度0的新切片(t *testing.T) {
 	if ids == nil || len(ids) != 0 {
 		t.Fatalf("空表应返回长度 0 的切片（非 nil），得到 %v", ids)
 	}
-	ids = append(ids, "injected")
+	injected := append(ids, "injected")
+	if len(injected) != 1 || injected[0] != "injected" {
+		t.Fatalf("append 结果应为单元素，得到 %v", injected)
+	}
 	r.mu.RLock()
 	again := r.copyIDsLocked()
 	r.mu.RUnlock()
