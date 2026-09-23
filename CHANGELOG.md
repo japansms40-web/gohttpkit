@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-09-23
+
 ### 破坏
 
 - 最低 Go 版本从 1.25.0 上调到 1.27.1（仓库工具 `tools/agentguard` 从 1.24.0 同步上调）。使用本库的模块须升级到 Go 1.27.1 或更高才能编译。CI 改为 `go-version: stable`，golangci-lint 改用 `latest`（`golangci-lint-action` 升到 v9）。
