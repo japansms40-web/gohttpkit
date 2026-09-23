@@ -71,7 +71,7 @@ func TestHook_Claude前置裁决(t *testing.T) {
 
 func TestHook_Codex前置裁决用退出码2(t *testing.T) {
 	root := newRepo(t, "feat/x")
-	in := input(t, map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": []any{"bash", "-lc", "git tag v1"}}})
+	in := input(t, map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": []any{"bash", "-lc", "git tag -d v1"}}})
 	code, _, errOut := callHook(t, in, "--agent", "codex", "--event", "pre-tool")
 	if code != 2 || !strings.Contains(errOut, "tag") {
 		t.Fatalf("Codex 拦截应退出 2 并写 stderr，得到 %d %q", code, errOut)

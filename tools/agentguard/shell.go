@@ -131,7 +131,7 @@ func stripPrefixes(tokens []string) []string {
 
 // evalGit 裁决 git 子命令。args 不含开头的 "git"。
 func evalGit(args []string, cwd string) verdict {
-	sub, rest, dir, v := splitGitGlobal(args, cwd)
+	sub, rest, _, v := splitGitGlobal(args, cwd)
 	if v.Decision != allow || sub == "" {
 		return v
 	}
@@ -140,7 +140,7 @@ func evalGit(args []string, cwd string) verdict {
 	}
 	switch sub {
 	case "commit":
-		return evalCommit(rest, dir)
+		return evalCommit(rest)
 	case "push":
 		return evalPush(rest)
 	case "tag":
@@ -196,7 +196,8 @@ func evalGitDestructive(sub string, rest []string) verdict {
 	return allowVerdict
 }
 
-func evalCommit(args []string, dir string) verdict {
+// evalCommit 只拦绕过钩子与自写豁免；在 main 上直接提交是允许的（改代码走 worktree，见 AGENTS.md）。
+func evalCommit(args []string) verdict {
 	for _, a := range args {
 		if commitNoVerifyRe.MatchString(a) {
 			return denyf("git commit -n 等同 --no-verify，禁止绕过 git 钩子")
@@ -204,9 +205,6 @@ func evalCommit(args []string, dir string) verdict {
 		if strings.Contains(a, string(overrideGovernance)) {
 			return denyf("「治理豁免」只能由人写进提交说明，agent 不得自行豁免治理守卫")
 		}
-	}
-	if b := currentBranch(dir); b == "main" || b == "master" {
-		return denyf("当前在 " + b + " 分支，AGENTS.md 要求先开分支再提交（git switch -c <type>/<topic>）")
 	}
 	return allowVerdict
 }
@@ -240,18 +238,14 @@ func refDst(refspec string) string {
 	return refspec
 }
 
-// evalTag 只放行列出类用法；创建、删除、移动 tag 一律拒绝。
+// evalTag 放行列出与创建 tag；删除（-d / --delete）与移动（-f / --force）一律拒绝。
+// 推送 tag 属于发布，由 evalPush 拦截。
 func evalTag(args []string) verdict {
-	listOnly := map[string]bool{"-l": true, "--list": true, "--contains": true, "--no-contains": true,
-		"--points-at": true, "--merged": true, "--no-merged": true, "--column": true, "--no-column": true}
 	for _, a := range args {
-		if listOnly[a] || strings.HasPrefix(a, "--sort") || strings.HasPrefix(a, "-n") || strings.HasPrefix(a, "--format") {
-			continue
+		if a == "--delete" || a == "--force" ||
+			(strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.ContainsAny(a, "df")) {
+			return denyf("AI 代理不得删除 / 移动 tag（已推送的 tag 不可改，见 docs/RELEASE.md）")
 		}
-		if (has(args, "-l") || has(args, "--list")) && !strings.HasPrefix(a, "-") {
-			continue // git tag -l 'v*' 的模式参数
-		}
-		return denyf("AI 代理不得创建 / 删除 / 移动 tag（发布由人执行，见 docs/RELEASE.md）")
 	}
 	return allowVerdict
 }

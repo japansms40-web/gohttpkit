@@ -21,5 +21,8 @@ coverage.out.*
 /.idea/
 /.vscode/
 
+# 本地 git worktree（改代码在此开，合回 main 后移除）
+/.worktrees/
+
 # Cursor 计划草稿（临时产物，不入库）；但 .cursor/rules/ 是跨 agent 规则，要跟踪
 /.cursor/plans/

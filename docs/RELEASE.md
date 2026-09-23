@@ -7,7 +7,7 @@
 
 ## 1. 角色
 
-- **MUST** 打 tag、推 tag、发 GitHub Release 由人执行。AI 代理只负责准备：CHANGELOG 草稿、升版本建议、检查单结果。
+- **MUST** 推 tag、发 GitHub Release 由人执行。AI 代理负责准备 CHANGELOG 草稿、升版本建议、检查单结果；用户明确要求时可在 `main` 上直接打附注 tag（不切分支），但不得推送、删除或移动 tag。
 - **MUST** 只从 `main` 的已通过 CI 的提交打 tag；不从个人分支、不从本地未推送提交打。
 
 ## 2. 版本号判断

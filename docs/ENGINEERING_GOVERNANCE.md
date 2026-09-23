@@ -46,8 +46,8 @@
 
 | 时机 | 动作 | 拦截 / 执行 |
 |---|---|---|
-| 执行 shell 前 | 拒绝 | `--no-verify` / `git commit -n`；强推（`-f`、`--force-with-lease`、`+refspec`）；删远端引用；推 / 建 / 删 tag；`git reset --hard`；`git clean -f`；改 `core.hooksPath`；`rm -r` 仓库外（系统临时目录除外）/ 仓库根 / `.git` / 根目录通配 |
-| 执行 shell 前 | 拒绝 | 在 `main` / `master` 上提交；agent 在提交说明里自写豁免标记 |
+| 执行 shell 前 | 拒绝 | `--no-verify` / `git commit -n`；强推（`-f`、`--force-with-lease`、`+refspec`）；删远端引用；推 / 删 / 移动 tag（`-d` / `-f`；新建 tag 放行）；`git reset --hard`；`git clean -f`；改 `core.hooksPath`；`rm -r` 仓库外（系统临时目录除外）/ 仓库根 / `.git` / 根目录通配 |
+| 执行 shell 前 | 拒绝 | agent 在提交说明里自写豁免标记（在 `main` 上直接提交放行：改代码走 worktree，合并、提交、打 tag 在 `main` 上做，见 AGENTS.md） |
 | 读写文件前 | 拒绝 | `.env*`（`.example` / `.sample` / `.template` 除外）、私钥类文件；`.git/` 内部；用 touch / rm / mv 等命令触碰放行标记 |
 | 改文件后 | 执行 | `.go` 文件 `gofmt -w` + `go vet` 所在包；改到 Makefile / `.golangci.yml` / 测试文件时跑治理守卫。问题回灌给 agent |
 | 回合结束前 | 执行 | 治理守卫（`--worktree`，对比 merge-base）；有未提交 Go 改动时 `make check`；改到 `tools/agentguard` 时 `make tools-check`。失败要求 agent 继续修，**连续 3 次**仍失败则放行并提示人（防死循环） |
@@ -94,7 +94,7 @@
 | IO 函数首参 `ctx`（CS §3） | `noctx` 管 HTTP；其余评审 | 🟡 |
 | 状态码 / header / 日志 key 无裸字面量（CS §9） | `goconst`(min=2) | 🟡 |
 | 不新增 `t.Skip` 屏蔽用例（TESTING §10） | 治理守卫 | ✅ |
-| AI 不绕过门禁、不自行打 tag、不在 main 提交、不碰凭据（AGENTS） | agent 钩子（Claude / Cursor / Codex） | ✅ |
+| AI 不绕过门禁、不推送 / 删除 / 移动 tag、不碰凭据（AGENTS） | agent 钩子（Claude / Cursor / Codex） | ✅ |
 | examples 可运行 | CI test | ✅ |
 | 跨 agent 规则同源 | `make agents-sync-check`（CI） | ✅ |
 

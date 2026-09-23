@@ -55,7 +55,7 @@
 模型指令是软约束，真正拦得住的是下面三层，后两层与用哪个模型无关：
 
 0. **agent 钩子**（`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json` → `scripts/agent-guard.sh` → `tools/agentguard`）：
-   执行命令前拦 `--no-verify`、强推、tag、`reset --hard`、main 上提交、读写凭据（只放行 / 拒绝，不弹确认框）；
+   执行命令前拦 `--no-verify`、强推、删 / 移动 / 推送 tag、`reset --hard`、读写凭据（只放行 / 拒绝，不弹确认框）；
    改文件后 gofmt + vet；回合结束前跑治理守卫与 `make check`，不过不许收尾。规则与人工放行方式见 `docs/ENGINEERING_GOVERNANCE.md` §3。
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
    - `pre-commit`：`gofmt`、`go vet`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
@@ -89,11 +89,15 @@
 
 ## 发布
 
-打 tag、写 `CHANGELOG.md`、升版本判断、hotfix / `retract` 流程见 [`docs/RELEASE.md`](docs/RELEASE.md)。**AI 代理不得自行打 tag 或发布**，只能准备发布材料由人确认。
+打 tag、写 `CHANGELOG.md`、升版本判断、hotfix / `retract` 流程见 [`docs/RELEASE.md`](docs/RELEASE.md)。AI 代理只在用户明确要求时于 `main` 上直接打附注 tag（不切分支、不开 worktree）；**推送 tag、发 Release 由人执行**，删除 / 移动 tag 一律禁止。
 
 ## Git 与 Pull Request 规范
 
-- 未经明确要求，不创建提交、不推送、不改写历史。当前在默认分支（`main`）时先开分支。
+- 未经明确要求，不创建提交、不推送、不改写历史。
+- **改代码用 worktree，不在主工作区切分支**：动手修改前 `git worktree add .worktrees/<type>-<topic> -b <type>/<topic>`，在该目录内改、测、提交；
+  完成后回主工作区 `git switch main && git merge --ff-only <type>/<topic>`（不能快进时先在 worktree 里 `git rebase main`），
+  再 `git worktree remove .worktrees/<type>-<topic> && git branch -d <type>/<topic>`。
+- **提交、打 tag 不需要切分支**：纯 git 操作（在 `main` 上提交、合并、打 tag）直接在主工作区的 `main` 上做。
 - 非合并提交标题 `<type>(<scope>): <中文摘要>`；`type` 仅用 `feat`、`fix`、`refactor`、`test`、`docs`、`perf`、`build`、`ci`、`chore`。仅仓库级杂项可省略 `scope`。
 - 摘要说清主要变化与可观察结果，避免「更新代码」「修复问题」。实质性提交空一行后用 2–6 条项目符号说明背景、行为变化、兼容边界；涉及接口写清方法、路径、输入输出与错误语义。
 - 正文末段统一写真实验证：`测试：<命令及结果>`；未运行写 `测试：未运行（原因）`。

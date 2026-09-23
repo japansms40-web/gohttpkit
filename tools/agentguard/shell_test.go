@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -17,6 +16,8 @@ func TestEvalShell_拦截与放行(t *testing.T) {
 		{"推分支", "git push -u origin feat/x", allow},
 		{"列出 tag", "git tag -l 'v*'", allow},
 		{"只看 tag", "git tag", allow},
+		{"打附注 tag", "git tag -a v0.4.0 -m v0.4.0", allow},
+		{"打轻量 tag", "git tag v0.4.0", allow},
 		{"删临时目录", "rm -rf /tmp/agentguard-xyz", allow},
 		{"删仓库内子目录", "rm -rf out/", allow},
 		{"非递归删文件", "rm coverage.out", allow},
@@ -35,8 +36,11 @@ func TestEvalShell_拦截与放行(t *testing.T) {
 		{"推 tags", "git push --tags", deny},
 		{"推单个 tag", "git push origin v0.4.0", deny},
 		{"推 refs/tags", "git push origin HEAD:refs/tags/v1", deny},
-		{"打 tag", "git tag -a v0.4.0 -m v0.4.0", deny},
 		{"删 tag", "git tag -d v0.3.1", deny},
+		{"删 tag 长选项", "git tag --delete v0.3.1", deny},
+		{"移动 tag", "git tag -f v0.3.1", deny},
+		{"移动 tag 组合短选项", "git tag -fa v0.3.1 -m x", deny},
+		{"移动 tag 长选项", "git tag --force v0.3.1", deny},
 		{"reset hard", "git reset --hard HEAD~1", deny},
 		{"clean -fd", "git clean -fd", deny},
 		{"卸钩子", "git config --unset core.hooksPath", deny},
@@ -70,18 +74,16 @@ func TestEvalShell_拦截与放行(t *testing.T) {
 	}
 }
 
-func TestEvalShell_main分支禁止提交(t *testing.T) {
+func TestEvalShell_main分支允许提交与打tag(t *testing.T) {
 	root := newRepo(t, "main")
-	if v := evalShell(`git commit -m "feat: x"`, root, root); v.Decision != deny {
-		t.Fatalf("main 上提交应拒绝，得到 %+v", v)
+	for _, cmd := range []string{`git commit -m "feat: x"`, "git tag -a v0.4.0 -m v0.4.0"} {
+		if v := evalShell(cmd, root, root); v.Decision != allow {
+			t.Fatalf("main 上 %q 应放行，得到 %+v", cmd, v)
+		}
 	}
-	sub := filepath.Join(root, "other")
-	if err := os.MkdirAll(sub, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	// -C 指向的仓库分支才是判据
-	if v := evalShell(`git -C `+sub+` commit -m x`, t.TempDir(), root); v.Decision != deny {
-		t.Fatalf("-C 指向 main 仓库也应拒绝，得到 %+v", v)
+	// main 上仍不得绕过钩子
+	if v := evalShell(`git commit -n -m x`, root, root); v.Decision != deny {
+		t.Fatalf("main 上 commit -n 仍应拒绝，得到 %+v", v)
 	}
 }
 
