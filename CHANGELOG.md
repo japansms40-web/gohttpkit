@@ -5,9 +5,19 @@
 
 ## [Unreleased]
 
+### 破坏
+
+- 最低 Go 版本从 1.24 升到 1.25。使用本库的模块须升级到 Go 1.25 或更高才能编译。
+
 ### 新增
 
 - 规范：`docs/RELEASE.md`、`SECURITY.md`、本文件；`CODE_STANDARDS` §10–16、`TESTING` §8–11；AI 代理硬性纪律。
+- 门禁：`nolintlint`；CI 显式 `make char`；治理守卫 `make governance`（CI / pre-push / agent 收尾）；
+  Claude / Cursor / Codex 三家 agent 钩子（`tools/agentguard`，仓库工具，不影响库的导出 API）。
+
+### 安全
+
+- 升级 `golang.org/x/net` 到 v0.55.0，修复经 `httpx.ExtractHTMLText` → `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
 
 ## [v0.3.1] - 2026-09-23
 

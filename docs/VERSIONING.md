@@ -10,7 +10,17 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
-## v0.4.0（未发布，相对 v0.3.0）
+## v0.4.0（未发布，相对 v0.3.1）
+
+破坏点：
+
+- `go.mod` 的 `go` 指令从 1.24.0 上调到 1.25.0。下游须使用 Go 1.25 及以上才能编译本库。
+
+安全：
+
+- `golang.org/x/net` 从 v0.50.0 升到 v0.55.0，修复经 `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
+
+## v0.3.1（相对 v0.3.0）
 
 新增（不破坏现有签名）：
 
