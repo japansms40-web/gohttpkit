@@ -19,6 +19,7 @@ linters:
     - forbidigo   # 强制 logger 门面，禁止裸打日志
     - gosec
     - revive
+    - nolintlint  # //nolint 必须指定 linter 并写理由（CODE_STANDARDS §14）
   settings:
     gocyclo:
       min-complexity: 20
@@ -35,6 +36,10 @@ linters:
       forbid:
         - pattern: '^(fmt\.Print(|f|ln)|log\.(Print|Fatal|Panic)|slog\.(Debug|Info|Warn|Error))'
           msg: "请使用 logger 门面: logger.Info(ctx, msg, attrs...)，ctx 必传"
+    nolintlint:
+      require-specific: true    # 禁止裸 //nolint 与 //nolint:all
+      require-explanation: true # 必须 // 后写理由
+      allow-unused: false       # 豁免失效（被豁免的告警已消失）也要删掉
     gosec:
       excludes:
         - G404 # math/rand 弱随机用于指纹域采样，非安全用途

@@ -15,7 +15,7 @@ step() { red "✗ $1 失败"; failed=1; }
 echo "pre-push：跑 race / char / cover（可能几十秒）……"
 make race  || step "make race（并发回归）"
 make char  || step "make char（行为锁定）"
-make cover || step "make cover（覆盖率门禁 ≥90%）"
+make cover || step "make cover（覆盖率门禁 ≥ MIN_COVERAGE）"
 
 if [ "$failed" -ne 0 ]; then
   red "pre-push 未通过。修复后重试，或 git push --no-verify 应急绕过（CI 仍会拦）。"

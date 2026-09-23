@@ -29,6 +29,8 @@ jobs:
         run: make cover
       - name: race（并发回归）
         run: go test -race -count=1 ./...
+      - name: char（对外行为锁定，改链序/发头/解压/状态语义的硬门禁）
+        run: make char
       - name: examples 可运行
         run: |
           go run ./examples/customchain
