@@ -12,7 +12,6 @@ type decision int
 
 const (
 	allow decision = iota
-	ask            // 需要人确认（Claude 弹权限框；不支持 ask 的 agent 按 deny 处理）
 	deny
 )
 
@@ -27,7 +26,7 @@ var allowVerdict = verdict{Decision: allow}
 func denyf(reason string) verdict { return verdict{Decision: deny, Reason: reason} }
 
 // allowMarkerName 是人工放行标记文件名，放在 git 目录里（不入库、agent 编辑也会被拦）。
-// 人执行 `touch "$(git rev-parse --git-path agent-guard-allow)"` 后：受保护文件可改、收尾治理违规降为警告。
+// 人执行 `touch "$(git rev-parse --git-path agent-guard-allow)"` 后：收尾的治理违规不再拦截。
 const allowMarkerName = "agent-guard-allow"
 
 // fileMutators 是会创建 / 删除 / 改写文件的命令。只在这些命令的参数里查放行标记，

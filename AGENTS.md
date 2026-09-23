@@ -55,7 +55,7 @@
 模型指令是软约束，真正拦得住的是下面三层，后两层与用哪个模型无关：
 
 0. **agent 钩子**（`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json` → `scripts/agent-guard.sh` → `tools/agentguard`）：
-   执行命令前拦 `--no-verify`、强推、tag、`reset --hard`、main 上提交、读写凭据；改门禁基础设施需人确认；
+   执行命令前拦 `--no-verify`、强推、tag、`reset --hard`、main 上提交、读写凭据（只放行 / 拒绝，不弹确认框）；
    改文件后 gofmt + vet；回合结束前跑治理守卫与 `make check`，不过不许收尾。规则与人工放行方式见 `docs/ENGINEERING_GOVERNANCE.md` §3。
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
    - `pre-commit`：`gofmt`、`go vet`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。

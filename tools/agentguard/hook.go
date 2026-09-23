@@ -76,15 +76,15 @@ func runHook(args []string) int {
 		return 0
 	}
 	h := hookCtx{agent: agentKind(*agent), root: root, cwd: cwd,
-		allowInfra: fileExists(gitPath(root, allowMarkerName))}
+		allowOverride: fileExists(gitPath(root, allowMarkerName))}
 
 	switch hookEvent(*event) {
 	case eventPreTool:
-		return h.emitPre(h.evalTool(in), false)
+		return h.emitPre(h.evalTool(in))
 	case eventPreShell:
-		return h.emitPre(evalShell(in.Command, cwd, root), true)
+		return h.emitPre(evalShell(in.Command, cwd, root))
 	case eventPreRead:
-		return h.emitPre(evalRead(in.FilePath), false)
+		return h.emitPre(evalRead(in.FilePath))
 	case eventPostTool:
 		return h.emitPost(h.postEdit(editedPaths(in)))
 	case eventStop:
@@ -96,9 +96,9 @@ func runHook(args []string) int {
 }
 
 type hookCtx struct {
-	agent      agentKind
-	root, cwd  string
-	allowInfra bool
+	agent         agentKind
+	root, cwd     string
+	allowOverride bool
 }
 
 // evalTool 按工具输入的形状裁决：有 command 走 shell（或 Codex 补丁），有文件路径走读 / 写。
@@ -107,7 +107,7 @@ func (h hookCtx) evalTool(in hookInput) verdict {
 	if cmd := commandOf(in.ToolInput); cmd != "" {
 		if isPatch(cmd) {
 			for _, p := range patchPaths(cmd) {
-				worst = stricter(worst, evalEdit(p, h.cwd, h.root, h.allowInfra))
+				worst = stricter(worst, evalEdit(p, h.cwd, h.root))
 			}
 			return worst
 		}
@@ -117,7 +117,7 @@ func (h hookCtx) evalTool(in hookInput) verdict {
 		if isReadTool(in.ToolName) {
 			return evalRead(p)
 		}
-		return evalEdit(p, h.cwd, h.root, h.allowInfra)
+		return evalEdit(p, h.cwd, h.root)
 	}
 	return worst
 }
@@ -231,7 +231,7 @@ func (h hookCtx) stopCheck() (block, notice string) {
 	}
 	var problems []string
 	vs := collectViolations(h.root, resolveBase(h.root, ""), true)
-	if len(vs) > 0 && !h.allowInfra {
+	if len(vs) > 0 && !h.allowOverride {
 		for _, v := range vs {
 			problems = append(problems, "治理守卫："+v.String())
 		}
@@ -260,26 +260,19 @@ func (h hookCtx) stopCheck() (block, notice string) {
 		n, maxStopBlocks, strings.Join(problems, "\n")), ""
 }
 
-// emitPre 按 agent 协议输出前置裁决。shellEvent 表示 Cursor beforeShellExecution（支持 ask）。
-func (h hookCtx) emitPre(v verdict, shellEvent bool) int {
+// emitPre 按 agent 协议输出前置裁决。只有放行 / 拒绝两档，不弹人工确认框。
+func (h hookCtx) emitPre(v verdict) int {
 	switch h.agent {
 	case agentClaude:
 		if v.Decision == allow {
 			return 0
 		}
-		d := "deny"
-		if v.Decision == ask {
-			d = "ask"
-		}
 		printJSON(map[string]any{"hookSpecificOutput": map[string]any{
-			"hookEventName": "PreToolUse", "permissionDecision": d, "permissionDecisionReason": "agentguard：" + v.Reason}})
+			"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "agentguard：" + v.Reason}})
 		return 0
 	case agentCursor:
 		perm := "allow"
-		switch {
-		case v.Decision == ask && shellEvent:
-			perm = "ask"
-		case v.Decision != allow:
+		if v.Decision != allow {
 			perm = "deny"
 		}
 		out := map[string]any{"permission": perm}

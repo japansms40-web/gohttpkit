@@ -5,23 +5,11 @@ import (
 	"strings"
 )
 
-// protectedPaths 是门禁基础设施：agent 改它们等于改裁判，必须由人确认。
-// 以 / 结尾表示目录前缀，否则为精确的仓库相对路径。
-var protectedPaths = []string{
-	".githooks/",
-	".github/workflows/",
-	".golangci.yml",
-	"tools/agentguard/",
-	"scripts/agent-guard.sh",
-	".claude/settings.json",
-	".cursor/hooks.json",
-	".codex/",
-}
-
 // evalEdit 裁决一次写文件。
-// 输入 path：目标路径（绝对或相对 cwd）；allowInfra：人工放行标记是否存在。
-// 返回：凭据文件与 .git 内部 → deny；门禁基础设施 → ask（有放行标记则 allow）；仓库外路径 → allow（不归本仓管）。
-func evalEdit(path, cwd, root string, allowInfra bool) verdict {
+// 输入 path：目标路径（绝对或相对 cwd）；cwd：相对路径的基准；root：仓库根。
+// 返回：凭据文件与 .git 内部 → deny；其余 → allow。
+// 门禁基础设施（钩子 / CI / lint / 守卫）不在这里拦：真正的放宽由治理守卫在改后、收尾、pre-push 与 CI 识别。
+func evalEdit(path, cwd, root string) verdict {
 	p := resolvePath(path, cwd)
 	if isSecretPath(p) {
 		return denyf("不得读写凭据文件（" + path + "），见 AGENTS.md「通用安全边界」")
@@ -33,15 +21,6 @@ func evalEdit(path, cwd, root string, allowInfra bool) verdict {
 	rel = filepath.ToSlash(rel)
 	if rel == ".git" || strings.HasPrefix(rel, ".git/") {
 		return denyf("不得直接改写 .git 内部文件（" + rel + "）")
-	}
-	if allowInfra {
-		return allowVerdict
-	}
-	for _, pp := range protectedPaths {
-		if rel == pp || (strings.HasSuffix(pp, "/") && strings.HasPrefix(rel, pp)) {
-			return verdict{Decision: ask, Reason: rel + " 属于门禁基础设施（钩子 / CI / lint / 守卫），改动须用户确认。" +
-				"非 Claude 的 agent 请让用户执行 touch \"$(git rev-parse --git-path " + allowMarkerName + ")\" 后重试，改完删除该文件"}
-		}
 	}
 	return allowVerdict
 }

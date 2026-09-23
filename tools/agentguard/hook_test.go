@@ -50,18 +50,18 @@ func TestHook_Claude前置裁决(t *testing.T) {
 		t.Fatalf("放行时应无输出，得到 code=%d out=%s", code, out)
 	}
 
+	// 门禁基础设施不弹确认框：前置放行，放宽由治理守卫在改后 / 收尾识别
 	edit := input(t, map[string]any{"cwd": root, "tool_name": "Edit", "tool_input": map[string]any{"file_path": filepath.Join(root, ".golangci.yml")}})
-	if _, out, _ = callHook(t, edit, "--agent", "claude", "--event", "pre-tool"); !strings.Contains(out, `"permissionDecision":"ask"`) {
-		t.Fatalf("改门禁配置应 ask，得到 %s", out)
-	}
-	marker := gitPath(root, allowMarkerName)
-	if err := os.WriteFile(marker, []byte("人工确认"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	if _, out, _ = callHook(t, edit, "--agent", "claude", "--event", "pre-tool"); out != "" {
-		t.Fatalf("有放行标记应直接放行，得到 %s", out)
+		t.Fatalf("改门禁配置应直接放行、不弹确认，得到 %s", out)
 	}
-	_ = os.Remove(marker)
+	gitInternal := input(t, map[string]any{"cwd": root, "tool_name": "Write", "tool_input": map[string]any{"file_path": filepath.Join(root, ".git", "config")}})
+	if _, out, _ = callHook(t, gitInternal, "--agent", "claude", "--event", "pre-tool"); !strings.Contains(out, `"deny"`) {
+		t.Fatalf("改 .git 内部应拒绝，得到 %s", out)
+	}
+	if strings.Contains(out, `"ask"`) {
+		t.Fatalf("任何情况都不应输出 ask，得到 %s", out)
+	}
 
 	read := input(t, map[string]any{"cwd": root, "tool_name": "Read", "tool_input": map[string]any{"file_path": filepath.Join(root, ".env")}})
 	if _, out, _ = callHook(t, read, "--agent", "claude", "--event", "pre-tool"); !strings.Contains(out, `"deny"`) {
@@ -78,8 +78,13 @@ func TestHook_Codex前置裁决用退出码2(t *testing.T) {
 	}
 	patch := "*** Begin Patch\n*** Update File: .github/workflows/ci.yml\n@@\n-a\n+b\n*** End Patch"
 	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
+	if code, _, _ = callHook(t, in, "--agent", "codex", "--event", "pre-tool"); code != 0 {
+		t.Fatalf("补丁改 CI 配置应放行，得到 %d", code)
+	}
+	patch = "*** Begin Patch\n*** Add File: .env\n+A=1\n*** End Patch"
+	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
 	if code, _, _ = callHook(t, in, "--agent", "codex", "--event", "pre-tool"); code != 2 {
-		t.Fatalf("补丁改 CI 配置应拦截（Codex 无 ask），得到 %d", code)
+		t.Fatalf("补丁写 .env 应拦截，得到 %d", code)
 	}
 	patch = "*** Begin Patch\n*** Add File: httpx/new.go\n+package httpx\n*** End Patch"
 	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
@@ -101,8 +106,12 @@ func TestHook_Cursor前置裁决(t *testing.T) {
 		t.Fatalf("Cursor 读 .env 应拒绝，得到 %s", out)
 	}
 	edit := input(t, map[string]any{"cwd": root, "tool_name": "Write", "tool_input": map[string]any{"file_path": ".githooks/pre-push"}})
-	if _, out, _ = callHook(t, edit, "--agent", "cursor", "--event", "pre-tool"); !strings.Contains(out, `"deny"`) {
-		t.Fatalf("Cursor preToolUse 不支持 ask，改钩子应 deny，得到 %s", out)
+	if _, out, _ = callHook(t, edit, "--agent", "cursor", "--event", "pre-tool"); strings.TrimSpace(out) != `{"permission":"allow"}` {
+		t.Fatalf("Cursor 改钩子应放行，得到 %s", out)
+	}
+	secret := input(t, map[string]any{"cwd": root, "tool_name": "Write", "tool_input": map[string]any{"file_path": "id_rsa"}})
+	if _, out, _ = callHook(t, secret, "--agent", "cursor", "--event", "pre-tool"); !strings.Contains(out, `"deny"`) {
+		t.Fatalf("Cursor 写私钥应拒绝，得到 %s", out)
 	}
 }
 

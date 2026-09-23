@@ -49,13 +49,14 @@
 | 执行 shell 前 | 拒绝 | `--no-verify` / `git commit -n`；强推（`-f`、`--force-with-lease`、`+refspec`）；删远端引用；推 / 建 / 删 tag；`git reset --hard`；`git clean -f`；改 `core.hooksPath`；`rm -r` 仓库外（系统临时目录除外）/ 仓库根 / `.git` / 根目录通配 |
 | 执行 shell 前 | 拒绝 | 在 `main` / `master` 上提交；agent 在提交说明里自写豁免标记 |
 | 读写文件前 | 拒绝 | `.env*`（`.example` / `.sample` / `.template` 除外）、私钥类文件；`.git/` 内部；用 touch / rm / mv 等命令触碰放行标记 |
-| 改文件前 | 需人确认 | 门禁基础设施：`.githooks/`、`.github/workflows/`、`.golangci.yml`、`tools/agentguard/`、`scripts/agent-guard.sh`、三家钩子配置。Claude 弹权限框；Cursor / Codex 无 ask，直接拒绝 |
 | 改文件后 | 执行 | `.go` 文件 `gofmt -w` + `go vet` 所在包；改到 Makefile / `.golangci.yml` / 测试文件时跑治理守卫。问题回灌给 agent |
 | 回合结束前 | 执行 | 治理守卫（`--worktree`，对比 merge-base）；有未提交 Go 改动时 `make check`；改到 `tools/agentguard` 时 `make tools-check`。失败要求 agent 继续修，**连续 3 次**仍失败则放行并提示人（防死循环） |
 
-**人工放行**：确需让 agent 改门禁基础设施或下调门槛时，由人执行
-`touch "$(git rev-parse --git-path agent-guard-allow)"`，完成后删除该文件。标记存在期间：受保护文件可改、收尾的治理违规不再拦截；
-pre-push 与 CI 的治理守卫仍然生效，提交说明里仍需人写豁免标记与理由。
+**不弹确认框**：钩子只有「放行 / 拒绝」两档。门禁基础设施（钩子、CI、lint 配置、守卫自身）agent 可以直接改，
+真正的放宽（下调覆盖率、关 linter、加豁免等）由治理守卫在改后、收尾、pre-push、CI 四处识别。
+
+**人工放行**：确需让 agent 下调门槛时，由人执行 `touch "$(git rev-parse --git-path agent-guard-allow)"`，完成后删除该文件。
+标记存在期间收尾的治理违规不再拦截；pre-push 与 CI 的治理守卫仍然生效，提交说明里仍需人写豁免标记与理由。
 
 **首次启用**：Claude Code 打开项目即生效；Cursor 读取 `.cursor/hooks.json` 即生效；Codex 需先信任本项目，再在 `/hooks` 里审核一次。
 三家都需要本机有 `go`（启动器会自动编译守卫）。
@@ -83,7 +84,7 @@ pre-push 与 CI 的治理守卫仍然生效，提交说明里仍需人写豁免�
 | 提交标题规范 | commit-msg、CI commits | ✅ |
 | 提交正文 `测试：` 行 | commit-msg 对 `feat`/`fix`/`refactor`/`perf` 校验 | ⬜ |
 | `//nolint` 必须指定 linter + 理由（CS §14） | `nolintlint`（pre-commit 增量、CI 全量） | ✅ |
-| 不放宽 `.golangci.yml`（CS §14） | agent 钩子（改前需人确认）+ 治理守卫（关 linter / 加豁免 / 调松阈值） | ✅ |
+| 不放宽 `.golangci.yml`（CS §14） | 治理守卫（关 linter / 加豁免 / 调松阈值）：agent 改后与收尾、pre-push、CI | ✅ |
 | goroutine 不泄漏（CS §11、TESTING §8） | `goleak` in `TestMain` | ⬜ |
 | 解压有大小上限（CS §10） | 代码实现 + characterization | ⬜ |
 | 破坏性变更升版本（VERSIONING） | CI `apidiff` 对比上一个 tag | ⬜ |
