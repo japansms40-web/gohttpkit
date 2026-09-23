@@ -10,7 +10,7 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
-## v0.5.0（未发布，相对 v0.4.1）
+## v0.5.0（相对 v0.4.1）
 
 破坏点：
 

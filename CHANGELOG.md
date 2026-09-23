@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [v0.5.0] - 2026-09-24
+
 ### 破坏
 
 - 删除 `interceptor.NewClient`，改用 `httpx.NewClient(httpx.Options{...})`：Interceptors 为 nil 时装默认链，空切片仍视为显式自组链。
