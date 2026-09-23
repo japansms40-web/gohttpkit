@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      { "command": "scripts/agent-guard.sh hook --agent cursor --event pre-shell", "timeout": 60 }
+    ],
+    "beforeReadFile": [
+      { "command": "scripts/agent-guard.sh hook --agent cursor --event pre-read", "timeout": 60 }
+    ],
+    "preToolUse": [
+      { "command": "scripts/agent-guard.sh hook --agent cursor --event pre-tool", "matcher": "Write", "timeout": 60 }
+    ],
+    "afterFileEdit": [
+      { "command": "scripts/agent-guard.sh hook --agent cursor --event post-tool", "timeout": 120 }
+    ],
+    "stop": [
+      { "command": "scripts/agent-guard.sh hook --agent cursor --event stop", "timeout": 360, "loop_limit": 3 }
+    ]
+  }
+}

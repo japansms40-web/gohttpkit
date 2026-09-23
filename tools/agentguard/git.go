@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -37,4 +38,25 @@ func showAt(root, rev, path string) (string, bool) {
 		return "", false
 	}
 	return s, true
+}
+
+// currentBranch 返回 dir 所在仓库的当前分支名；detached HEAD 返回 "HEAD"，出错返回空串。
+func currentBranch(dir string) string {
+	b, err := gitOut(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return b
+}
+
+// gitPath 返回 git 目录下 name 的绝对路径（兼容 worktree）。
+func gitPath(root, name string) string {
+	p, err := gitOut(root, "rev-parse", "--git-path", name)
+	if err != nil {
+		return ""
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(root, p)
+	}
+	return p
 }

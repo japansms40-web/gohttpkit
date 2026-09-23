@@ -1,0 +1,4 @@
+# Codex CLI 项目级配置（需在 Codex 里信任本项目后生效；钩子在 .codex/hooks.json，首次需 /hooks 审核）。
+# 沙箱：只允许写工作区；越界操作、联网等由人审批。与 AGENTS.md「AI 代理硬性纪律」配套。
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"

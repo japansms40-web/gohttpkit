@@ -28,6 +28,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "governance":
 		return runGovernance(args[1:])
+	case "hook":
+		return runHook(args[1:])
 	default:
 		usage()
 		return 1
