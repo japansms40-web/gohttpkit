@@ -15,7 +15,7 @@ import "github.com/japansms40-web/gohttpkit/httpx"
 // 给普通 HTTP 调用：不做业务解释，只做重试、解压、日志、状态缓存。
 // 输入：无。返回新切片，每次调用独立分配。
 // 返回：8 层预设；非 2xx 不报错；解码失败不重试。
-// 例：interceptor.NewClient(httpx.Options{Headers: h}) 未传 Interceptors 时用本链。
+// 例：httpx.NewClient(httpx.Options{Headers: h}) 未传 Interceptors 时用本链。
 func DefaultChain() httpx.Interceptors {
 	return baseChain(NewCallServerInterceptor())
 }

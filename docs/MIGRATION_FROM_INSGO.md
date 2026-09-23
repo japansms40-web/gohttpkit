@@ -15,7 +15,7 @@ insgo 侧**未做任何改动**，两边是独立演进的两份代码；本文�
 
 | insgo | gohttpkit | 说明 |
 |---|---|---|
-| `internal.Client` / `internal.NewClient` | `httpx.Client` / `interceptor.NewClient(Options)` | 去掉 Platform / VersionConfig，换成 `HeaderProvider` |
+| `internal.Client` / `internal.NewClient` | `httpx.Client` / `httpx.NewClient(Options)`（需 import `httpx/interceptor` 注册默认链） | 去掉 Platform / VersionConfig，换成 `HeaderProvider` |
 | `Client.DoRequestWithHeadersAndWhitelist` | `Client.Do(ctx, RequestSpec)` | 7 个位置参数改成结构体 |
 | `Client.GetWithHeadersAndWhitelist` | `Client.Get` / `Client.Do` | |
 | `Client.PostFormWithHeadersAndWhitelist` | `Client.PostForm` / `Client.Do` | |

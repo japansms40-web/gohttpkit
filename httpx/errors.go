@@ -4,6 +4,9 @@ import "fmt"
 
 // errors.go —— 本包身份错误。判定请用 errors.As 读字段，不要扫 Error() 文案。
 
+// fieldOptionsHeaders 是 MissingHeaderProviderError.Field 的取值（New / NewClient 共用）。
+const fieldOptionsHeaders = "Options.Headers"
+
 // MissingHeaderProviderError New 时 Options.Headers 为 nil。
 // Field 恒为 "Options.Headers"，便于上层直接读。判定请用 errors.As。
 type MissingHeaderProviderError struct {
@@ -40,6 +43,20 @@ func (e *ChainExhaustedError) Error() string {
 		return "httpx: interceptor chain exhausted <nil>"
 	}
 	return "httpx: interceptor chain exhausted — missing terminal interceptor (e.g. NewCallServerInterceptor)"
+}
+
+// NoDefaultChainError NewClient 未传 Interceptors，且没有包注册过默认链。
+// 通常是程序里没有 import httpx/interceptor。判定请用 errors.As。
+type NoDefaultChainError struct{}
+
+// Error 实现 error。
+// 输入：接收者可为 nil。
+// 返回：nil → "httpx: no default chain <nil>"；否则 → 提示 import httpx/interceptor 的文案。
+func (e *NoDefaultChainError) Error() string {
+	if e == nil {
+		return "httpx: no default chain <nil>"
+	}
+	return "httpx: no default interceptor chain registered — import github.com/japansms40-web/gohttpkit/httpx/interceptor (a blank import is enough) or pass Options.Interceptors"
 }
 
 // NilBuildHeadersError HeaderProvider.BuildHeaders 返回了 nil。

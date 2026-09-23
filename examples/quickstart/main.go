@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
-	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
+	_ "github.com/japansms40-web/gohttpkit/httpx/interceptor" // 注册 httpx.NewClient 的默认链
 	"github.com/japansms40-web/gohttpkit/logger"
 )
 
@@ -52,7 +52,7 @@ func run(out io.Writer, args []string) error {
 
 	// ① 构头器：本库唯一必填的接缝。这里用最简的 StaticHeaders；
 	//    需要 cookie / token / 逐请求变化的头，就自己实现 HeaderProvider（见 examples/fidelity）。
-	client, err := interceptor.NewClient(httpx.Options{
+	client, err := httpx.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{
 			Base: base,
 			Headers: map[string]string{

@@ -48,7 +48,7 @@ func TestConcurrent_共享Client并发请求(t *testing.T) {
 	defer srv.Close()
 
 	hp := &statefulHeaders{base: srv.URL, token: "t-0"}
-	c, err := interceptor.NewClient(httpx.Options{
+	c, err := httpx.NewClient(httpx.Options{
 		Headers: hp,
 		// 响应回写：把服务端下发的新 token 写回构头器，下一次请求带上。
 		OnResponseHeaders: func(_ context.Context, h http.Header) {
@@ -97,7 +97,7 @@ func TestConcurrent_派生子Client与父并发互不干扰(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := interceptor.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
+	c, err := httpx.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
 	if err != nil {
 		t.Fatal(err)
 	}

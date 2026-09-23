@@ -418,7 +418,7 @@ func TestRetry_指数退避时序下界(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := interceptor.NewClient(httpx.Options{
+	c, err := httpx.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{Base: srv.URL},
 		Retry:   httpx.WithRetry(3, 200*time.Millisecond, 0),
 	})
@@ -442,7 +442,7 @@ func TestRetry_退避封顶生效(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := interceptor.NewClient(httpx.Options{
+	c, err := httpx.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{Base: srv.URL},
 		Retry:   httpx.WithRetry(3, 200*time.Millisecond, 250*time.Millisecond),
 	})
@@ -524,7 +524,7 @@ func TestRetry_ctx取消时立即返回(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := interceptor.NewClient(httpx.Options{
+	c, err := httpx.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{Base: srv.URL},
 		Retry:   httpx.WithRetry(5, 300*time.Millisecond, 0),
 	})
@@ -560,7 +560,7 @@ func TestRetry_每次重试重建请求头(t *testing.T) {
 	})
 	hp.base = srv.URL
 
-	c, err := interceptor.NewClient(httpx.Options{Headers: hp, Retry: httpx.WithRetry(3, time.Millisecond, 0)})
+	c, err := httpx.NewClient(httpx.Options{Headers: hp, Retry: httpx.WithRetry(3, time.Millisecond, 0)})
 	if err != nil {
 		t.Fatal(err)
 	}

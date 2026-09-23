@@ -19,7 +19,12 @@ go get github.com/japansms40-web/gohttpkit
 ## 30 秒上手
 
 ```go
-client, err := interceptor.NewClient(httpx.Options{
+import (
+    "github.com/japansms40-web/gohttpkit/httpx"
+    _ "github.com/japansms40-web/gohttpkit/httpx/interceptor" // 注册默认链；用到任何拦截器时已隐式满足
+)
+
+client, err := httpx.NewClient(httpx.Options{
     Headers: httpx.StaticHeaders{
         Base:    "https://api.example.com",
         Headers: map[string]string{"accept": "application/json"},
@@ -95,9 +100,9 @@ client.Do(ctx, httpx.RequestSpec{Path: "/x",
 ### 3. 重试策略：nil 是「没配」，不是「不重试」
 
 ```go
-interceptor.NewClient(httpx.Options{Headers: hp})                          // 默认 3 次 + 200/400/800ms
-interceptor.NewClient(httpx.Options{Headers: hp, Retry: httpx.NoRetry()})  // 明确不重试
-interceptor.NewClient(httpx.Options{Headers: hp,
+httpx.NewClient(httpx.Options{Headers: hp})                          // 默认 3 次 + 200/400/800ms
+httpx.NewClient(httpx.Options{Headers: hp, Retry: httpx.NoRetry()})  // 明确不重试
+httpx.NewClient(httpx.Options{Headers: hp,
     Retry: httpx.WithRetry(5, 100*time.Millisecond, time.Second)})
 ```
 
@@ -111,7 +116,7 @@ interceptor.NewClient(httpx.Options{Headers: hp,
 ### 4. 会话状态回写挂在 Options 上，不挂在链上
 
 ```go
-interceptor.NewClient(httpx.Options{
+httpx.NewClient(httpx.Options{
     Headers: myProvider,
     OnResponseHeaders: func(ctx context.Context, h http.Header) {
         myProvider.ApplySetCookie(h)   // 服务端下发的新 token 立刻回写
@@ -171,7 +176,7 @@ func (s *signer) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 超时、重试、慢请求只认 `Options`，不读环境变量。零值回落代码默认：整请求 30s、响应头 15s、重试 3 次。
 
 ```go
-client, err := interceptor.NewClient(httpx.Options{
+client, err := httpx.NewClient(httpx.Options{
     Headers:               headers,
     Timeout:               10 * time.Second,
     ResponseHeaderTimeout: 5 * time.Second,

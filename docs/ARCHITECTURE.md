@@ -138,8 +138,10 @@ logging
 ### 6.1 客户端创建链
 
 ```text
-interceptor.NewClient             httpx/interceptor/client.go
-├── Interceptors 为 nil 时填 DefaultChain
+httpx.NewClient                   httpx/default_chain.go
+├── 校验 Options.Headers
+├── Interceptors 为 nil 时调注册的默认链工厂（interceptor 包 init() 注册 DefaultChain，
+│   见 httpx/interceptor/register.go）；未注册返回 *NoDefaultChainError
 └── httpx.New                     httpx/client.go
     ├── 校验 Options.Headers
     ├── 未传 Transport 时：
@@ -372,7 +374,8 @@ classDiagram
 | API | 用途 | 文件 |
 |---|---|---|
 | `httpx.New(Options)` | 创建客户端，不装默认链 | `httpx/client.go` |
-| `interceptor.NewClient(Options)` | 创建客户端，nil 链时填 DefaultChain | `httpx/interceptor/client.go` |
+| `httpx.NewClient(Options)` | 创建客户端，nil 链时填注册的默认链（import `httpx/interceptor` 即注册 DefaultChain） | `httpx/default_chain.go` |
+| `httpx.RegisterDefaultChain(f)` | 注册默认链工厂（interceptor 包 init() 调用） | `httpx/default_chain.go` |
 | `Client.Do(ctx, RequestSpec)` | 完整请求入口 | `httpx/client.go` |
 | `Client.Get` / `PostForm` / `PostJSON` | 常用请求快捷方法 | `httpx/client.go` |
 | `HeaderProvider` | 由上层提供基础 URL 和候选请求头 | `httpx/headers.go` |

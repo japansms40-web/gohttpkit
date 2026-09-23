@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
-	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
 func newClient(t *testing.T, srv *httptest.Server, mutate func(*httpx.Options)) *httpx.Client {
@@ -25,7 +24,7 @@ func newClient(t *testing.T, srv *httptest.Server, mutate func(*httpx.Options)) 
 	if mutate != nil {
 		mutate(&opts)
 	}
-	c, err := interceptor.NewClient(opts)
+	c, err := httpx.NewClient(opts)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -86,7 +85,7 @@ func assertReadResponseBody(t *testing.T, err error, encoding httpx.ContentEncod
 
 func newClientWith(t *testing.T, opts httpx.Options) *httpx.Client {
 	t.Helper()
-	c, err := interceptor.NewClient(opts)
+	c, err := httpx.NewClient(opts)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

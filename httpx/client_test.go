@@ -42,7 +42,7 @@ func TestPostJSON_自动带contentType(t *testing.T) {
 func TestClient_访问器(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	hp := httpx.StaticHeaders{Base: srv.URL, Headers: map[string]string{"accept": "*/*"}}
-	c, err := interceptor.NewClient(httpx.Options{Headers: hp, ProxyURL: "", Timeout: 5 * time.Second})
+	c, err := httpx.NewClient(httpx.Options{Headers: hp, ProxyURL: "", Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### 破坏
+
+- 删除 `interceptor.NewClient`，改用 `httpx.NewClient(httpx.Options{...})`：Interceptors 为 nil 时装默认链，空切片仍视为显式自组链。
+  默认链由 `httpx/interceptor` 包在 `init()` 里经 `httpx.RegisterDefaultChain` 注册，程序里需 import 一次该包
+  （用到任何拦截器即已满足，否则 blank import）；未注册时 `httpx.NewClient` 返回 `*httpx.NoDefaultChainError`。
+  迁移：把 `interceptor.NewClient(` 替换为 `httpx.NewClient(`，确认仍 import 了 `httpx/interceptor`。
+
+### 新增
+
+- `httpx.NewClient`、`httpx.RegisterDefaultChain`、`httpx.NoDefaultChainError`。
+
 ## [v0.4.0] - 2026-09-23
 
 ### 破坏

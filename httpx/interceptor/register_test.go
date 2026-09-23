@@ -10,9 +10,11 @@ import (
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
-func TestNewClient_未传链时装默认链(t *testing.T) {
+// 本文件锁定 interceptor 包 init() 把 DefaultChain 注册进 httpx：import 本包后 httpx.NewClient 开箱即用。
+
+func TestHTTPXNewClient_未传链时装默认链(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	c, err := interceptor.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
+	c, err := httpx.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +31,8 @@ func TestNewClient_未传链时装默认链(t *testing.T) {
 	}
 }
 
-func TestNewClient_空切片不回落默认链(t *testing.T) {
-	c, err := interceptor.NewClient(httpx.Options{
+func TestHTTPXNewClient_空切片不回落默认链(t *testing.T) {
+	c, err := httpx.NewClient(httpx.Options{
 		Headers:      httpx.StaticHeaders{Base: "https://x.example"},
 		Interceptors: httpx.Interceptors{},
 	})

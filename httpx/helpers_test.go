@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
-	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
+	_ "github.com/japansms40-web/gohttpkit/httpx/interceptor" // 注册 httpx.NewClient 的默认链
 )
 
 // newClient 建一个指向 srv 的客户端，headers 为构头结果（nil 用一组最小头）。
@@ -30,7 +30,7 @@ func newClient(t *testing.T, srv *httptest.Server, mutate func(*httpx.Options)) 
 	if mutate != nil {
 		mutate(&opts)
 	}
-	c, err := interceptor.NewClient(opts)
+	c, err := httpx.NewClient(opts)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -80,7 +80,7 @@ func (rs *recordingServer) last() *http.Request {
 // newClientWith 用给定 Options 建客户端（失败即 fatal）。
 func newClientWith(t *testing.T, opts httpx.Options) *httpx.Client {
 	t.Helper()
-	c, err := interceptor.NewClient(opts)
+	c, err := httpx.NewClient(opts)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

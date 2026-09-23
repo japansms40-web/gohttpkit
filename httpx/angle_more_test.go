@@ -180,7 +180,7 @@ func TestHeaderProviderFunc_Build返回nil原样nil(t *testing.T) {
 }
 
 func TestWithChain_nil只保留最外层旁路(t *testing.T) {
-	parent, err := interceptor.NewClient(httpx.Options{
+	parent, err := httpx.NewClient(httpx.Options{
 		Headers: httpx.StaticHeaders{Base: "https://a.example"},
 		Interceptors: httpx.Prepend(interceptor.DefaultChain(),
 			interceptor.NewTransactionInterceptor(nil)),

@@ -118,7 +118,7 @@ type Options struct {
 	Transport *http.Transport
 
 	// Interceptors 拦截器链。nil / 空切片都原样收下，不会装默认链。
-	// 开箱即用请走 interceptor.NewClient，它只在本字段为 nil 时填 DefaultChain。
+	// 开箱即用请走 httpx.NewClient，它只在本字段为 nil 时填注册的默认链（import httpx/interceptor 即注册）。
 	Interceptors Interceptors
 
 	// Retry 重试策略。nil → 默认策略（3 次 + 200/400/800ms）；

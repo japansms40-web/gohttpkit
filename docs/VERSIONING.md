@@ -10,6 +10,18 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.5.0（未发布，相对 v0.4.1）
+
+破坏点：
+
+- 删除 `interceptor.NewClient`，入口改为 `httpx.NewClient`（未传 Interceptors 时装由 `httpx/interceptor` 注册的默认链）。
+  按维护者决定**未经弃用期直接删除**（不同于上面的弃用周期规则）；下游把 `interceptor.NewClient(` 替换为 `httpx.NewClient(`，
+  并确认程序里仍 import 了 `httpx/interceptor`（否则得到 `*httpx.NoDefaultChainError`）。
+
+新增（不破坏现有签名）：
+
+- `httpx.NewClient`、`httpx.RegisterDefaultChain`、`httpx.NoDefaultChainError`。
+
 ## v0.4.0（相对 v0.3.3）
 
 破坏点：

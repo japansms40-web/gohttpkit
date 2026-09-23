@@ -7,13 +7,16 @@
 //
 // 最小可用示例：
 //
-//	client, err := interceptor.NewClient(httpx.Options{
+//	client, err := httpx.NewClient(httpx.Options{
 //	    Headers: httpx.StaticHeaders{
 //	        Base:    "https://api.example.com",
 //	        Headers: map[string]string{"accept": "application/json"},
 //	    },
 //	})
 //	body, err := client.Get(ctx, "/v1/ping", nil)
+//
+// NewClient 的默认链由 httpx/interceptor 包注册：程序里至少 import 一次该包（`import _ ".../httpx/interceptor"` 即可），
+// 否则未传 Interceptors 时返回 *NoDefaultChainError。
 //
 // 更多用法见 examples/ 下三个可直接 go run 的例子。
 package httpx
@@ -63,14 +66,14 @@ type Client struct {
 // 给接入方：每个会话一个 Client，绑定自己的 HeaderProvider。
 // 输入 opts：Headers 必填；Timeout / ResponseHeaderTimeout / Retry 零值走代码默认；
 // Interceptors 为 nil 或空切片时不装默认链（空链 Do 得到 *ChainExhaustedError）；
-// 开箱即用请走 interceptor.NewClient。传了 Transport 则整份沿用（不再接代理、不再调优）。
+// 开箱即用请走 NewClient（default_chain.go）。传了 Transport 则整份沿用（不再接代理、不再调优）。
 // 返回：成功 *Client；Headers==nil 是 *MissingHeaderProviderError{Field:"Options.Headers"}；
 // 自建 Transport 失败是 fmt.Errorf("httpx: build transport: %w", err)，里层仍是 netproxy 类型。
 // 例：New(Options{Headers: StaticHeaders{Base: "https://api.example.com"}}) → (*Client, nil)；
 // New(Options{}) → *MissingHeaderProviderError。
 func New(opts Options) (*Client, error) {
 	if opts.Headers == nil {
-		return nil, &MissingHeaderProviderError{Field: "Options.Headers"}
+		return nil, &MissingHeaderProviderError{Field: fieldOptionsHeaders}
 	}
 
 	transport := opts.Transport
