@@ -1,0 +1,15 @@
+---
+description: netproxy / traffic 约定：代理 URL 解析、凭据不外泄、拨号 ctx、计数并发
+globs: netproxy/**,traffic/**
+alwaysApply: false
+---
+
+# netproxy / traffic
+
+- 代理 scheme 是闭合集合，用 `Scheme` 枚举（`scheme.go`）；新增 scheme 先加枚举常量与 `parseScheme` 分支，再加测试。
+- 错误用类型：`*InvalidProxyURLError`（带 `InvalidURLReason`）、`*UnsupportedProxySchemeError`、`*UnsupportedDialerError`。不改 `Error()` 文案当身份。
+- 代理 URL 里的 `user:pass` **不得**进日志与错误文案；需要展示时先去掉 `User` 信息。测试夹具用明显的假值并加 `// notsecret`。
+- 拨号必须尊重 ctx：取消 / 超时后立即返回，迟到的连接要关闭，不留后台 goroutine。
+- 解析外部原文的入口（`ParseProxyURL`）改动时同步更新 `proxy_fuzz_test.go` 种子。
+- 需要代理服务端的测试自带最小实现（参考 `proxy_test.go` 的 SOCKS5），不依赖本机代理或外网。
+- `traffic` 计数在多 goroutine 读写下必须精确：改动后跑 `go test -race -count=1 ./traffic/`。

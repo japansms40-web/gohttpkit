@@ -2,8 +2,9 @@
 
 > 本文件是所有 AI 编码代理（Codex、Cursor、Claude、Gemini 等）与人类贡献者在本仓库工作的**唯一正本**。
 > `CLAUDE.md` / `GEMINI.md` 是指向本文件的符号链接，改这里即改全部；Cursor 另读 `.cursor/rules/*.mdc` 做目录级细化。
-> 规范全文见 [`docs/CODE_STANDARDS.md`](docs/CODE_STANDARDS.md)，贡献流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，
-> 版本策略见 [`docs/VERSIONING.md`](docs/VERSIONING.md)，门禁与治理见 [`docs/ENGINEERING_GOVERNANCE.md`](docs/ENGINEERING_GOVERNANCE.md)。
+> 规范全文见 [`docs/CODE_STANDARDS.md`](docs/CODE_STANDARDS.md)，测试见 [`docs/TESTING.md`](docs/TESTING.md)，贡献流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，
+> 版本策略见 [`docs/VERSIONING.md`](docs/VERSIONING.md)，发布见 [`docs/RELEASE.md`](docs/RELEASE.md)，
+> 门禁与治理（含「规则 → 强制手段」对照表）见 [`docs/ENGINEERING_GOVERNANCE.md`](docs/ENGINEERING_GOVERNANCE.md)。
 
 ## 通用协作规范
 
@@ -46,12 +47,12 @@
 - 核心库（除 `examples/`）行覆盖率硬门禁（`make cover`，`MIN_COVERAGE` 目标 ≥98%，只许上调）；
   逐包定位短板用 `make cover-pkg`。
 - 并发回归跑 `make race`（需要 C 编译器）。
-- 合入口径：本地 `make ci`（= `check` + `lint-new` + `race` + `char`）与 CI 对齐；轻量自检 `make check`。
+- 合入口径：本地 `make ci`（= `check` + `lint-new` + `race` + `char` + `agents-sync-check`）与 CI 对齐；轻量自检 `make check`。
 - 如实报告实际跑了哪些命令与结果；没跑的说明原因，不得声称未执行的测试通过。
 
 ## 强制门禁（不是靠自觉）
 
-模型指令是软约束，真正拦得住的是这两层，且与用哪个模型无关：
+模型指令是软约束，真正拦得住的是下面几层（agent 钩子层见 `docs/ENGINEERING_GOVERNANCE.md` §3，部分待落地），后两层与用哪个模型无关：
 
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
    - `pre-commit`：`gofmt`、`go vet`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
@@ -59,6 +60,33 @@
    - `pre-push`：`make race char cover`。
    - 应急可 `--no-verify` 绕过，但**禁止常规使用**；绕过后 CI 仍会拦。
 2. **CI**（服务端，`--no-verify` 绕不过）：`.github/workflows/ci.yml` 跑全量门禁 + 密钥扫描 + 提交规范 + 漏洞扫描。独立开发靠「本地钩子 + CI」即完整闭环；想再要「不绿不许合 main」可选配分支保护（approvals=0、不要 code-owner 审核），步骤见 `docs/ENGINEERING_GOVERNANCE.md`。
+
+## AI 代理硬性纪律
+
+适用于 Claude Code、Codex / GPT、Cursor（任意模型）及其它代理。违反任一条，产出按不合格处理，不论门禁是否恰好放行。
+
+**标准工作流**（不可跳步）：
+
+1. 读：与任务直接相关的代码、测试、本文件与对应 `docs/`。
+2. 计划：多文件或改对外行为时先列改动点与影响面（导出符号、链顺序、错误类型、版本号）。
+3. 先测：新行为 / bug 修复先写一条**因正确原因失败**的测试（见 `docs/TESTING.md` §5）。
+4. 最小实现：只改任务需要的文件与 hunk。
+5. 验证：先跑最小测试（具体包 / `-run`），再按风险扩到 `make check` / `make ci`。
+6. 报告：列出实际执行的命令与结果、未执行项及原因、遗留风险。
+
+**禁止事项**（MUST NOT）：
+
+- 为过门禁而下调 `MIN_COVERAGE`、放宽 `.golangci.yml`（新增 `exclusions` / 关 linter / 调高阈值）、新增无理由 `//nolint`。
+- 用 `--no-verify`、`t.Skip`、构建标签、改 `-run` 正则等手段绕过门禁或屏蔽失败用例。
+- 修改或删除 characterization / 既有断言去迁就新实现；行为确需改变时，先在计划与 PR 中说明，再改测试。
+- 新增第三方依赖、改 `go.mod` 的 `go` 版本、改导出符号签名，而未在计划中说明并获用户确认。
+- 声称未执行的命令已通过；把「编译通过」当成「测试通过」。
+- 将凭据、真实账号、抓包原文写入代码、测试、日志、提交或对话输出。
+- 顺带格式化、重命名或「优化」任务范围外的代码。
+
+## 发布
+
+打 tag、写 `CHANGELOG.md`、升版本判断、hotfix / `retract` 流程见 [`docs/RELEASE.md`](docs/RELEASE.md)。**AI 代理不得自行打 tag 或发布**，只能准备发布材料由人确认。
 
 ## Git 与 Pull Request 规范
 

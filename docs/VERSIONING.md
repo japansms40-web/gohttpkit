@@ -4,6 +4,12 @@
 
 依赖：`go.mod` 不因治理类重构变动。打 tag 用 `vMAJOR.MINOR.PATCH`（如 `v0.3.0`）。
 
+- **新增导出符号至少升 minor**，不走 patch（下游 `go get -u=patch` 预期不会出现新 API）。有疑问取更高一档。
+- **弃用周期**：删除 / 改变导出符号前，先以 `// Deprecated: 用 Xxx 替代。将在 vX.Y.0 移除。` 标记并至少保留一个 minor。
+  规则见 [`CODE_STANDARDS.md`](CODE_STANDARDS.md) §13。
+- **上调 `go.mod` 的 `go` 指令**按 minor 处理。
+- 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
+
 ## v0.4.0（未发布，相对 v0.3.0）
 
 新增（不破坏现有签名）：

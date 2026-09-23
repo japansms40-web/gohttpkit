@@ -1,0 +1,18 @@
+---
+description: 测试文件约定：角度驱动、类型错误断言、确定性、不迁就实现
+globs: "**/*_test.go"
+alwaysApply: false
+---
+
+# 测试
+
+全文见 `docs/TESTING.md`，这里只列写测试时最常踩的点。
+
+- 文件：`foo.go` → `foo_test.go`；fuzz 用 `foo_fuzz_test.go`。用例名中文短句，说清锁的是什么行为。
+- 角度：对被测函数走查 TESTING §2 角度表，边界（0/1/空/满/越限）必测；只补「能真出错」的角度，out-of-scope 写理由。
+- 错误：本库类型错误用 `errors.As` 断言类型和字段；`io.EOF` / `context.Canceled` 用 `errors.Is`。禁止只判 `err != nil`、禁止比文案。
+- 日志：只用 `t.Log` / `t.Logf`，默认 `go test` 不刷屏；禁止 `fmt.Print` / `logger.*`。
+- 确定性：离线（`httptest`）、`t.TempDir()`、固定种子 `*rand.Rand`、不用 `time.Sleep` 同步 goroutine。改全局状态（`logger.SetHandler` 等）的测试不并行并 `t.Cleanup` 还原。
+- 并发：有共享状态就起多 goroutine + `-race`，断言精确聚合值。
+- 纪律：先写失败测试再实现；不为通过而改断言、删用例、`t.Skip`；fuzz 发现的崩溃种子（`testdata/fuzz/`）必须提交。
+- 验证：先 `go test -count=1 ./pkg/ -run 'TestXxx'`，再 `make cover` / `make race`。

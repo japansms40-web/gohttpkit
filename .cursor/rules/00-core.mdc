@@ -1,0 +1,24 @@
+---
+description: gohttpkit 全局核心规则：正本指向 AGENTS.md，AI 代理硬性纪律摘要
+alwaysApply: true
+---
+
+# gohttpkit 核心规则
+
+**正本是仓库根目录 `AGENTS.md`**，本文件只是摘要，冲突时以 `AGENTS.md` 与 `docs/` 为准。无论当前选用 GPT、Claude 还是其它模型，规则相同。
+
+- 用中文沟通、写注释与提交说明。
+- 开工前 `git status --short`，只动任务需要的文件与 hunk。
+- 工作流：读 → 计划 → 先写失败测试 → 最小实现 → 最小测试 → `make check` / `make ci` → 如实报告实际命令与结果。
+- 编码要点：导出即契约；错误是带字段的类型（`errors.As`），不是哨兵；IO 函数首参 `ctx`；日志走 `logger` 门面；默认链不做业务判断。详见 `docs/CODE_STANDARDS.md`。
+- 测试要点：按角度补测、边界必测、错误断言「是哪个错」、离线确定性。详见 `docs/TESTING.md`。
+
+## 禁止（MUST NOT）
+
+- 下调 `MIN_COVERAGE`、放宽 `.golangci.yml`、新增无理由 `//nolint`。
+- `--no-verify`、`t.Skip`、改 `-run` 正则等绕过门禁或屏蔽失败用例。
+- 修改 / 删除 characterization 或既有断言去迁就新实现。
+- 未经确认新增依赖、改 `go.mod` 的 `go` 版本、改导出符号签名。
+- 自行 commit / push / 打 tag / 发布（除非用户明确要求；发布只准备材料，见 `docs/RELEASE.md`）。
+- 声称未执行的测试已通过。
+- 把凭据、真实账号、抓包原文写进代码、测试、日志或提交。

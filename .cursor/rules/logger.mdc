@@ -1,0 +1,16 @@
+---
+description: logger 包约定：slog 门面、ctx 必传、全局注入点、保留字段
+globs: logger/**
+alwaysApply: false
+---
+
+# logger
+
+包职责与用法以 `logger/doc.go` 为准。本包是门面实现，允许直呼 `slog`（`.golangci.yml` 已豁免 forbidigo），其它包不行。
+
+- 门面签名固定 `Debug/Info/Warn/Error(ctx, msg, attrs...)`，ctx 必传首参；新增 API 同样 ctx 首参。
+- ctx 值不可变：`EnsureTraceID` / `WithAttrs` / `StartSpan` / `WithTraceID` 返回派生 ctx，文档与示例都写成 `ctx = ...`。
+- 保留字段（`trace_id` / `span_id` / `parent_span_id` / `span_name` / `event` / `duration_ms` / `error`）集中在 `fields.go`，不得新增同名字面量。
+- `SetLogger` / `SetHandler` / `SetConfig` 是进程级全局状态：读写经锁或原子；测试改它们必须 `t.Cleanup` 还原且不得 `t.Parallel()`。
+- 不读环境变量，配置只走 `SetConfig`。本包只依赖标准库，不引 OpenTelemetry 等第三方。
+- 错误用类型（如 `*FileSetupError`），`mustFileWriter` 的 panic 值必须是该类型，调用方 `recover` 后可 `errors.As`。

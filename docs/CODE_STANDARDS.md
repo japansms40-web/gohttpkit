@@ -170,3 +170,73 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
     （`.golangci.yml` 已豁免 `goconst`）。表即数据，提成常量反而看不出表长什么样。
   - `examples/` 为直观允许字面量（`.golangci.yml` 已豁免）。
   - `*_test.go` 可用字面量从「外部视角」核对契约实际值；生产代码不得回写字面量。
+
+## 10. 安全编码
+
+本库替调用方发请求、接代理、解压响应，任何一处放松都会被下游原样继承。
+
+- **MUST NOT** 在生产代码里默认设置 `tls.Config.InsecureSkipVerify = true`。确需跳过校验必须是调用方显式传入的
+  选项，字段 doc comment 写明风险；测试里用 `httptest.NewTLSServer` 的证书池，不关校验。强制：`gosec` G402。
+- **MUST** 对外部输入设上限：响应体解压后大小、header 数量与长度、重试次数、退避时长都有有界默认值，
+  零值回落默认而非「无限」（与 §5 超时规则同理）。解压走 `io.LimitReader` 或等价上限，防解压炸弹。
+  **现状差距**：`bodyDecodeInterceptor` 解压尚无大小上限，已列入治理文档 §7 待落地清单。
+- **MUST NOT** 在日志、错误文案、`Transaction` 以外的快照里输出代理凭据（`user:pass@`）或 `Authorization` 值。
+  代理 URL 进日志前先去掉 `User` 信息。（`event=http.transaction` 按原文打头是 §6 的明确例外，只进本地排障日志。）
+- **MUST** 本仓的 git remote、CI、脚本不内嵌 Token。用凭据助手（`gh auth` / osxkeychain）或 CI secrets。
+- **SHOULD** 解析外部原文（代理 URL、content-encoding、版本标识）的函数配 fuzz 测试（见 `TESTING.md` §9）。
+  范例：`netproxy/proxy_fuzz_test.go`、`httpx/encoding_fuzz_test.go`。
+
+## 11. 资源与生命周期
+
+- **MUST** 谁拿到 `*http.Response` 谁负责 `Body.Close()`；所有权移交必须在代码处注释写明接手方。
+  范例：`httpx/interceptor/do_http.go` 的 `//nolint:bodyclose // 所有权移交 bodyDecodeInterceptor`。强制：`bodyclose`。
+- **MUST** 每个启动的 goroutine 都有确定的退出路径（ctx 取消 / channel 关闭 / 显式 `Close`），并在类型头注里写明。
+  库不得留下调用方无法回收的后台 goroutine。强制：测试侧 goleak（待落地，见治理文档 §7）。
+- **MUST** 实现了 `Close` / `Stop` 的类型：重复调用幂等、返回值稳定；关闭后再调用业务方法返回类型错误而非 panic。
+- **MUST NOT** 在请求路径（`Do*`、拦截器、`Get`、查表函数）上 `panic`。panic 只允许出现在：
+  1. `Must*` 前缀函数（名字即声明，panic 值必须是本库类型错误，`recover` 后可 `errors.As`）；
+  2. 进程初始化期的注册 / 配置（如 `versionreg.Registry.Register` 重复注册）。
+  范例：`versionreg.Registry.MustGet`。新代码的 panic 值一律用类型错误，不用裸字符串。
+- **MUST** 可阻塞的等待（退避、读、写）同时 `select` 在 `ctx.Done()` 上，ctx 取消后立即返回，且返回的错误链里含 `ctx.Err()`（调用方可 `errors.Is(err, context.Canceled)`）。
+  范例：`httpx/interceptor/retry.go` 退避等待。
+
+## 12. 依赖管理
+
+- **MUST** 新增直接依赖须在 PR 写明：为什么标准库 / 现有依赖不够、许可证、维护活跃度、引入的传递依赖数。
+  AI 代理新增依赖须先获用户确认（见 `AGENTS.md` 禁止事项）。
+- **MUST** 许可证仅限 MIT / BSD-2/3 / Apache-2.0 / ISC；GPL / AGPL / 无许可证一律不引入。
+- **MUST** `go mod tidy -diff` 无差异；`govulncheck ./...` 无可达漏洞（CI `vuln` job 硬卡）。
+- **SHOULD** 依赖升级单独成提交（`build(deps): …`），不与功能改动混在一起，便于回滚。
+- **MUST NOT** 使用 `replace` 指向本地路径后提交；`go.mod` 的 `go` 指令变更视为兼容性变更，按 `VERSIONING.md` 处理。
+
+## 13. API 演进与弃用
+
+- **MUST** 删除或改变导出符号前先弃用至少一个 minor 版本：doc comment 末段加标准格式
+  `// Deprecated: 用 Xxx 替代。将在 vX.Y.0 移除。`（`staticcheck` SA1019 会提示调用方）。
+- **MUST** 每个包有包级文档（`doc.go` 或主文件顶部 `// Package xxx ...`），写明包的职责边界与入口。
+  范例：`geo/doc.go`、`logger/doc.go`。
+- **MUST** 导出 struct 新增字段时零值必须保持旧行为（否则是破坏性变更）。
+- **SHOULD** 对外 API 变化用 `apidiff` 与上一个 tag 对比，结果写进 PR 与 `CHANGELOG.md`（待落地为 CI job）。
+- **MUST NOT** 导出接口类型后再往接口上加方法（下游实现会编译失败）；需要扩展时新增接口或可选接口断言。
+
+## 14. lint 豁免纪律
+
+- **MUST** `//nolint` 必须指定 linter 并写理由：`//nolint:<linter> // <为什么这里是误报或有意为之>`。
+  禁止裸 `//nolint`、禁止 `//nolint:all`。范例：`httpx/options.go` 的 `//nolint:staticcheck // ST1011：…`。
+  强制：`nolintlint`（require-specific + require-explanation，待落地）。
+- **MUST** `.golangci.yml` 的 `exclusions` 只增不删须有注释说明理由；按路径整体豁免只用于数据表、示例、门面自身。
+  AI 代理不得为让自己的改动过 lint 而新增豁免。
+- **SHOULD** 能改代码就不豁免；豁免是「工具误报」或「契约不可改」，不是「不想改」。
+
+## 15. 性能
+
+- **SHOULD** 热路径（拦截器链、header 拼装、解压、查表）的改动附 benchmark 前后对比（`go test -bench . -benchmem -count=6`
+  + `benchstat`），结果贴进 PR。`allocs/op` 回退需在 PR 给出理由。
+- **SHOULD** 热路径不做每请求的正则编译、反射、`fmt.Sprintf` 拼 key；可预计算的放包级变量。
+- **MAY** 为减少分配用 `sync.Pool`，但必须有 benchmark 证明收益，且池内对象归还前清零。
+
+## 16. 体量与复杂度
+
+- **MUST** 圈复杂度 ≤ 20（`gocyclo` 硬卡；`geo/` 数据表豁免）。
+- **SHOULD** 函数不超过 80 行、单文件不超过 600 行（数据表文件除外）；超过时按职责拆分，而不是按行数机械拆。
+- **SHOULD** 嵌套不超过 4 层；多用卫语句提前返回。

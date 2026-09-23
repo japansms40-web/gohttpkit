@@ -1,6 +1,6 @@
 # 贡献指南
 
-本库是「导出即契约」的 Go HTTP 基建。新符号默认小写；确需导出的，doc comment 必须写明给谁用、什么场景。规范全文见 [`docs/CODE_STANDARDS.md`](docs/CODE_STANDARDS.md)，版本策略见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
+本库是「导出即契约」的 Go HTTP 基建。新符号默认小写；确需导出的，doc comment 必须写明给谁用、什么场景。规范全文见 [`docs/CODE_STANDARDS.md`](docs/CODE_STANDARDS.md)，测试规范见 [`docs/TESTING.md`](docs/TESTING.md)，版本策略见 [`docs/VERSIONING.md`](docs/VERSIONING.md)，发布流程见 [`docs/RELEASE.md`](docs/RELEASE.md)，安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
 
 ## 提交前清单
 
@@ -28,3 +28,15 @@
 ## 破坏性变更
 
 导出符号的类型、字段或行为变了，必须升版本（0.x 阶段升 minor）。见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
+
+## 评审补充（第 10–16 章）
+
+9. **安全**：不默认关 TLS 校验；外部输入有上限；代理凭据不进日志。
+10. **资源**：Body 所有权明确；goroutine 有退出路径；请求路径不 panic。
+11. **依赖**：新增须论证 + 许可证白名单；升级单独提交。
+12. **API 演进**：删改导出符号先 `Deprecated` 一个 minor；每包有包级文档。
+13. **lint 豁免**：`//nolint:<linter> // 理由`，不为过门禁放宽配置。
+
+## AI 辅助贡献
+
+允许使用 Claude / Cursor / Codex 等代理，但产出按人写的标准评审。代理须遵守 [`AGENTS.md`](AGENTS.md)「AI 代理硬性纪律」；PR 模板的「AI 参与声明」必填。

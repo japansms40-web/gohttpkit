@@ -102,3 +102,40 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 不要求一次到 98。按包补：先测短板包（逐函数报告里 < 100% 的先补错误路径与边界），
 每让核心库总覆盖率稳定站上一档就把 `Makefile` 的 `MIN_COVERAGE` 抬一档（如 95 → 96 → 97 → 98），
 每档在提交说明里写清抬到多少。**只上不下。**
+
+## 8. 泄漏与并发
+
+- **MUST** 启动 goroutine 的包（`httpx`、`netproxy`、`traffic`、`logger`）在 `TestMain` 里接 goleak
+  （`goleak.VerifyTestMain(m)`），测试结束仍存活的 goroutine 直接判失败。（待落地，见治理文档 §7。）
+- **MUST** 并发测试断言**精确**聚合值，并至少跑一次 `-race -count=1`；需要放大竞态时本地 `-count=50`。
+- **MUST NOT** 用 `time.Sleep` 等「大概够了」来同步 goroutine；用 channel / `sync.WaitGroup` / 条件等待。
+  确需等待异步效果时用有上限的轮询（如 `require.Eventually` 语义的自写 helper），超时即失败。
+
+## 9. fuzz 与 benchmark
+
+- **SHOULD** 解析外部原文的函数（代理 URL、content-encoding、版本标识、header 白名单、Accept-Language 拼装）配 fuzz。
+  范例：`netproxy/proxy_fuzz_test.go`、`httpx/encoding_fuzz_test.go`、`versionreg/registry_fuzz_test.go`。
+- **MUST** fuzz 发现的崩溃输入会写入 `testdata/fuzz/FuzzXxx/`，**必须提交**，作为永久回归种子（`go test` 默认会跑）。
+- **SHOULD** 本地改到解析逻辑时跑 `go test -fuzz=FuzzXxx -fuzztime=30s ./pkg/`；CI 定时（nightly）跑长时 fuzz（待落地）。
+- **SHOULD** 热路径配 `BenchmarkXxx`，带 `b.ReportAllocs()`；对比用 `benchstat`，至少 `-count=6`（见 `CODE_STANDARDS.md` §15）。
+- **MUST NOT** 把 benchmark 数值写成断言（机器差异会让它 flaky）；allocs 必须恒定的场景用 `testing.AllocsPerRun` 断言。
+
+## 10. 确定性
+
+- **MUST** 测试离线、可重复、与执行顺序无关：不访问外网（自带 `httptest` / 最小协议实现）、不依赖本机代理、
+  不依赖真实时区与 locale、不写仓库目录（用 `t.TempDir()`）。
+- **MUST** 依赖时间或随机数的逻辑可注入：时钟用函数 / 接口参数，随机用 `*rand.Rand` 固定种子。
+  范例：`geo.BuildChromeAcceptLanguage` 接收 `*rand.Rand`。
+- **MUST** flaky 零容忍：发现偶发失败立即开 issue 并修复根因；禁止加重试、放宽断言或 `t.Skip` 了事。
+- **SHOULD** 无共享全局状态的测试加 `t.Parallel()`；改全局状态（`logger.SetHandler`、包级变量）的测试**不得**并行，
+  并用 `t.Cleanup` 还原。
+- **SHOULD** 单个测试 < 1s，包级 < 30s；CI 统一带 `-timeout`（默认 10m）防挂死。
+- **SHOULD** golden 文件放 `testdata/`，更新走 `-update` 标志并在 PR 说明为什么变；禁止手改 golden 迁就实现。
+
+## 11. 测试的地位高于实现
+
+- **MUST NOT** 为让新实现通过而修改既有断言、删用例、放宽期望值。先问「是测试错了还是实现错了」：
+  实现错 → 改实现；行为确需变化 → 在 PR 写清旧行为 / 新行为 / 影响的调用方，再改测试，并按 `VERSIONING.md` 判断升版本。
+- **MUST** characterization 用例（`httpx/characterization_test.go` 与 `make char` 覆盖的用例）的删除或断言变更，
+  PR 标题或正文必须显式标注「行为变更」。
+- **MUST** 修 bug 先写能复现它的失败测试，测试名写明锁的是哪个 bug 的行为。
