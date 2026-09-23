@@ -47,19 +47,22 @@
 - 核心库（除 `examples/`）行覆盖率硬门禁（`make cover`，`MIN_COVERAGE` 目标 ≥98%，只许上调）；
   逐包定位短板用 `make cover-pkg`。
 - 并发回归跑 `make race`（需要 C 编译器）。
-- 合入口径：本地 `make ci`（= `check` + `lint-new` + `race` + `char` + `agents-sync-check`）与 CI 对齐；轻量自检 `make check`。
+- 合入口径：本地 `make ci`（= `check` + `lint-new` + `race` + `char` + `agents-sync-check` + `governance` + `tools-check`）与 CI 对齐；轻量自检 `make check`。
 - 如实报告实际跑了哪些命令与结果；没跑的说明原因，不得声称未执行的测试通过。
 
 ## 强制门禁（不是靠自觉）
 
-模型指令是软约束，真正拦得住的是下面几层（agent 钩子层见 `docs/ENGINEERING_GOVERNANCE.md` §3，部分待落地），后两层与用哪个模型无关：
+模型指令是软约束，真正拦得住的是下面三层，后两层与用哪个模型无关：
 
+0. **agent 钩子**（`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json` → `scripts/agent-guard.sh` → `tools/agentguard`）：
+   执行命令前拦 `--no-verify`、强推、tag、`reset --hard`、main 上提交、读写凭据；改门禁基础设施需人确认；
+   改文件后 gofmt + vet；回合结束前跑治理守卫与 `make check`，不过不许收尾。规则与人工放行方式见 `docs/ENGINEERING_GOVERNANCE.md` §3。
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
    - `pre-commit`：`gofmt`、`go vet`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
    - `commit-msg`：校验 `<type>(<scope>): 摘要` 约定。
-   - `pre-push`：`make race char cover`。
+   - `pre-push`：`make governance race char cover`。
    - 应急可 `--no-verify` 绕过，但**禁止常规使用**；绕过后 CI 仍会拦。
-2. **CI**（服务端，`--no-verify` 绕不过）：`.github/workflows/ci.yml` 跑全量门禁 + 密钥扫描 + 提交规范 + 漏洞扫描。独立开发靠「本地钩子 + CI」即完整闭环；想再要「不绿不许合 main」可选配分支保护（approvals=0、不要 code-owner 审核），步骤见 `docs/ENGINEERING_GOVERNANCE.md`。
+2. **CI**（服务端，`--no-verify` 绕不过）：`.github/workflows/ci.yml` 跑全量门禁 + 治理守卫 + 密钥扫描 + 提交规范 + 漏洞扫描。独立开发靠「本地钩子 + CI」即完整闭环；想再要「不绿不许合 main」可选配分支保护（approvals=0、不要 code-owner 审核），步骤见 `docs/ENGINEERING_GOVERNANCE.md`。
 
 ## AI 代理硬性纪律
 
