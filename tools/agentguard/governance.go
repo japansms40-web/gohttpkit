@@ -33,7 +33,9 @@ const (
 	golangciPath = ".golangci.yml"
 	charTestPath = "httpx/characterization_test.go"
 	testGlob     = "*_test.go"
-	zeroSHA      = "0000000000000000000000000000000000000000"
+	// selfExclude：守卫自身的测试以字符串形式大量出现 t.Skip 等样本，不参与 Skip 检查
+	selfExclude = ":(exclude)tools/agentguard/**"
+	zeroSHA     = "0000000000000000000000000000000000000000"
 )
 
 // violation 是一条治理违规。
@@ -141,7 +143,7 @@ func collectViolations(root, base string, worktree bool) []violation {
 				fmt.Sprintf("%s 删除或改动了 %d 行既有内容（TESTING §11：不得迁就实现）", charTestPath, n), overrideBehavior})
 		}
 	}
-	if d, err := gitRaw(root, "diff", "--no-color", "--no-ext-diff", "-U0", base, "--", testGlob); err == nil {
+	if d, err := gitRaw(root, "diff", "--no-color", "--no-ext-diff", "-U0", base, "--", testGlob, selfExclude); err == nil {
 		vs = append(vs, skipViolations(addedLines(d))...)
 	}
 	if worktree {
@@ -151,7 +153,7 @@ func collectViolations(root, base string, worktree bool) []violation {
 }
 
 func untrackedSkipViolations(root string) []violation {
-	list, err := gitOut(root, "ls-files", "--others", "--exclude-standard", "--", testGlob)
+	list, err := gitOut(root, "ls-files", "--others", "--exclude-standard", "--", testGlob, selfExclude)
 	if err != nil || list == "" {
 		return nil
 	}
