@@ -63,6 +63,8 @@ func TestEvalShell_拦截与放行(t *testing.T) {
 		{"删 core 整节 子命令", "git config remove-section core", deny},
 		{"读其它键不受影响", "git config --get user.name", allow},
 		{"临时换钩子目录", "git -c core.hooksPath=/dev/null commit -m x", deny},
+		{"-C 指向其它仓库照样拦", "git -C ../other reset --hard", deny},
+		{"-C 的取值不当子命令", "git -C push status", allow},
 		{"agent 自写治理豁免", "git commit -F - <<'EOF'\nfix: x\n\n治理豁免: 我觉得可以\nEOF", deny},
 		{"读 env", "cat .env", deny},
 		{"写 env.local", "echo A=1 >> .env.local", deny},

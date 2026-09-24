@@ -76,7 +76,7 @@ func hasGitCommit(segs [][]string) bool {
 	for _, seg := range segs {
 		t := stripPrefixes(seg)
 		if len(t) > 0 && filepath.Base(t[0]) == "git" {
-			if sub, _, _, _ := splitGitGlobal(t[1:], ""); sub == "commit" {
+			if sub, _, _ := splitGitGlobal(t[1:]); sub == "commit" {
 				return true
 			}
 		}
@@ -106,7 +106,7 @@ func evalSegment(tokens []string, cwd, root string) verdict {
 			}
 		}
 	case "git":
-		return evalGit(tokens[1:], cwd)
+		return evalGit(tokens[1:])
 	case "rm":
 		return evalRm(tokens[1:], cwd, root)
 	}
@@ -130,8 +130,8 @@ func stripPrefixes(tokens []string) []string {
 }
 
 // evalGit 裁决 git 子命令。args 不含开头的 "git"。
-func evalGit(args []string, cwd string) verdict {
-	sub, rest, _, v := splitGitGlobal(args, cwd)
+func evalGit(args []string) verdict {
+	sub, rest, v := splitGitGlobal(args)
 	if v.Decision != allow || sub == "" {
 		return v
 	}
@@ -150,17 +150,17 @@ func evalGit(args []string, cwd string) verdict {
 	}
 }
 
-// splitGitGlobal 跳过 git 的全局选项（-C dir、-c k=v、--no-pager…），返回子命令、其参数与生效目录。
-// -c core.hooksPath=… 直接拒绝。
-func splitGitGlobal(args []string, cwd string) (sub string, rest []string, dir string, v verdict) {
-	dir = cwd
+// splitGitGlobal 跳过 git 的全局选项（-C dir、-c k=v、--no-pager…），返回子命令与其参数。
+// 输入 args：不含开头的 "git"。
+// 返回：子命令为空表示只有全局选项；-c core.hooksPath=… 直接拒绝。
+// 不解析 -C 的目标目录：现有 git 规则在任何仓库都一律生效，与目录无关（原「main 上禁止提交」已在 41feffc 移除）。
+// 例：`-C push status` → ("status", nil)，-C 的取值不会被当成子命令。
+func splitGitGlobal(args []string) (sub string, rest []string, v verdict) {
 	i := 0
 	for i < len(args) && strings.HasPrefix(args[i], "-") {
 		if (args[i] == "-C" || args[i] == "-c") && i+1 < len(args) {
-			if args[i] == "-C" {
-				dir = resolvePath(args[i+1], cwd)
-			} else if strings.HasPrefix(strings.ToLower(args[i+1]), "core.hookspath") {
-				return "", nil, dir, denyf("不得临时改写 core.hooksPath 绕过 git 钩子")
+			if args[i] == "-c" && strings.HasPrefix(strings.ToLower(args[i+1]), "core.hookspath") {
+				return "", nil, denyf("不得临时改写 core.hooksPath 绕过 git 钩子")
 			}
 			i += 2
 			continue
@@ -168,9 +168,9 @@ func splitGitGlobal(args []string, cwd string) (sub string, rest []string, dir s
 		i++
 	}
 	if i >= len(args) {
-		return "", nil, dir, allowVerdict
+		return "", nil, allowVerdict
 	}
-	return args[i], args[i+1:], dir, allowVerdict
+	return args[i], args[i+1:], allowVerdict
 }
 
 // evalGitDestructive 拦会丢弃本地改动或卸载钩子的子命令：reset --hard、clean -f、config core.hooksPath。
