@@ -1,0 +1,4 @@
+# agentguard 仓库级配置（tools/agentguard/config.go）。治理守卫读【基线】上的这份文件，同一次改动里改它不生效。
+characterization:
+  # characterization 用例所在文件；未配 func_pattern 时整个文件都算 char 用例。
+  file: httpx/characterization_test.go

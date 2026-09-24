@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `tools/agentguard`：仓库差异改由仓库根 `.agentguard.yml` 声明（`characterization.file` / `func_pattern`，读基线上的配置），
+  供其它仓库按版本 `go install` 复用，不再复制源码；char 检查支持只看命中 `func_pattern` 的用例函数（按行号范围判定）。
+
 ## [v0.5.0] - 2026-09-24
 
 ### 破坏

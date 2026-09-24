@@ -44,6 +44,11 @@
 （首次或源码变更后自动编译到 `.git/agent-guard/`，之后单次约 40ms）；`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json`
 只是把各家原生事件映射到 `agentguard hook --agent <名> --event <事件>` 的薄适配。
 
+`tools/agentguard` 同时供其它仓库（如 insgo）复用，**不复制源码**：下游用 `go install github.com/japansms40-web/gohttpkit/tools/agentguard@<版本>`
+按固定版本安装（子模块 tag 形如 `tools/agentguard/vX.Y.Z`）。各仓库唯一的差异是 characterization 用例的定位，写在仓库根的
+`.agentguard.yml`（`characterization.file` / `characterization.func_pattern`，后者留空表示整文件）；守卫读的是**基线**上的这份配置，
+同一次改动里改它不会放宽本次检查。基线没有该文件时不做 char 检查。
+
 | 时机 | 动作 | 拦截 / 执行 |
 |---|---|---|
 | 执行 shell 前 | 拒绝 | `--no-verify` / `git commit -n`；强推（`-f`、`--force-with-lease`、`+refspec`）；删远端引用；推 / 删 / 移动 tag（`-d` / `-f`；新建 tag 放行）；`git reset --hard`；`git clean -f`；改 `core.hooksPath`；`rm -r` 仓库外（系统临时目录除外）/ 仓库根 / `.git` / 根目录通配 |
@@ -77,7 +82,7 @@
 | `MIN_COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
 | 并发无竞态（CS §4） | pre-push、CI `go test -race` | ✅ |
 | characterization 行为锁定（CS §8） | pre-push、CI `make char` | ✅ |
-| characterization 用例不得删 / 改断言迁就实现（TESTING §11） | 治理守卫：删改 `httpx/characterization_test.go` 既有行须标注「行为变更」 | ✅ |
+| characterization 用例不得删 / 改断言迁就实现（TESTING §11） | 治理守卫：删改 `.agentguard.yml` 指定的 char 用例（本仓库为 `httpx/characterization_test.go` 整文件）既有行须标注「行为变更」 | ✅ |
 | go.mod 整洁、无漏洞依赖（CS §12） | pre-commit、CI `tidy -diff`、`govulncheck` | ✅ |
 | 依赖许可证白名单（CS §12） | CI license 检查（`go-licenses check`） | ⬜ |
 | 密钥不入库（AGENTS 安全边界） | pre-commit、CI gitleaks | ✅ |

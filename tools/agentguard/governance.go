@@ -3,6 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,7 +35,6 @@ const (
 const (
 	makefilePath = "Makefile"
 	golangciPath = ".golangci.yml"
-	charTestPath = "httpx/characterization_test.go"
 	testGlob     = "*_test.go"
 	// selfExclude：守卫自身的测试以字符串形式大量出现 t.Skip 等样本，不参与 Skip 检查
 	selfExclude = ":(exclude)tools/agentguard/**"
@@ -53,6 +56,7 @@ var (
 	minCoverageRe = regexp.MustCompile(`(?m)^MIN_COVERAGE\s*\?=\s*([0-9]+(?:\.[0-9]+)?)\s*$`)
 	skipCallRe    = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)
 	govOverrideRe = regexp.MustCompile(`治理豁免\s*[:：]\s*\S+`)
+	hunkRe        = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+`)
 )
 
 // runGovernance 执行治理检查并打印结果。
@@ -137,12 +141,7 @@ func collectViolations(root, base string, worktree bool) []violation {
 			vs = append(vs, compareGolangci(old, string(cur))...)
 		}
 	}
-	if d, err := gitRaw(root, "diff", "--no-color", "--no-ext-diff", "-U0", base, "--", charTestPath); err == nil {
-		if n := len(removedLines(d)); n > 0 {
-			vs = append(vs, violation{ruleChar,
-				fmt.Sprintf("%s 删除或改动了 %d 行既有内容（TESTING §11：不得迁就实现）", charTestPath, n), overrideBehavior})
-		}
-	}
+	vs = append(vs, charViolations(root, base)...)
 	if d, err := gitRaw(root, "diff", "--no-color", "--no-ext-diff", "-U0", base, "--", testGlob, selfExclude); err == nil {
 		vs = append(vs, skipViolations(addedLines(d))...)
 	}
@@ -195,13 +194,96 @@ func parseMinCoverage(makefile string) (float64, bool) {
 	return f, err == nil
 }
 
-// removedLines 从 -U0 unified diff 里取出被删除的非空行（不含 --- 文件头）。
-func removedLines(diff string) []string {
-	var out []string
-	for _, l := range strings.Split(diff, "\n") {
-		if strings.HasPrefix(l, "-") && !strings.HasPrefix(l, "---") && strings.TrimSpace(l[1:]) != "" {
-			out = append(out, l[1:])
+// charViolations 检查 characterization 用例里既有行的删改。
+// 输入 base：对比基线；规则取自基线的 .agentguard.yml（见 config.go）。
+// 返回：至多一条违规；未配置、基线里没有该测试文件或 diff 失败时不检查；配置非法时报违规（宁可多拦）。
+func charViolations(root, base string) []violation {
+	rule, err := loadCharRule(root, base)
+	if err != nil {
+		return []violation{{ruleChar, err.Error(), overrideBehavior}}
+	}
+	if rule.path == "" {
+		return nil
+	}
+	old, ok := showAt(root, base, rule.path)
+	if !ok {
+		return nil
+	}
+	d, err := gitRaw(root, "diff", "--no-color", "--no-ext-diff", "-U0", base, "--", rule.path)
+	if err != nil {
+		return nil
+	}
+	ranges := charFuncRanges(old, rule)
+	n := 0
+	for _, l := range removedLines(d) {
+		if inRanges(l.No, ranges) {
+			n++
 		}
+	}
+	if n == 0 {
+		return nil
+	}
+	return []violation{{ruleChar,
+		fmt.Sprintf("%s 的 characterization 用例删除或改动了 %d 行既有内容（TESTING §11：不得迁就实现）", rule.path, n), overrideBehavior}}
+}
+
+// lineRange 是闭区间 [From, To] 的行号范围（从 1 起）。
+type lineRange struct{ From, To int }
+
+// charFuncRanges 找出源码里 characterization 用例函数（rule.funcRe 命中的顶层函数）占的行号范围。
+// 输入 src：基线版本的测试文件全文；rule.funcRe 为 nil 表示整文件都算。
+// 返回：各函数从 func 关键字到右花括号的范围；未配置函数正则或源码解析不了时按整文件处理（宁可多拦）。
+func charFuncRanges(src string, rule charRule) []lineRange {
+	if rule.funcRe == nil {
+		return []lineRange{{1, math.MaxInt}}
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, rule.path, src, parser.SkipObjectResolution)
+	if err != nil {
+		return []lineRange{{1, math.MaxInt}}
+	}
+	var out []lineRange
+	for _, d := range f.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Recv != nil || !rule.funcRe.MatchString(fd.Name.Name) {
+			continue
+		}
+		out = append(out, lineRange{fset.Position(fd.Pos()).Line, fset.Position(fd.End()).Line})
+	}
+	return out
+}
+
+func inRanges(n int, rs []lineRange) bool {
+	for _, r := range rs {
+		if n >= r.From && n <= r.To {
+			return true
+		}
+	}
+	return false
+}
+
+// diffLine 是 diff 里的一行删除内容及其在旧文件中的行号。
+type diffLine struct {
+	No   int
+	Text string
+}
+
+// removedLines 从 -U0 unified diff 里取出被删除的非空行及其旧文件行号（不含 --- 文件头）。
+func removedLines(diff string) []diffLine {
+	var out []diffLine
+	next := 0
+	for _, l := range strings.Split(diff, "\n") {
+		if m := hunkRe.FindStringSubmatch(l); m != nil {
+			next, _ = strconv.Atoi(m[1])
+			continue
+		}
+		if !strings.HasPrefix(l, "-") || strings.HasPrefix(l, "---") {
+			continue
+		}
+		if strings.TrimSpace(l[1:]) != "" {
+			out = append(out, diffLine{next, l[1:]})
+		}
+		next++
 	}
 	return out
 }

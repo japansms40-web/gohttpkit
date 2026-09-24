@@ -1,4 +1,5 @@
-// agentguard 是 gohttpkit 的治理守卫与 AI agent 钩子入口，独立子模块，不进核心库覆盖率。
+// agentguard 是治理守卫与 AI agent 钩子入口，独立子模块，不进核心库覆盖率。
+// gohttpkit 自身与下游仓库（按版本 go install）共用；仓库差异写在各自根目录的 .agentguard.yml。
 //
 // 子命令：
 //
