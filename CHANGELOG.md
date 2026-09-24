@@ -10,6 +10,11 @@
 - `tools/agentguard`：仓库差异改由仓库根 `.agentguard.yml` 声明（`characterization.file` / `func_pattern`，读基线上的配置），
   供其它仓库按版本 `go install` 复用，不再复制源码；char 检查支持只看命中 `func_pattern` 的用例函数（按行号范围判定）。
 
+### 修复
+
+- `tools/agentguard`：`git config` 区分读写，`--get` / `get` / 单键无值读取 `core.hooksPath` 不再被当成改写拦下；
+  补拦 `--remove-section core` / `--rename-section core …`（会连带删除 hooksPath）。
+
 ## [v0.5.0] - 2026-09-24
 
 ### 破坏

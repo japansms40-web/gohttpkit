@@ -187,13 +187,76 @@ func evalGitDestructive(sub string, rest []string) verdict {
 			}
 		}
 	case "config":
-		for _, a := range rest {
-			if strings.EqualFold(a, "core.hooksPath") {
-				return denyf("不得修改 core.hooksPath（会卸载 git 钩子）；安装请用 make hooks")
-			}
+		if gitConfigWritesHooksPath(rest) {
+			return denyf("不得修改 core.hooksPath（会卸载 git 钩子）；安装请用 make hooks")
 		}
 	}
 	return allowVerdict
+}
+
+// gitConfigValueOpts 是 git config 里带独立取值参数的选项（取值不算位置参数）。
+var gitConfigValueOpts = map[string]bool{
+	"-f": true, "--file": true, "--blob": true, "--type": true, "--default": true, "--comment": true, "--value": true,
+}
+
+// gitConfigWriteOpts / gitConfigWriteSubs 是 git config 的写入类选项与子命令（git 2.46+ 子命令形式）。
+var (
+	gitConfigWriteOpts = map[string]bool{
+		"--unset": true, "--unset-all": true, "--add": true, "--replace-all": true,
+		"--rename-section": true, "--remove-section": true, "--edit": true, "-e": true,
+	}
+	gitConfigWriteSubs = map[string]bool{
+		"set": true, "unset": true, "rename-section": true, "remove-section": true, "edit": true,
+	}
+	gitConfigReadOpts = map[string]bool{
+		"--get": true, "--get-all": true, "--get-regexp": true, "--get-urlmatch": true,
+	}
+)
+
+// gitConfigWritesHooksPath 判断一次 git config 调用是否会改写 core.hooksPath。
+// 输入 rest：config 之后的参数。
+// 返回：写 / 删 core.hooksPath、删改 core 整节 → true；只读（--get 系、get 子命令、单键无值）或不涉及该键 → false。
+// 读写分不清时按写处理（宁可多拦）。
+// 例：`--get core.hooksPath` → false；`core.hooksPath x` → true；`--remove-section core` → true。
+func gitConfigWritesHooksPath(rest []string) bool {
+	var positional []string
+	write, read := false, false
+	for i := 0; i < len(rest); i++ {
+		a := rest[i]
+		switch {
+		case gitConfigValueOpts[a]:
+			i++ // 跳过选项取值
+		case gitConfigWriteOpts[a]:
+			write = true
+		case gitConfigReadOpts[a]:
+			read = true
+		case strings.HasPrefix(a, "-"):
+			// --local / --global / --type=bool 等不影响读写判定
+		default:
+			positional = append(positional, a)
+		}
+	}
+	if len(positional) > 0 {
+		switch sub := strings.ToLower(positional[0]); {
+		case gitConfigWriteSubs[sub]:
+			write, positional = true, positional[1:]
+		case sub == "get":
+			read, positional = true, positional[1:]
+		}
+	}
+	for _, p := range positional {
+		if strings.EqualFold(p, "core") && write {
+			return true // 删 / 改 core 整节会连带 hooksPath
+		}
+	}
+	if len(positional) == 0 || !strings.EqualFold(positional[0], "core.hooksPath") {
+		return false
+	}
+	if write {
+		return true
+	}
+	// 只读：显式 --get 系（其后可跟值正则）或单键无值；「键 值」两个位置参数就是写入
+	return !read && len(positional) > 1
 }
 
 // evalCommit 只拦绕过钩子与自写豁免；在 main 上直接提交是允许的（改代码走 worktree，见 AGENTS.md）。
