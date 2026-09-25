@@ -12,7 +12,7 @@ go get github.com/japansms40-web/gohttpkit
 ```
 
 依赖只有三个，全是公开模块，没有任何 `replace`：`brotli`、`klauspost/compress`、`golang.org/x/net`。
-最低 Go 版本 1.24。
+最低 Go 版本以 `go.mod` 的 `go` 指令为准（当前 1.27.1），随 Go 最新稳定版上调。
 
 ---
 
@@ -50,22 +50,24 @@ go run ./examples/fidelity                      # 高保真复刻抓包
 
 | 包 | 作用 |
 |---|---|
-| `httpx` | **核心框架**：Client、拦截器链框架、白名单发头、`Transaction` 快照类型；内建拦截器（重试/解压/日志/缓存）与默认链在子包 `httpx/interceptor` |
+| `httpx` | **核心框架**：Client、拦截器链框架、白名单发头、`Transaction` 快照类型；入口 `httpx.NewClient` |
+| `httpx/interceptor` | 内建拦截器（追踪/日志/解压/缓存/重试/桥接/状态语义/归类/HTML）与预设链 `DefaultChain` / `NoRedirectChain` / `APIChain`；import 即注册默认链 |
 | `logger` | 基于 `log/slog` 的日志门面，trace_id / span 自动注入，可换成你自家的 handler |
 | `errors` | 可重试网络错误的判定与包装（关键词表可扩展）、HTTP 状态码错误 |
 | `netproxy` | socks5 / http / https 代理接入 `http.Transport`，或拿裸 `proxy.Dialer` 给 TCP 链路用 |
 | `traffic` | TCP 层真实收发字节计数，零注入时零开销，贴近代理商计费口径 |
-| `geo` | 国家码 → Web data-code / Android locale / 时区，代理 URL → 出口国，按 Chromium 拼 Accept-Language |
+| `geo` | 国家码 → Web data-code / Android locale / 时区，按 Chromium 拼 Accept-Language |
+| `geo/locale_mobile` | 国家码 → Android 5 个 locale 头（包名 `localemobile`），未命中返回 `*geo.UnknownCountryError` |
 | `versionreg` | 「按版本隔离协议实现」的泛型注册表骨架 + 按 endpoint 的白名单访问器 |
 
 ---
 
-## 三个值得先理解的设计取舍
+## 四个值得先理解的设计取舍
 
 ### 1. 默认链不替你做业务判断
 
 ```
-logging → bodyDecode → statusCodeCache → responseHeaderCache → retry → bridge → callServer
+tracing → logging → bodyDecode → statusCodeCache → responseHeaderCache → retry → bridge → callServer
 ```
 
 默认链**不**提纯 HTML、**不**归类业务错误、**不**把非 2xx 变成 error。
@@ -76,7 +78,7 @@ logging → bodyDecode → statusCodeCache → responseHeaderCache → retry →
 
 ```go
 chain := httpx.Prepend(interceptor.DefaultChain(),
-    interceptor.NewClassifyInterceptor(myClassify),        // 业务错误 → sentinel error
+    interceptor.NewClassifyInterceptor(myClassify),        // 业务错误 → 你的错误类型
     interceptor.NewStatusSemanticsInterceptor(nil),        // 非 2xx 空体 → error
 )
 chain = httpx.SpliceBeforeTerminal(chain, mySigner)  // 请求签名，包住每次真实发送
@@ -207,8 +209,8 @@ client, err := httpx.NewClient(httpx.Options{
 贡献流程与提交前清单见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；版本策略（导出即契约，0.x 破坏性变更升 minor）见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
 ```bash
-make check       # 本地轻量：build + vet + cover(含 90% 门禁) + tidy-check
-make ci          # 合入口径聚合：check + lint-new + race + char（race 需要 C 编译器）
+make check       # 本地轻量：build + vet + cover(含 98% 门禁) + tidy-check
+make ci          # 合入口径聚合：check + lint-new + race + char + agents-sync-check + governance + tools-check（race 需要 C 编译器）
 make char        # 行为锁定套件：改拦截器链之前先跑它
 make cover       # 覆盖率报告 + 门禁；make cover-html 看逐行
 make race        # 并发回归（需要 C 编译器）
@@ -217,20 +219,12 @@ make examples    # 跑两个离线示例（customchain / fidelity）；quickstar
 
 合入前请跑 `make check`，以及 `make lint-new` 与 `make race`（CI 已覆盖这两项）。想一条命令跑合入门禁，用 `make ci`。注意与 CI 的差异：CI 上 `lint` 是**全量** `golangci-lint run`，本地 `lint-new` 只查相对 `BASE_REV` 的增量；`make ci` 不跑 examples，CI 会另跑 `customchain` / `fidelity`。
 
-覆盖率门禁在 `make cover` 里，低于 90% 直接失败（`MIN_COVERAGE` 可调高，不要调低）。
-当前总覆盖率 **95.0%**（≥ 90% 门禁）。多数包在 97% 以上，`httpx/interceptor` 目前 80.3%，是后续要补测的重点：
-
-| 包 | 覆盖率 | | 包 | 覆盖率 |
-|---|---|---|---|---|
-| `errors` | 100% | | `httpx` | 99.3% |
-| `traffic` | 100% | | `logger` | 99.4% |
-| `versionreg` | 100% | | `netproxy` | 97.1% |
-| `geo` | 100% | | `examples/*` | 93~96% |
-| `httpx/interceptor` | 80.3% | | | |
+覆盖率门禁在 `make cover` 里，低于 `MIN_COVERAGE`（当前 98%）直接失败，只许调高不许调低。
+各包实时覆盖率用 `make cover-pkg` 查看（不在文档里写死数字，免得过期）。
 
 测试分三层，各管各的：
 
-- `httpx/characterization_test.go` —— **对外行为**锁定：重试几次、退避多久、哪些错误不重试、
+- `httpx/characterization_test.go` —— **对外行为**锁定（`make char` 跑这个文件的全部用例，治理守卫保护它的既有行）：重试几次、退避多久、哪些错误不重试、
   白名单怎么过滤、头的大小写、缓存时机、链的执行顺序。链的顺序一旦被改动，破坏的往往不是编译，
   而是某个只在生产环境偶发的行为 —— 那就是它存在的理由。
 - 各源文件同名的 `*_test.go`（`httpx/*_test.go` 与 `httpx/interceptor/*_test.go`）—— 每个导出符号自己的契约：
@@ -244,7 +238,7 @@ make examples    # 跑两个离线示例（customchain / fidelity）；quickstar
 
 本库的实现从一个生产中的私有 API 客户端项目（insgo）里抽取并彻底去业务化而来，
 其中的每一条 transport 参数、每一个重试关键词、每一处「怪异但必要」的行为都带着实战注释。
-对照表见 [`docs/MIGRATION_FROM_INSGO.md`](docs/MIGRATION_FROM_INSGO.md)。
+insgo 现已反过来直接依赖本库；迁移记录与前后对照见 [`docs/MIGRATION_FROM_INSGO.md`](docs/MIGRATION_FROM_INSGO.md)。
 
 ## 许可证
 

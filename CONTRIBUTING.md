@@ -2,14 +2,19 @@
 
 本库是「导出即契约」的 Go HTTP 基建。新符号默认小写；确需导出的，doc comment 必须写明给谁用、什么场景。规范全文见 [`docs/CODE_STANDARDS.md`](docs/CODE_STANDARDS.md)，测试规范见 [`docs/TESTING.md`](docs/TESTING.md)，版本策略见 [`docs/VERSIONING.md`](docs/VERSIONING.md)，发布流程见 [`docs/RELEASE.md`](docs/RELEASE.md)，安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
 
+## 首次上手
+
+clone 后先跑一次 `make hooks`，安装本地 git 门禁（pre-commit / commit-msg / pre-push）。
+
 ## 提交前清单
 
 本地请按顺序跑（或一条 `make ci` 对齐 CI）：
 
-- [ ] `make check` —— build + vet + cover（核心库 ≥ `MIN_COVERAGE`，目标 98%）+ tidy
+- [ ] `make check` —— build + vet + cover（核心库 ≥ `MIN_COVERAGE`，当前 98%）+ tidy
 - [ ] `make lint-new` —— 只对增量严格（`golangci-lint --new-from-rev`）
 - [ ] `make race` —— 并发回归（需要 C 编译器）
 - [ ] `make char` —— 对外行为锁定；改拦截器链 / 发头 / 解压 / 状态语义之前必跑
+- [ ] `make governance` —— 治理守卫：覆盖率棘轮、lint 放宽、char 删改、新增 `t.Skip`（pre-push 与 CI 也会跑）
 
 ## 评审要点（按规范章节）
 

@@ -1,17 +1,30 @@
 # 从 insgo 迁移到 gohttpkit
 
 本库的实现抽取自 insgo（`chenweilong1022/insgo`）的 HTTP 基建，去掉了全部 Instagram 业务耦合。
-insgo 侧**未做任何改动**，两边是独立演进的两份代码；本文档记录符号对照与**行为差异**，
-方便日后同步共性修复，也方便老项目照着改。
 
-## 为什么要抽出来
+**迁移已完成**：insgo 现在直接依赖本库（`github.com/japansms40-web/gohttpkit`），不再保留自己的一份 HTTP 基建。
+本文档保留迁移前的符号对照与**行为差异**，供维护老代码、理解历史取舍时查阅。
 
-1. insgo 的 HTTP 核心全在 `internal/`（`request.go` / `interceptor.go` / `interceptors.go` /
+## 现状（2026-09）
+
+- insgo 的 `go.mod` 直接依赖 gohttpkit v0.5.0 与 `github.com/japansms40-web/insgouagen`（公开模块，没有 `replace`）。
+- insgo 只剩一个客户端类型 `pkg.Client`：内部私有持有 `*httpx.Client` 执行请求，默认链 = IG 专属三层
+  （`classifyIG` → `igStatusSemantics` → `htmlText`）外加本库 `interceptor.DefaultChain` 的 8 层；
+  `ig-set-*` 回写走 `Options.OnResponseHeaders`。IG 构头（`HeaderBuilder`）直接实现 `httpx.HeaderProvider`。
+- 重试 / 超时 / 慢请求阈值一律用本库默认值，insgo 不读环境变量。
+- 日志、geo、traffic、netproxy、versionreg、通用 errors 都直接 import 本库对应包；insgo 只保留 IG 业务错误（sentinel 与 `ClassifyIGResponse*`）。
+- 共性修复（可重试关键词表、国家 → locale / 时区表、transport 调优）**只改本库**，insgo 升级依赖即可生效，不再双边对拷。
+
+## 为什么要抽出来（迁移前的问题）
+
+1. insgo 的 HTTP 核心当时全在 `internal/`（`request.go` / `interceptor.go` / `interceptors.go` /
    `proxy.go` / `headers*.go`），Go 的 internal 规则决定了跨模块 import 不到；
-2. insgo 的 `go.mod` 对 `chenweilong1022/insgouagen` 用了 `replace`，而 replace 对下游消费者无效，
-   别的项目 `go get chenweilong1022/insgo` 会直接解析失败。
+2. insgo 的 `go.mod` 当时对 `chenweilong1022/insgouagen` 用了 `replace`，而 replace 对下游消费者无效，
+   别的项目 `go get chenweilong1022/insgo` 会直接解析失败。（现已改为公开模块，无 replace。）
 
-## 符号对照
+## 符号对照（迁移前的 insgo → 本库）
+
+下表左列是**迁移前**的 insgo 符号，多数已从 insgo 删除（insgo 现状见上一节）。
 
 | insgo | gohttpkit | 说明 |
 |---|---|---|
@@ -46,7 +59,7 @@ insgo 侧**未做任何改动**，两边是独立演进的两份代码；本文�
 
 ## 行为差异（重要）
 
-迁移时最容易踩的几处。
+迁移时最容易踩的几处。下文「insgo」均指迁移前的实现。
 
 ### 1. 拦截器接口从「禁止外部实现」变成「完全公开」
 
@@ -67,7 +80,7 @@ insgo 把两者混为一谈（因为它的每个端点都必配白名单）。�
 应当是「按构头结果发」，否则随手 `client.Get` 会得到一个连 `accept` 都没有的裸请求。
 **迁移时凡是显式传 nil 期望「不发头」的地方，改成传空 map。**
 
-### 3. 默认链不再做 IG 的三件事
+### 3. 默认链不再做 IG 的三件事（insgo 现改为在默认链外层自行 Prepend）
 
 insgo 默认链含 `igErrorClassify`（业务错误归类）、`igState`（`ig-set-*` 回写）、
 `htmlText`（HTML 提纯）、`statusSemantics`（"Please wait" / 572 限流）。本库全部下沉为可选：
@@ -118,8 +131,7 @@ insgo 的重试次数与退避只能靠 env 调。本库只认 `Options.Retry`�
 `Options.Retry` 的类型是 `*RetryPolicy`（指针）：nil = 没配、走代码默认值；非 nil = 每个字段字面生效。
 用指针而不是「值类型 + 零值即未配」，是因为后者分不清「没配」和「明确要求 MaxRetries=0」。
 
-## 同步共性修复时
+## 共性修复
 
-两边都改的典型是：`errors` 的可重试关键词表（新的代理/网络栈错误文案）、
-`geo` 的国家→locale/时区表、transport 调优参数。
-本库这三处与 insgo 保持逐行一致，同步时可直接对拷。
+`errors` 的可重试关键词表（新的代理 / 网络栈错误文案）、`geo` 的国家 → locale / 时区表、transport 调优参数
+现在只存在于本库。修改后发版，insgo 升级 gohttpkit 依赖即可，不需要再对拷代码。

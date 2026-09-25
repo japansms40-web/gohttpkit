@@ -8,10 +8,10 @@
 
 ## 1. 覆盖率政策
 
-- **核心库**（`errors` / `geo` / `httpx` / `logger` / `netproxy` / `traffic` / `versionreg`，即除 `examples/` 外）
+- **核心库**（除 `examples/` 外的全部包：`errors` / `geo` / `geo/locale_mobile` / `httpx` / `httpx/interceptor` / `logger` / `netproxy` / `traffic` / `versionreg`）
   行覆盖率**硬门禁**：`make cover` 低于 `MIN_COVERAGE` 直接失败。
-- **目标 ≥ 98%，100% 为追求**。`MIN_COVERAGE`（在 `Makefile`）是当前地板，**只许上调、不许下调**（棘轮）——
-  每补齐一个包就把地板往上抬一档，直到 98。下调的那一刻，门禁就从「防线」变成「摆设」。
+- **当前门禁 98%（已达标），100% 为追求**。`MIN_COVERAGE`（在 `Makefile`）是地板，**只许上调、不许下调**（棘轮）——
+  总覆盖率稳定站上新一档（下一档 99）就把地板抬上去。下调的那一刻，门禁就从「防线」变成「摆设」。
 - **`examples/` 不计入覆盖门禁**（演示代码），但 `make examples` 保证它可编译、可运行。
 - **为什么 100% 不设成硬门禁**：硬卡 100% 会逼你为「理论上到不了」的防御分支写假测试，制造绿色假象；
   也会奖励「调一次不断言」的凑数测试。100% 行覆盖 **≠ 测够了**——见 §2。真正到不了的行按 §4 显式豁免。
@@ -45,8 +45,8 @@
 
 ## 3. 每个测试的硬规矩
 
-- **一个测试一个行为**；命名按行为不按行号：`拒绝空国家码` / `rejects_empty_country`，不是 `Test_validate_2`。
-  测试名需要「and」就拆开。
+- **一个测试一个行为**；命名 `Test<被测函数>_<中文行为短句>`（如 `TestParseCountry_拒绝空国家码`），
+  按行为不按行号，不是 `Test_validate_2`。测试名需要「和」就拆开。（与 CODE_STANDARDS §8 一致。）
 - **边界必测**：0 / 1 / 空 / 满 / 越限各一条（角度 #2），不是只有一个中间值。
 - **错误要断言「是哪个错」**（角度 #4）：本库类型错误用 `errors.As` 解出类型和字段，**不只判 `err != nil`**；
   `io.EOF`/`context.Canceled`/第三方哨兵用 `errors.Is`。（与 CODE_STANDARDS §5「类型错误非哨兵」一致。）
@@ -54,7 +54,7 @@
 - **并发相关代码**（角度 #6）必须有 `-race` + 多 goroutine 测试，断言**精确**聚合值（不是「大概对」）。
   范例：`traffic` 的 8 goroutine × 100 读写，断言字节总数精确相等。
 - **表驱动扫多输入**（角度 #11）：每行断言前 `t.Logf` 一行输入与结果（§8.1），默认 `go test` 不刷屏。
-- **零值合法时必须能和失败区分**：如 `geo.TimezoneOffsetForCountry` 的 `0` 是合法 GMT+0，要看 `ok`。
+- **零值合法时必须能和失败区分**：如 `geo.TimezoneOffsetForCountry` 的 `0` 是合法 GMT+0，要看返回的 `error`。
 
 ## 4. 豁免机制（真不可达的行）
 
@@ -99,8 +99,8 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 
 ## 7. 落地节奏（棘轮上调）
 
-不要求一次到 98。按包补：先测短板包（逐函数报告里 < 100% 的先补错误路径与边界），
-每让核心库总覆盖率稳定站上一档就把 `Makefile` 的 `MIN_COVERAGE` 抬一档（如 95 → 96 → 97 → 98），
+98 已达标。继续按包补：先测短板包（`make cover-pkg` 与逐函数报告里 < 100% 的先补错误路径与边界），
+每让核心库总覆盖率稳定站上一档就把 `Makefile` 的 `MIN_COVERAGE` 抬一档（下一档 99），
 每档在提交说明里写清抬到多少。**只上不下。**
 
 ## 8. 泄漏与并发
@@ -116,7 +116,7 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 - **SHOULD** 解析外部原文的函数（代理 URL、content-encoding、版本标识、header 白名单、Accept-Language 拼装）配 fuzz。
   范例：`netproxy/proxy_fuzz_test.go`、`httpx/encoding_fuzz_test.go`、`versionreg/registry_fuzz_test.go`。
 - **MUST** fuzz 发现的崩溃输入会写入 `testdata/fuzz/FuzzXxx/`，**必须提交**，作为永久回归种子（`go test` 默认会跑）。
-- **SHOULD** 本地改到解析逻辑时跑 `go test -fuzz=FuzzXxx -fuzztime=30s ./pkg/`；CI 定时（nightly）跑长时 fuzz（待落地）。
+- **SHOULD** 本地改到解析逻辑时跑 `go test -fuzz=FuzzXxx -fuzztime=30s ./<包路径>/`（如 `./netproxy/`）；CI 定时（nightly）跑长时 fuzz（待落地）。
 - **SHOULD** 热路径配 `BenchmarkXxx`，带 `b.ReportAllocs()`；对比用 `benchstat`，至少 `-count=6`（见 `CODE_STANDARDS.md` §15）。
 - **MUST NOT** 把 benchmark 数值写成断言（机器差异会让它 flaky）；allocs 必须恒定的场景用 `testing.AllocsPerRun` 断言。
 
@@ -125,17 +125,17 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 - **MUST** 测试离线、可重复、与执行顺序无关：不访问外网（自带 `httptest` / 最小协议实现）、不依赖本机代理、
   不依赖真实时区与 locale、不写仓库目录（用 `t.TempDir()`）。
 - **MUST** 依赖时间或随机数的逻辑可注入：时钟用函数 / 接口参数，随机用 `*rand.Rand` 固定种子。
-  范例：`geo.BuildChromeAcceptLanguage` 接收 `*rand.Rand`。
+  范例：`geo.BuildChromeAcceptLanguageForCountry` 接收 `*rand.Rand`。
 - **MUST** flaky 零容忍：发现偶发失败立即开 issue 并修复根因；禁止加重试、放宽断言或 `t.Skip` 了事。
 - **SHOULD** 无共享全局状态的测试加 `t.Parallel()`；改全局状态（`logger.SetHandler`、包级变量）的测试**不得**并行，
   并用 `t.Cleanup` 还原。
-- **SHOULD** 单个测试 < 1s，包级 < 30s；CI 统一带 `-timeout`（默认 10m）防挂死。
+- **SHOULD** 单个测试 < 1s，包级 < 30s；挂死由 `go test` 默认的 10m 超时兜底（CI 未另设 `-timeout`）。
 - **SHOULD** golden 文件放 `testdata/`，更新走 `-update` 标志并在 PR 说明为什么变；禁止手改 golden 迁就实现。
 
 ## 11. 测试的地位高于实现
 
 - **MUST NOT** 为让新实现通过而修改既有断言、删用例、放宽期望值。先问「是测试错了还是实现错了」：
   实现错 → 改实现；行为确需变化 → 在 PR 写清旧行为 / 新行为 / 影响的调用方，再改测试，并按 `VERSIONING.md` 判断升版本。
-- **MUST** characterization 用例（`httpx/characterization_test.go` 与 `make char` 覆盖的用例）的删除或断言变更，
-  PR 标题或正文必须显式标注「行为变更」。
+- **MUST** characterization 用例（`httpx/characterization_test.go` 的全部用例，即 `make char` 跑的范围，
+  也是治理守卫保护的范围）的删除或断言变更，提交说明或 PR 标题、正文必须显式标注「行为变更」。
 - **MUST** 修 bug 先写能复现它的失败测试，测试名写明锁的是哪个 bug 的行为。

@@ -41,13 +41,19 @@
 ## 3. 第 0 层：agent 钩子
 
 三家 agent 钩子**语义一致**：裁决逻辑全在 `tools/agentguard`（独立 Go 子模块，带测试），入口是 `scripts/agent-guard.sh`
-（首次或源码变更后自动编译到 `.git/agent-guard/`，之后单次约 40ms）；`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json`
+（首次或源码变更后自动编译到 `$(git rev-parse --absolute-git-dir)/agent-guard/`——主工作区是 `.git/agent-guard/`，
+worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；`.claude/settings.json`、`.cursor/hooks.json`、`.codex/hooks.json`
 只是把各家原生事件映射到 `agentguard hook --agent <名> --event <事件>` 的薄适配。
 
 `tools/agentguard` 同时供其它仓库（如 insgo）复用，**不复制源码**：下游用 `go install github.com/japansms40-web/gohttpkit/tools/agentguard@<版本>`
-按固定版本安装（子模块 tag 形如 `tools/agentguard/vX.Y.Z`）。各仓库唯一的差异是 characterization 用例的定位，写在仓库根的
-`.agentguard.yml`（`characterization.file` / `characterization.func_pattern`，后者留空表示整文件）；守卫读的是**基线**上的这份配置，
-同一次改动里改它不会放宽本次检查。基线没有该文件时不做 char 检查。
+按固定版本安装（子模块 tag 形如 `tools/agentguard/vX.Y.Z`）。各仓库的差异写在仓库根的 `.agentguard.yml`：
+
+- `characterization.file` / `characterization.func_pattern`（后者留空表示整文件）：char 用例的定位。守卫读的是**基线**上的这份配置，
+  同一次改动里改它不会放宽本次检查；基线没有该文件时不做 char 检查。
+- `main_branch`（默认 `main`）：主干分支名，用来取治理基线。基线的取值顺序：`--base` / `$GOVERNANCE_BASE` →
+  `merge-base(HEAD, origin/HEAD)` → `merge-base(HEAD, origin/<main_branch>)`（读 **HEAD 提交**里的配置，未提交的改动不生效）→
+  `merge-base(HEAD, origin/main)` → `HEAD`（此时只能看到未提交的改动）。主干不叫 main 的仓库（如 insgo 的 insgo190）必须配置它，
+  或在本地执行一次 `git remote set-head origin --auto` 让 `origin/HEAD` 可用。
 
 | 时机 | 动作 | 拦截 / 执行 |
 |---|---|---|
@@ -60,13 +66,16 @@
 **不弹确认框**：钩子只有「放行 / 拒绝」两档。门禁基础设施（钩子、CI、lint 配置、守卫自身）agent 可以直接改，
 真正的放宽（下调覆盖率、关 linter、加豁免等）由治理守卫在改后、收尾、pre-push、CI 四处识别。
 
+**工作树有 WIP 时**：收尾检查看的是整个工作树（`git status`），用户未提交的 Go 改动同样会触发 `make check`。
+失败若来自用户 WIP 而非本次任务，agent 应如实说明，不去改动用户文件；连续 3 次后钩子自动放行。
+
 **人工放行**：确需让 agent 下调门槛时，由人执行 `touch "$(git rev-parse --git-path agent-guard-allow)"`，完成后删除该文件。
 标记存在期间收尾的治理违规不再拦截；pre-push 与 CI 的治理守卫仍然生效，提交说明里仍需人写豁免标记与理由。
 
 **首次启用**：Claude Code 打开项目即生效；Cursor 读取 `.cursor/hooks.json` 即生效；Codex 需先信任本项目，再在 `/hooks` 里审核一次。
 三家都需要本机有 `go`（启动器会自动编译守卫）。
 
-> 定位：第 0 层防手滑，不防对抗——shell 解析只处理引号、转义、`&& || ; |` 串联和 `bash -c` 嵌套，变量展开等绕得过去；
+> 定位：第 0 层防手滑，不防对抗——shell 解析只处理引号、转义、`&& || ; |` 串联、heredoc 和 `bash -c` 嵌套，变量展开等绕得过去；
 > 真正不可绕过的是第 2、3 层。钩子出错（如编译失败）时放行，不会把 agent 卡死。
 
 ## 4. 规则 → 强制手段对照表
@@ -153,7 +162,7 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 7. **apidiff** CI job（PR 对比最近 tag，破坏性变化且未升 minor 时失败）+ **release workflow**（tag 触发：全量门禁 → GitHub Release）。
 8. **供应链**：actions 钉 SHA、`.github/dependabot.yml`（gomod + github-actions，每周）、`go-licenses check`。Go 与直接依赖、CI 的 Go / golangci-lint / govulncheck 跟最新稳定版，不钉死。
 9. nightly 长时 fuzz。CI 不建旧 Go 版本矩阵。
-10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）；`versionreg.Registry.Register` 的裸字符串 panic 改为类型错误（CS §11）。
+10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）；`versionreg.Registry.MustRegister` 的裸字符串 panic 改为类型错误（CS §11）。
 11. **治理守卫扩展**：检测新增 `var Err… = errors.New(` 生产代码（CS §5）。
 
 ## 8. 分支保护（独立开发：可选）
@@ -183,6 +192,6 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 
 - **覆盖率门禁能不能降到 80%？** 不能随手降。`MIN_COVERAGE` 只许上调；确需下调在提交说明里单列理由——降的那一刻门禁就成摆设（独立开发尤其要自己盯住，没人替你把关）。
 - **gitleaks 误报了我的测试假 token？** 在该行加 `// notsecret`，或把路径加进 `.gitleaks.toml` 的 `allowlist.paths`。生产代码不要这么放行。
-- **pre-push 太慢？** 它跑 race+char+cover，本就重。日常小步提交用 commit（只过 pre-commit），push 前一次性过重门禁；应急可 `--no-verify`，但 CI 会补上。
+- **pre-push 太慢？** 它跑 governance+race+char+cover，本就重。日常小步提交用 commit（只过 pre-commit），push 前一次性过重门禁；应急可 `--no-verify`，但 CI 会补上。
 - **AI 说「测试都过了」可信吗？** 只信它贴出的命令与输出；第 0 层 `Stop` 钩子会在有 Go 改动时于收尾前强制跑 `make check`。
 - **agent 钩子误拦了正常操作？** 记下命令与裁决理由，在 `tools/agentguard/*_test.go` 补一条用例再修规则；临时需要时按 §3 用放行标记。

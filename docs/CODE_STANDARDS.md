@@ -138,7 +138,7 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
   `t.Logf("country=%q → %q err=%v", country, got, err)`。
   范例：`geo/locale_web_test.go`、`geo/lookup_test.go`。
 - **SHOULD** 全表扫描按 key 排序后再 `Log`，map 遍历顺序不稳定，排过才方便对表。
-  范例：`geo/locale_web_test.go` 的 `TestCountryToWebAcceptTag_值不含下划线`。
+  范例：`geo/locale_web_test.go` 的 `TestCountryToWebAcceptTag_满足构建前置条件`。
 - **MAY** 错误路径再打 `errors.As` 解出的类型和字段，方便核对类型错误而不是文案。
   范例：`geo/errors_test.go` 的 `assertUnknownCountry` / `assertInvalidExtra` /
   `assertExtraExceedsPool`。本库错误的定义与对比见第 5 节。
@@ -195,8 +195,9 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 - **MUST** 实现了 `Close` / `Stop` 的类型：重复调用幂等、返回值稳定；关闭后再调用业务方法返回类型错误而非 panic。
 - **MUST NOT** 在请求路径（`Do*`、拦截器、`Get`、查表函数）上 `panic`。panic 只允许出现在：
   1. `Must*` 前缀函数（名字即声明，panic 值必须是本库类型错误，`recover` 后可 `errors.As`）；
-  2. 进程初始化期的注册 / 配置（如 `versionreg.Registry.Register` 重复注册）。
+  2. 进程初始化期的注册 / 配置（如 `versionreg.Registry.MustRegister` 重复注册）。
   范例：`versionreg.Registry.MustGet`。新代码的 panic 值一律用类型错误，不用裸字符串。
+  现状差距：`MustRegister` 的「标识为空」「重复注册」两处仍 panic 裸字符串（`versionreg/registry.go`），待改为类型错误。
 - **MUST** 可阻塞的等待（退避、读、写）同时 `select` 在 `ctx.Done()` 上，ctx 取消后立即返回，且返回的错误链里含 `ctx.Err()`（调用方可 `errors.Is(err, context.Canceled)`）。
   范例：`httpx/interceptor/retry.go` 退避等待。
 
@@ -226,7 +227,7 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 
 - **MUST** `//nolint` 必须指定 linter 并写理由：`//nolint:<linter> // <为什么这里是误报或有意为之>`。
   禁止裸 `//nolint`、禁止 `//nolint:all`。范例：`httpx/options.go` 的 `//nolint:staticcheck // ST1011：…`。
-  强制：`nolintlint`（require-specific + require-explanation，待落地）。
+  强制：`nolintlint`（require-specific + require-explanation，已在 `.golangci.yml` 启用）。
 - **MUST** `.golangci.yml` 的 `exclusions` 只增不删须有注释说明理由；按路径整体豁免只用于数据表、示例、门面自身。
   AI 代理不得为让自己的改动过 lint 而新增豁免。
 - **SHOULD** 能改代码就不豁免；豁免是「工具误报」或「契约不可改」，不是「不想改」。

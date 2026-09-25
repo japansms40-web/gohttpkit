@@ -1,12 +1,17 @@
 # 更新日志
 
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [`docs/VERSIONING.md`](docs/VERSIONING.md)，
-发布流程见 [`docs/RELEASE.md`](docs/RELEASE.md)。每个版本按「破坏 / 新增 / 修复 / 弃用 / 安全」分组，空组省略。
+发布流程见 [`docs/RELEASE.md`](docs/RELEASE.md)。每个版本按「破坏 / 新增 / 变更 / 修复 / 弃用 / 安全」分组，空组省略。
 
 ## [Unreleased]
 
+> 下列条目只涉及仓库工具 `tools/agentguard`（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API。
+> 其中「`.agentguard.yml` 声明」随 `tools/agentguard/v0.1.0` 发布，「`git config` 区分读写」随 `v0.1.1` 发布。
+
 ### 新增
 
+- `tools/agentguard`：治理基线支持主干不叫 `main` 的仓库：取值顺序改为 `--base` / `$GOVERNANCE_BASE` → `merge-base(HEAD, origin/HEAD)` →
+  `merge-base(HEAD, origin/<main_branch>)` → `merge-base(HEAD, origin/main)` → `HEAD`；`.agentguard.yml` 新增 `main_branch`（默认 `main`，从 HEAD 提交读取）。
 - `tools/agentguard`：仓库差异改由仓库根 `.agentguard.yml` 声明（`characterization.file` / `func_pattern`，读基线上的配置），
   供其它仓库按版本 `go install` 复用，不再复制源码；char 检查支持只看命中 `func_pattern` 的用例函数（按行号范围判定）。
 
@@ -28,21 +33,46 @@
 
 - `httpx.NewClient`、`httpx.RegisterDefaultChain`、`httpx.NoDefaultChainError`。
 
+## [v0.4.1] - 2026-09-23
+
+### 变更
+
+- 仓库工作流：改代码走 `git worktree`，提交与打 tag 直接在 `main` 上做；agent 钩子不再拒绝 `main` 上的提交，放行新建 tag，
+  删除 / 移动 / 推送 tag 仍拒绝（仓库工具，不影响库的导出 API）。
+
 ## [v0.4.0] - 2026-09-23
 
 ### 破坏
 
 - 最低 Go 版本从 1.25.0 上调到 1.27.1（仓库工具 `tools/agentguard` 从 1.24.0 同步上调）。使用本库的模块须升级到 Go 1.27.1 或更高才能编译。CI 改为 `go-version: stable`，golangci-lint 改用 `latest`（`golangci-lint-action` 升到 v9）。
 
+### 安全
+
+- 直接依赖升级：`golang.org/x/net` v0.55.0 → v0.59.0、`github.com/andybalholm/brotli` v1.2.1 → v1.2.4、`github.com/klauspost/compress` v1.18.6 → v1.20.0。其中 `x/net` 修复经 `httpx.ExtractHTMLText` → `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
+
+## [v0.3.3] - 2026-09-23
+
+### 修复
+
+- CI 固定 golangci-lint v2.12.2，兼容 Go 1.25（仓库门禁，不影响库本身）。
+
+## [v0.3.2] - 2026-09-23
+
+> 注：本版本把 `go` 指令从 1.24.0 上调到 1.25.0，按 `docs/VERSIONING.md` 应为 minor；tag 已发布，此处如实补记。
+
+### 破坏
+
+- 最低 Go 版本从 1.24.0 上调到 1.25.0。
+
 ### 新增
 
 - 规范：`docs/RELEASE.md`、`SECURITY.md`、本文件；`CODE_STANDARDS` §10–16、`TESTING` §8–11；AI 代理硬性纪律。
 - 门禁：`nolintlint`；CI 显式 `make char`；治理守卫 `make governance`（CI / pre-push / agent 收尾）；
-  Claude / Cursor / Codex 三家 agent 钩子（`tools/agentguard`，仓库工具，不影响库的导出 API）。
+  Claude / Cursor / Codex 三家 agent 钩子（`tools/agentguard`，仓库工具，不影响库的导出 API），只有放行 / 拒绝两档。
 
 ### 安全
 
-- 直接依赖升级：`golang.org/x/net` v0.55.0 → v0.59.0、`github.com/andybalholm/brotli` v1.2.1 → v1.2.4、`github.com/klauspost/compress` v1.18.6 → v1.20.0。其中 `x/net` 修复经 `httpx.ExtractHTMLText` → `html.Parse` 可达的 HTML 解析漏洞，以及 HTTP/2 相关漏洞。
+- `golang.org/x/net` v0.50.0 → v0.55.0。
 
 ## [v0.3.1] - 2026-09-23
 
@@ -76,9 +106,13 @@
 
 ## [v0.2.0] - 2026-08-26
 
+### 破坏
+
+- `Options.Retry` 改为 `*RetryPolicy`：nil 表示走默认策略，非 nil 字面生效（`MaxRetries: 0` 即不重试）。
+
 ### 新增
 
-- 全包测试覆盖到 98.1%，加覆盖率门禁。
+- 全包测试覆盖到 98.1%，加 90% 覆盖率门禁（此后逐步上调，现为 98%）。
 
 ## [v0.1.0] - 2026-08-25
 

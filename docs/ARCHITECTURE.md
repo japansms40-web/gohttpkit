@@ -38,19 +38,25 @@
 
 ```text
 gohttpkit/
-├── httpx/                 # 核心 HTTP 客户端、拦截器链、重试、解压、请求头和 Transport
+├── httpx/                 # 核心：Client、拦截器链框架、请求编码、白名单发头、Transport；入口 httpx.NewClient
+│   └── interceptor/       # 内建拦截器（追踪/日志/解压/缓存/重试/桥接/状态语义/归类/HTML）与预设链，import 即注册默认链
 ├── logger/                # 基于 slog 的全局日志门面、trace_id、span
 ├── errors/                # 可重试网络错误与 HTTP 状态错误
 ├── netproxy/              # SOCKS5 / HTTP / HTTPS 代理配置与代理拨号
 ├── traffic/               # net.Conn 层的真实收发字节统计
-├── geo/                   # 国家、locale、Accept-Language、时区与代理国家解析
+├── geo/                   # 国家、Web locale、Accept-Language、时区
+│   └── locale_mobile/     # 国家 → Android 5 个 locale 头（包名 localemobile）
 ├── versionreg/            # 泛型版本注册表、端点白名单和示例版本配置
 ├── examples/
 │   ├── quickstart/        # 最小客户端示例
 │   ├── customchain/       # 自定义签名、计数、状态回写、业务归类示例
 │   └── fidelity/          # 请求高保真复刻与完整快照示例
-├── docs/                  # 迁移说明、代码规范和本文档
-├── .github/workflows/     # CI：构建、vet、测试、覆盖率、race、示例和 lint
+├── tools/agentguard/      # AI 代理钩子与治理守卫（独立子模块，按 tools/agentguard/vX.Y.Z 打 tag，下游按版本安装）
+├── scripts/               # agent-guard.sh 等启动脚本
+├── .githooks/             # 本地 git 门禁（make hooks 安装）
+├── .claude/ .cursor/ .codex/  # 各家 AI 代理的钩子配置，统一转到 scripts/agent-guard.sh
+├── docs/                  # 本文档、代码规范、测试、工程治理、版本、发布与迁移说明
+├── .github/workflows/     # CI：test（build/vet/tidy/cover/race/char/examples）、governance、lint、vuln、secrets、commits
 ├── Makefile               # 本地与 CI 质量门禁入口
 └── go.mod                 # 模块声明和三个直接外部依赖
 ```
@@ -67,17 +73,23 @@ flowchart TD
     APP --> LOG[logger 日志门面]
     APP --> TRAFFIC[traffic 流量 Hook]
 
+    APP --> ICPT[httpx/interceptor 内建拦截器]
+    ICPT --> HTTPX
+    ICPT --> LOG
+    ICPT --> ERR
+    ICPT --> BROTLI[andybalholm/brotli]
+    ICPT --> ZSTD[klauspost/compress/zstd]
+
     HTTPX --> ERR[errors 错误判定]
     HTTPX --> LOG
     HTTPX --> PROXY[netproxy 代理]
+    HTTPX --> HTML[golang.org/x/net/html]
 
-    PROXY --> LOG
     PROXY --> TRAFFIC
     PROXY --> XPROXY[golang.org/x/net/proxy]
 
-    HTTPX --> BROTLI[andybalholm/brotli]
-    HTTPX --> ZSTD[klauspost/compress/zstd]
-    HTTPX --> HTML[golang.org/x/net/html]
+    APP --> LM[geo/locale_mobile]
+    LM --> GEO
 ```
 
 仓库内部没有循环依赖。关键依赖关系来自以下真实文件：
@@ -85,7 +97,9 @@ flowchart TD
 - `httpx/options.go`、`httpx/interceptor` → `errors`；
 - `httpx/client.go`、`httpx/interceptor` → `logger`；
 - `httpx/transport.go` → `netproxy`；
-- `netproxy/proxy.go` → `logger`、`traffic`；
+- `netproxy/proxy.go` → `traffic`；
+- `httpx/interceptor` → `httpx`、`logger`、`errors`，解压依赖 brotli / zstd 只在这一层；
+- `geo/locale_mobile` → `geo`；
 - `geo`、`versionreg` 不依赖 `httpx`，由上层按需组合。
 
 ## 5. 核心模块及职责
@@ -108,19 +122,21 @@ flowchart TD
 ```text
 请求方向（外 → 内）
 
-logging
-  → bodyDecode
-    → statusCodeCache
-      → responseHeaderCache
-        → retry
-          → bridge
-            → callServer
+tracing
+  → logging
+    → bodyDecode
+      → statusCodeCache
+        → responseHeaderCache
+          → retry
+            → bridge
+              → callServer
 
 响应方向与上面相反。
 ```
 
 各层的作用：
 
+- `tracing`：为内层整段链建立一个轻量 span，派生并回写 `Request.Ctx`（不引入 OpenTelemetry）；
 - `logging`：记录最终请求结果和总耗时；
 - `bodyDecode`：读取、关闭并按 `content-encoding` 解压响应体；
 - `statusCodeCache`：保存最近一次响应状态码；
@@ -228,7 +244,7 @@ HeaderProvider.BuildHeaders                    httpx/headers.go
 
 ```text
 Options.ProxyURL                              httpx/options.go
-  → NewTransport                             httpx/transport.go
+  → newTransport（内部，New 调用）            httpx/transport.go
   → ApplyProxyToTransport                    netproxy/proxy.go
       ├── socks5：改写 Transport.DialContext
       │   → x/net/proxy.DialContext
@@ -445,7 +461,7 @@ HTTP、TLS、日志、并发和基础压缩能力主要使用 Go 标准库。
 
 - `HeaderWhitelist == nil` 表示发送全部候选头，空 map 表示一个头都不发；见 `httpx/headers.go`、`httpx/interceptor`。
 - 默认链不会因为非 2xx 自动报错，也不会自动解释业务响应；见 `httpx/interceptor/chain.go`。
-- 只有 `TransportError` 会进入默认自动重试；见 `httpx/chain.go`、`httpx/interceptor`。
+- 只有 `TransportError` 会进入默认自动重试；错误类型见 `httpx/errors.go`，重试逻辑见 `httpx/interceptor/retry.go`。
 - 自定义终端拦截器必须自己保存请求头快照，并负责正确处理响应体所有权；见 `httpx/interceptor`。
 - 拦截器框架层是一组互相递归的类型，必须同包：`Interceptor.Intercept` 收 `*Chain`，`Chain` 又持有 `[]Interceptor`，所以 `Interceptor` / `Chain` / `Request` / `Response` 及 `SideChannel` 等标记接口都不能单独拆进子包，否则父子包循环引用。要把内建拦截器拆到子包时，只能外迁【只单向依赖框架层】的具体实现、`NewXxxInterceptor` 构造函数和 `DefaultChain` 等预设链；判定口径是「被框架层类型反向引用 → 留在 `httpx`，只反向依赖 `httpx` → 可外迁」。见 `httpx/chain.go`、`httpx/presets.go`。
 - 一个 `Client` 可以并发调用，但带会话状态的 `HeaderProvider` 必须由调用方保证并发安全；见 `httpx/client.go`、`httpx/headers.go`。

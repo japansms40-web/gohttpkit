@@ -27,7 +27,7 @@
 
 在待发布提交上逐项完成，结果贴进 Release 说明或发布 PR：
 
-- [ ] CI 全绿（`test` / `lint` / `vuln` / `secrets` / `commits`）
+- [ ] CI 全绿（`test` / `governance` / `lint` / `vuln` / `secrets` / `commits`）
 - [ ] 本地 `make ci` 全绿（含 `race`、`char`）
 - [ ] `go run ./examples/customchain && go run ./examples/fidelity` 通过
 - [ ] API 对比：`apidiff`（`golang.org/x/exp/cmd/apidiff`）与上一个 tag 对比，结果与第 2 节判断一致

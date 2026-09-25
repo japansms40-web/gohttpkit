@@ -36,6 +36,7 @@
 - [ ] `make lint-new`
 - [ ] `make race`
 - [ ] `make char`
+- [ ] `make governance`
 
 ```
 测试：<粘贴实际命令与结果；未运行的写「未运行（原因）」>
