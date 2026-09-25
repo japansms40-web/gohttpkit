@@ -60,7 +60,8 @@ var (
 )
 
 // runGovernance 执行治理检查并打印结果。
-// 输入 args：--base REV（对比基线，默认 $GOVERNANCE_BASE → merge-base(HEAD, origin/main) → HEAD）；
+// 输入 args：--base REV（对比基线，默认 $GOVERNANCE_BASE → merge-base(HEAD, origin/HEAD) →
+// merge-base(HEAD, origin/<main_branch>) → merge-base(HEAD, origin/main) → HEAD）；
 // --worktree（agent 收尾模式：只认工作区，不读提交说明里的豁免标记）。
 // 返回：0 通过；1 有未放行的违规或运行错误。
 func runGovernance(args []string) int {
@@ -116,13 +117,30 @@ func resolveBase(root, flagBase string) string {
 		}
 		return flagBase
 	}
-	if mb, err := gitOut(root, "merge-base", "HEAD", "origin/main"); err == nil && mb != "" {
-		return mb
+	for _, ref := range mainRefs(root) {
+		if mb, err := gitOut(root, "merge-base", "HEAD", ref); err == nil && mb != "" {
+			return mb
+		}
 	}
 	if _, err := gitOut(root, "rev-parse", "--verify", "-q", "HEAD"); err == nil {
 		return "HEAD"
 	}
 	return ""
+}
+
+// mainRefs 按优先级返回主干候选引用，供 resolveBase 取 merge-base。
+// 输入 root：仓库根。
+// 返回：origin/HEAD（远端默认分支，仓库文件改不了）→ origin/<HEAD 提交里 .agentguard.yml 的 main_branch> → origin/main，已去重。
+// 读 HEAD 提交而不是工作区的配置：未提交的改动不能把基线指向当前分支来绕过检查。
+func mainRefs(root string) []string {
+	src, _ := showAt(root, "HEAD", configPath)
+	refs := []string{"origin/HEAD"}
+	for _, r := range []string{"origin/" + parseMainBranch(src), "origin/" + defaultMainBranch} {
+		if r != refs[len(refs)-1] {
+			refs = append(refs, r)
+		}
+	}
+	return refs
 }
 
 // collectViolations 对比基线与工作区，收集全部治理违规（不考虑放行标记）。

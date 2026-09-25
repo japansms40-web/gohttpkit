@@ -3,18 +3,24 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // config.go —— 仓库级差异配置。agentguard 由多个仓库共用（gohttpkit 自身、insgo 等），
-// 各仓库只有 characterization 用例的定位不同，放在仓库根的 .agentguard.yml 里声明，不再复制源码改常量。
+// 各仓库只有 characterization 用例的定位与主干分支名不同，放在仓库根的 .agentguard.yml 里声明，不再复制源码改常量。
 
 // configPath 是仓库根下的 agentguard 配置文件。
 const configPath = ".agentguard.yml"
 
+// defaultMainBranch 是未配置 main_branch 时的主干分支名。
+const defaultMainBranch = "main"
+
 // repoConfig 对应 .agentguard.yml 的结构。
 type repoConfig struct {
+	// MainBranch 是主干分支名（如 insgo 的 insgo190），用于取治理基线 merge-base(HEAD, origin/<MainBranch>)；空表示 main。
+	MainBranch       string `yaml:"main_branch"`
 	Characterization struct {
 		// File 是 characterization 用例所在的测试文件（相对仓库根）；空表示不做 char 检查。
 		File string `yaml:"file"`
@@ -62,4 +68,19 @@ func loadCharRule(root, base string) (charRule, error) {
 		return charRule{}, nil
 	}
 	return parseCharRule(src)
+}
+
+// parseMainBranch 从 .agentguard.yml 内容取主干分支名。
+// 输入 src：配置全文，可为空串。
+// 返回：main_branch 去空白后的值；未配置、为空或 YAML 非法时回落 "main"（非法配置由 parseCharRule 报违规，这里不重复）。
+// 例：`main_branch: insgo190` → "insgo190"；"" → "main"。
+func parseMainBranch(src string) string {
+	var cfg repoConfig
+	if err := yaml.Unmarshal([]byte(src), &cfg); err != nil {
+		return defaultMainBranch
+	}
+	if b := strings.TrimSpace(cfg.MainBranch); b != "" {
+		return b
+	}
+	return defaultMainBranch
 }

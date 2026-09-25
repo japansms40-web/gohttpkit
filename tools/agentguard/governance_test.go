@@ -417,3 +417,80 @@ func anyRule(vs []violation, rule string) bool {
 	}
 	return false
 }
+
+func TestParseMainBranch(t *testing.T) {
+	cases := []struct{ name, src, want string }{
+		{"未配置默认 main", "", "main"},
+		{"只配 char 默认 main", "characterization:\n  file: a_test.go\n", "main"},
+		{"显式主干", "main_branch: insgo190\n", "insgo190"},
+		{"首尾空白裁剪", "main_branch: \"  release \"\n", "release"},
+		{"YAML 非法回落 main", "main_branch: [", "main"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := parseMainBranch(c.src); got != c.want {
+				t.Fatalf("parseMainBranch(%q)=%q，期望 %q", c.src, got, c.want)
+			}
+		})
+	}
+}
+
+// TestResolveBase_主干分支 基线按 GOVERNANCE_BASE → origin/HEAD → HEAD 提交里声明的 main_branch → origin/main → HEAD 取。
+func TestResolveBase_主干分支(t *testing.T) {
+	setup := func(t *testing.T, cfg string) (dir, base string) {
+		t.Helper()
+		dir = t.TempDir()
+		files := map[string]string{"a.txt": "1\n"}
+		if cfg != "" {
+			files[configPath] = cfg
+		}
+		initRepo(t, dir, files)
+		base = mustGit(t, dir, "rev-parse", "HEAD")
+		if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mustGit(t, dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "feature")
+		return dir, base
+	}
+
+	t.Run("HEAD 提交声明的主干", func(t *testing.T) {
+		dir, base := setup(t, "main_branch: insgo190\n")
+		mustGit(t, dir, "update-ref", "refs/remotes/origin/insgo190", base)
+		if got := resolveBase(dir, ""); got != base {
+			t.Fatalf("基线=%q，期望 merge-base(HEAD, origin/insgo190)=%q", got, base)
+		}
+	})
+	t.Run("工作区改 main_branch 不生效", func(t *testing.T) {
+		dir, base := setup(t, "main_branch: insgo190\n")
+		mustGit(t, dir, "update-ref", "refs/remotes/origin/insgo190", base)
+		head := mustGit(t, dir, "rev-parse", "HEAD")
+		mustGit(t, dir, "update-ref", "refs/remotes/origin/feature", head)
+		if err := os.WriteFile(filepath.Join(dir, configPath), []byte("main_branch: feature\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := resolveBase(dir, ""); got != base {
+			t.Fatalf("未提交的配置改动不应改变基线：得到 %q，期望 %q", got, base)
+		}
+	})
+	t.Run("origin/HEAD 优先于配置", func(t *testing.T) {
+		dir, base := setup(t, "main_branch: other\n")
+		mustGit(t, dir, "update-ref", "refs/remotes/origin/insgo190", base)
+		mustGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/insgo190")
+		if got := resolveBase(dir, ""); got != base {
+			t.Fatalf("基线=%q，期望按 origin/HEAD 取 %q", got, base)
+		}
+	})
+	t.Run("未配置回落 origin/main", func(t *testing.T) {
+		dir, base := setup(t, "")
+		mustGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
+		if got := resolveBase(dir, ""); got != base {
+			t.Fatalf("基线=%q，期望 %q", got, base)
+		}
+	})
+	t.Run("都取不到回落 HEAD", func(t *testing.T) {
+		dir, _ := setup(t, "main_branch: insgo190\n")
+		if got := resolveBase(dir, ""); got != "HEAD" {
+			t.Fatalf("基线=%q，期望 HEAD", got)
+		}
+	})
+}
