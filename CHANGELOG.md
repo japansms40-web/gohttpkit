@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [v0.6.0] - 2026-09-25
+
 > 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API。
 > 其中「`.agentguard.yml` 声明」随 `tools/agentguard/v0.1.0` 发布，「`git config` 区分读写」随 `v0.1.1` 发布。
 

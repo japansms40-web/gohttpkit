@@ -10,6 +10,13 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.6.0（相对 v0.5.0）
+
+新增（不破坏现有签名）：
+
+- `httpx.StatusRuleContext`、`interceptor.NewStatusSemanticsInterceptorContext`：状态语义规则额外拿到本次请求的 ctx。
+  `NewStatusSemanticsInterceptor` 签名与行为不变，下游无需迁移。
+
 ## v0.5.0（相对 v0.4.1）
 
 破坏点：
