@@ -1,7 +1,7 @@
 # gohttpkit 质量门禁入口。
 #   make hooks  —— clone 后先跑一次：安装本地 git 门禁（.githooks + core.hooksPath）
 #   make check  —— 本地轻量：build + vet + cover + tidy（不含 lint / race，避免每次要 cgo）
-#   合入口径    —— check + lint-new + race（CI 已跑后两项；本地完整请 make ci）
+#   合入口径    —— check + lint-new + race（CI 跑的是全量 lint 与 race；本地完整请 make ci）
 
 BASE_REV ?= HEAD~1
 
@@ -23,9 +23,13 @@ test:
 	go test -count=1 ./...
 
 # 行为锁定：拦截器链的对外行为（重试次数/退避/白名单/头大小写/缓存时机/链序）。
-# 改动 httpx 的链结构之前先跑它。
+# 改动 httpx 的链结构之前先跑它。用例范围 = CHAR_FILE 里的全部顶层 Test 函数，
+# 与 .agentguard.yml 的 characterization.file 同源（治理守卫保护的就是这个文件），新增用例无需改正则。
+CHAR_FILE := httpx/characterization_test.go
 char:
-	go test -count=1 -v -run 'Test(DoRequest|Headers|Retry|Chain|SpecialHeaders|Snapshot|BodyDecode|StatusSemantics|Classify|HTMLText|Transaction|DefaultChain|OnResponseHeaders|Logging)' ./httpx/
+	@names=$$(sed -nE 's/^func (Test[^(]+)\(t \*testing\.T\).*/\1/p' $(CHAR_FILE) | paste -sd'|' -); \
+	test -n "$$names" || { echo "$(CHAR_FILE) 里没有 Test 函数"; exit 1; }; \
+	go test -count=1 -v -run "^($$names)$$" ./httpx/
 
 # 并发回归门禁。需要 C 编译器（-race 依赖 cgo）。
 race:
@@ -40,7 +44,7 @@ cover:
 	dir=$$(mktemp -d "$${TMPDIR:-/tmp}/gohttpkit-cover.XXXXXX"); \
 	out=$$(mktemp coverage.out.XXXXXX); \
 	trap 'rm -rf "$$dir" "$$out"' EXIT; \
-	go test -count=1 -coverprofile="$$dir/coverage.out" $$(go list ./... | grep -v '/examples/') > /dev/null; \
+	go test -count=1 -coverprofile="$$dir/coverage.out" $$(go list ./... | grep -v '/examples/') > "$$dir/test.txt" 2>&1 || { grep -E '^(--- FAIL|FAIL|panic)' "$$dir/test.txt" | head -40; echo "单元测试失败"; exit 1; }; \
 	go tool cover -func="$$dir/coverage.out" > "$$dir/func.txt"; \
 	summary=$$(tail -1 "$$dir/func.txt"); \
 	printf '%s\n' "$$summary"; \
