@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"strings"
 
 	"github.com/japansms40-web/gohttpkit/errors"
@@ -11,6 +12,11 @@ import (
 // 返回 nil     → 放行：响应原样继续向外流（调用方自己解析体 + 读状态码）
 // 返回非 nil   → 整次调用以该 error 失败
 type StatusRule func(status int, body []byte) error
+
+// StatusRuleContext 是带本次请求 ctx 的 StatusRule，返回值语义与 StatusRule 相同。
+// 给命中时要打带 trace_id 的事件日志、或按 ctx 携带的信息决定归类的规则；
+// 纯状态码 / 文案判断用 StatusRule 即可。ctx 为本次请求的 Request.Ctx。
+type StatusRuleContext func(ctx context.Context, status int, body []byte) error
 
 // DefaultStatusRule 默认规则：非 2xx 且响应体为空 → *errors.HTTPStatusError。
 // 给 NewStatusSemanticsInterceptor：响应体非空则放行（4xx 常承载业务体）。

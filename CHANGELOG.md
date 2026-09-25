@@ -5,11 +5,14 @@
 
 ## [Unreleased]
 
-> 下列条目只涉及仓库工具 `tools/agentguard`（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API。
+> 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API。
 > 其中「`.agentguard.yml` 声明」随 `tools/agentguard/v0.1.0` 发布，「`git config` 区分读写」随 `v0.1.1` 发布。
 
 ### 新增
 
+- `httpx.StatusRuleContext` 与 `interceptor.NewStatusSemanticsInterceptorContext`：状态语义规则额外拿到本次请求的 ctx，
+  命中时可打带 trace_id 的事件日志（原 `StatusRule` 拿不到 ctx，接入方只能自写拦截器）。
+  `NewStatusSemanticsInterceptor` 签名与行为不变；nil 规则同样回落 `DefaultStatusRule`。
 - `tools/agentguard`：治理基线支持主干不叫 `main` 的仓库：取值顺序改为 `--base` / `$GOVERNANCE_BASE` → `merge-base(HEAD, origin/HEAD)` →
   `merge-base(HEAD, origin/<main_branch>)` → `merge-base(HEAD, origin/main)` → `HEAD`；`.agentguard.yml` 新增 `main_branch`（默认 `main`，从 HEAD 提交读取）。
 - `tools/agentguard`：仓库差异改由仓库根 `.agentguard.yml` 声明（`characterization.file` / `func_pattern`，读基线上的配置），

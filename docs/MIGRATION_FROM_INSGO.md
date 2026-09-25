@@ -9,7 +9,7 @@
 
 - insgo 的 `go.mod` 直接依赖 gohttpkit v0.5.0 与 `github.com/japansms40-web/insgouagen`（公开模块，没有 `replace`）。
 - insgo 只剩一个客户端类型 `pkg.Client`：内部私有持有 `*httpx.Client` 执行请求，默认链 = IG 专属三层
-  （`classifyIG` → `igStatusSemantics` → `htmlText`）外加本库 `interceptor.DefaultChain` 的 8 层；
+  （`classifyIG` → IG 状态语义（`NewStatusSemanticsInterceptorContext` + IG 规则）→ `htmlText`）外加本库 `interceptor.DefaultChain` 的 8 层；
   `ig-set-*` 回写走 `Options.OnResponseHeaders`。IG 构头（`HeaderBuilder`）直接实现 `httpx.HeaderProvider`。
 - 重试 / 超时 / 慢请求阈值一律用本库默认值，insgo 不读环境变量。
 - 日志、geo、traffic、netproxy、versionreg、通用 errors 都直接 import 本库对应包；insgo 只保留 IG 业务错误（sentinel 与 `ClassifyIGResponse*`）。
@@ -91,7 +91,7 @@ insgo 默认链含 `igErrorClassify`（业务错误归类）、`igState`（`ig-s
 | `igState` 的响应头缓存 | 已在默认链里（`interceptor.NewResponseHeaderCacheInterceptor`） |
 | `igState` 的 `ig-set-*` 回写 | `Options.OnResponseHeaders` |
 | `htmlText` | `interceptor.NewHTMLTextInterceptor(errorPageMarkers...)` |
-| `statusSemantics` | `interceptor.NewStatusSemanticsInterceptor(rule)`，限流文案用 `httpx.RetryableTextRule` |
+| `statusSemantics` | `interceptor.NewStatusSemanticsInterceptor(rule)`，限流文案用 `httpx.RetryableTextRule`；规则要打事件日志（需 ctx）时用 `NewStatusSemanticsInterceptorContext` |
 
 顺带：insgo 里「默认链 vs raw 链」的二分在本库消失了 —— 默认就是 raw。
 

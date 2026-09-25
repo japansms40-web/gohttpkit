@@ -407,7 +407,7 @@ classDiagram
 | `httpx.Prepend` / `SpliceBeforeTerminal` | 在最外层或每次真实发送前插入拦截器 | `httpx/presets.go` |
 | `httpx.InsertBefore` / `InsertAfter` / `Replace` / `Without` | 编辑链 | `httpx/presets.go` |
 | `interceptor.NewClassifyInterceptor` | 把业务响应归类为 error | `httpx/interceptor/classify.go` |
-| `interceptor.NewStatusSemanticsInterceptor` | 定义非 2xx 的处理规则 | `httpx/interceptor/status_semantics.go` |
+| `interceptor.NewStatusSemanticsInterceptor` / `NewStatusSemanticsInterceptorContext` | 定义非 2xx 的处理规则（后者规则拿得到请求 ctx） | `httpx/interceptor/status_semantics.go` |
 | `interceptor.NewRequestMutatorInterceptor` | 在发送前删头、签名或改写请求 | `httpx/interceptor/request_mutator.go` |
 | `interceptor.NewTransactionInterceptor` / `NewHTMLSaveInterceptor` | 把观察数据交给调用方 sink | `httpx/interceptor/{transaction,html_save}.go` |
 
