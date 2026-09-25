@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gohttpkit pre-push 门禁（重活）：并发回归 + 行为锁定 + 覆盖率。
+# gohttpkit pre-push 门禁（重活）：治理守卫 + 并发回归 + 行为锁定 + 覆盖率。
 # 放在 push 而非 commit，避免每次提交都等几十秒。应急绕过：git push --no-verify。
 set -uo pipefail
 

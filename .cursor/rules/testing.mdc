@@ -15,4 +15,4 @@ alwaysApply: false
 - 确定性：离线（`httptest`）、`t.TempDir()`、固定种子 `*rand.Rand`、不用 `time.Sleep` 同步 goroutine。改全局状态（`logger.SetHandler` 等）的测试不并行并 `t.Cleanup` 还原。
 - 并发：有共享状态就起多 goroutine + `-race`，断言精确聚合值。
 - 纪律：先写失败测试再实现；不为通过而改断言、删用例、`t.Skip`；fuzz 发现的崩溃种子（`testdata/fuzz/`）必须提交。
-- 验证：先 `go test -count=1 ./pkg/ -run 'TestXxx'`，再 `make cover` / `make race`。
+- 验证：先 `go test -count=1 ./<改动的包>/ -run 'TestXxx'`，再 `make cover` / `make race`。
