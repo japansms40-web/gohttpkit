@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `logger.Named(name) *Logger`：不需要 ctx 的具名日志句柄，`Debug/Info/Warn/Error(msg, attrs...)` 直接打，
+  name 非空时每条带 `module=name`；`Logger.With(attrs...)` 追加固定字段（copy-on-write）。每次调用才读当前全局 handler，
+  包级 var 先于 `SetHandler` / `SetConfig` 创建也生效；零值与 nil 接收者可用。不带 trace_id / span_id，要同链仍用 `logger.Info(ctx, ...)`。
+- `logger.FieldModule`（`"module"`）：`Named` 写入的字段 key，列入保留字段。
+
 ## [v0.7.0] - 2026-09-26
 
 > 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API；

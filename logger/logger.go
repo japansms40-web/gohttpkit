@@ -95,23 +95,32 @@ func Error(ctx context.Context, msg string, attrs ...slog.Attr) {
 	log(ctx, slog.LevelError, msg, attrs...)
 }
 
-// log 构造 Record 并转发给当前 handler。
+// log 是包级 ctx 门面（Debug/Info/Warn/Error、InfoEvent/WarnEvent）的公共出口。
 // 输入 ctx：nil 回落 Background；level / msg / attrs 写入 Record。
-// 返回：无。Handler.Handle 的 error 被丢掉——日志失败不能反向打爆业务。
-// runtime.Callers(3)：0=Callers 1=log 2=Debug/Info/Warn/Error 3=业务调用点，保证 AddSource 定位正确。
+// 返回：无。skip=4：0=Callers 1=output 2=log 3=门面函数 4=业务调用点，保证 AddSource 定位正确。
 func log(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	l := active()
-	if !l.Handler().Enabled(ctx, level) {
+	output(ctx, level, msg, 4, nil, attrs)
+}
+
+// output 构造 Record 并转发给当前 handler。
+// 输入 ctx：非 nil；skip：runtime.Callers 的跳过帧数，须指向业务调用点；
+// pre：先写入的固定字段（Logger 的 module / With）；attrs：本次调用字段，排在 pre 之后。
+// 返回：无。Handler.Handle 的 error 被丢掉——日志失败不能反向打爆业务。
+// 先判 Enabled 再取调用栈：低于阈值时不付 runtime.Callers 的开销。
+func output(ctx context.Context, level slog.Level, msg string, skip int, pre, attrs []slog.Attr) {
+	h := active().Handler()
+	if !h.Enabled(ctx, level) {
 		return
 	}
 	var pcs [1]uintptr
-	runtime.Callers(3, pcs[:])
+	runtime.Callers(skip, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	r.AddAttrs(pre...)
 	r.AddAttrs(attrs...)
-	_ = l.Handler().Handle(ctx, r)
+	_ = h.Handle(ctx, r)
 }
 
 // Err 错误字段（替代 zap.Error）。

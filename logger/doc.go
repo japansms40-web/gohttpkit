@@ -18,11 +18,21 @@
 //
 // InfoEvent / WarnEvent 的 msg 与 event 同值。需要人类文案与机器事件分离时，
 // 才用 Info(ctx, msg, EventAttr(name))。
-// 保留字段（trace_id / span_id / parent_span_id / span_name / event / duration_ms / error）
+// 保留字段（trace_id / span_id / parent_span_id / span_name / event / duration_ms / error / module）
 // 不得由业务 attrs 重用；slog 允许重名 key，不同 JSON 消费器的取值可能不一致。
+//
+// 拿不到 ctx 的地方（main、init、启动配置）用具名 Logger，不必硬造 context.Background()：
+//
+//	var log = logger.Named("mymod") // 包级声明一次，每条带 module=mymod
+//	log.Info("启动完成", slog.String("addr", addr))
+//	log.With(slog.String("account_id", "u1")).Warn("限流")
+//
+// Logger 不带 trace_id / span_id；要与 HTTP 日志同链仍用 Info(ctx, ...)。
 //
 // 设计要点：
 //   - 门面在 logger.go：Debug/Info/Warn/Error(ctx, msg, attrs...)，ctx 必传首参。
+//   - named.go 的 Logger 是全局 logger 之上的字段视图，每次调用才读当前 handler，
+//     包级 var 先于 SetHandler / SetConfig 创建也生效。
 //   - 默认输出构造在 config.go。未注入外部 logger 时按 Config 走（默认 console JSON / info）。
 //     级别 / 格式 / 去向只用 SetConfig / SetHandler / SetLogger，不读环境变量。
 //   - handler.go 包装任意 slog.Handler，注入 trace_id / span_id / WithAttrs。
