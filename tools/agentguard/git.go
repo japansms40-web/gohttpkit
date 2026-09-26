@@ -2,10 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// gitTimeout 单条 git 子命令的超时；git 卡在锁或凭据提示时到点即失败，不让钩子无限等待。
+// 是 var 而非 const：测试调小以覆盖超时分支。
+var gitTimeout = time.Minute
 
 // gitOut 在 dir 下执行 git 并返回去掉首尾空白的 stdout。
 // 输入 dir：工作目录，空串表示当前目录；args：git 子命令与参数。
@@ -15,9 +21,12 @@ func gitOut(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(s), err
 }
 
-// gitRaw 同 gitOut，但不裁剪输出（读文件内容 / diff 时保留原样）。
+// gitRaw 同 gitOut，但不裁剪输出（读文件内容 / diff 时保留原样）；超过 gitTimeout 视为失败。
 func gitRaw(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	// CLI 没有上游 ctx，这里是合法的根；与 runCmd 同款超时写法。
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout = &out

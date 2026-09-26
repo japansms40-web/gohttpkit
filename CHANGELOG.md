@@ -11,6 +11,7 @@
   不再打 `http.retry` 告警，返回 `failed to send request: %w`（可 `errors.Is` 判 `context.DeadlineExceeded` / `Canceled`），
   不再包成 `*errors.RetryableError`。此前 `"context deadline exceeded"` 命中可重试关键词，调用方超时会被当成网络抖动。
   `http.Client.Timeout` 引起的超时（调用方 ctx 仍存活）照常重试；可重试失败后在退避中取消仍返回 `*errors.RetryableError`，不变。
+- `tools/agentguard`：git 子命令改用 `exec.CommandContext` 并加 1 分钟超时，git 卡在锁或凭据提示时钩子不再无限等待。
 
 ## [v0.6.0] - 2026-09-25
 
