@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+## [v0.8.0] - 2026-09-26
+
+> tag `v0.8.0` 指向 `3924fc6`；本段定版在 tag 之后补提交，故 tag 内的 CHANGELOG 仍把这些条目记在 `[Unreleased]` 下。
+
 ### 新增
 
 - `logger.Named(name) *Logger`：不需要 ctx 的具名日志句柄，`Debug/Info/Warn/Error(msg, attrs...)` 直接打，

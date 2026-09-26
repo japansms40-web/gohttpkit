@@ -10,6 +10,13 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.8.0（相对 v0.7.0）
+
+新增（不破坏现有签名）：
+
+- `logger.Named`、`logger.Logger`（`With` / `Debug` / `Info` / `Warn` / `Error`）、`logger.FieldModule`：不需要 ctx 的具名日志句柄。
+  `logger.Info(ctx, ...)` 等 ctx 版门面签名与行为不变，下游无需迁移；拿不到 ctx 的调用点可改用 `Named`，但它不带 trace_id。
+
 ## v0.7.0（相对 v0.6.0）
 
 行为变更（签名不变，0.x 阶段按 minor）：
