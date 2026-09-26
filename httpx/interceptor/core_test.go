@@ -26,7 +26,7 @@ func TestBodyDecode_Raw为nil时原样放过(t *testing.T) {
 			}),
 		},
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("raw=nil body=%q err=%v", body, err)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 			_, _ = w.Write([]byte("this is not compressed at all"))
 		})
 		c := newClient(t, srv.Server, nil)
-		_, err := c.Get(context.Background(), "/x", nil)
+		_, err := c.Get(t.Context(), "/x", nil)
 		var ce *httpx.ContentEncodingError
 		if !errors.As(err, &ce) || ce.Encoding != httpx.EncodingGzip {
 			t.Fatalf("err = %v (%T), want *ContentEncodingError Encoding=gzip", err, err)
@@ -56,7 +56,7 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 			_, _ = w.Write([]byte("this is not compressed at all"))
 		})
 		c := newClient(t, srv.Server, nil)
-		_, err := c.Get(context.Background(), "/x", nil)
+		_, err := c.Get(t.Context(), "/x", nil)
 		if err == nil {
 			t.Fatal("zstd 流损坏应报错")
 		}
@@ -79,7 +79,7 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 func TestBridge_创建请求失败(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, nil)
-	_, err := c.Do(context.Background(), httpx.RequestSpec{Method: "BAD METHOD", Path: "/x"})
+	_, err := c.Do(t.Context(), httpx.RequestSpec{Method: "BAD METHOD", Path: "/x"})
 	var cre *httpx.CreateHTTPRequestError
 	if !errors.As(err, &cre) || cre.Method != "BAD METHOD" || cre.Err == nil {
 		t.Fatalf("err = %v (%T), want *CreateHTTPRequestError Method=BAD METHOD", err, err)
@@ -100,7 +100,7 @@ func TestBridge_构头返回nil不发请求(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Headers = httpx.HeaderProviderFunc{Base: srv.URL, Build: func(context.Context) map[string]string { return nil }}
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	assertNilBuildHeaders(t, err, "httpx.HeaderProviderFunc")
 	if srv.count() != 0 {
 		t.Fatal("构头失败时不应发出网络请求")
@@ -112,7 +112,7 @@ func TestBridge_自定义Provider构头nil带类型名(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Headers = nilHeaders{base: srv.URL}
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	assertNilBuildHeaders(t, err, "interceptor_test.nilHeaders")
 	if srv.count() != 0 {
 		t.Fatal("构头失败时不应发出网络请求")
@@ -140,7 +140,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 				}),
 			},
 		})
-		_, err := c.Get(context.Background(), "/x", nil)
+		_, err := c.Get(t.Context(), "/x", nil)
 		assertReadResponseBody(t, err, httpx.EncodingIdentity, cause)
 		var re *kiterrors.RetryableError
 		if errors.As(err, &re) {
@@ -164,7 +164,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 				}),
 			},
 		})
-		_, err := c.Get(context.Background(), "/x", nil)
+		_, err := c.Get(t.Context(), "/x", nil)
 		var got *httpx.ReadResponseBodyError
 		if !errors.As(err, &got) {
 			t.Fatalf("err = %v (%T), want *httpx.ReadResponseBodyError", err, err)
@@ -192,7 +192,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 				}),
 			},
 		})
-		_, err := c.Get(context.Background(), "/x", nil)
+		_, err := c.Get(t.Context(), "/x", nil)
 		var re *kiterrors.RetryableError
 		if !errors.As(err, &re) {
 			t.Fatalf("err = %v (%T), want *errors.RetryableError", err, err)
@@ -220,7 +220,7 @@ func TestNoRedirectTerminal_传输错误也包成TransportError(t *testing.T) {
 		Retry:        httpx.WithRetry(2, time.Millisecond, 0),
 		Interceptors: httpx.SpliceBeforeTerminal(interceptor.NoRedirectChain(), countingInterceptor(&attempts)),
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("noRedirect transport err=%v attempts=%d", err, attempts)
 	if err == nil {
 		t.Fatal("want error")

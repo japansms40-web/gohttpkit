@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -78,7 +77,7 @@ func TestBuildCookie_按抓包顺序拼且跳过空值(t *testing.T) {
 		sessionID: "s1",
 		extraCk:   map[string]string{"datr": "d1", "mid": "m1"},
 	}
-	got := h.BuildHeaders(context.Background())["cookie"]
+	got := h.BuildHeaders(t.Context())["cookie"]
 	want := "datr=d1; mid=m1; csrftoken=c1; sessionid=s1"
 	if got != want {
 		t.Fatalf("cookie = %q, want %q", got, want)
@@ -86,13 +85,13 @@ func TestBuildCookie_按抓包顺序拼且跳过空值(t *testing.T) {
 
 	// 空值字段整条不发，而不是发一个 name=
 	h2 := &browserHeaders{base: "https://x.example", csrfToken: "c1"}
-	if got := h2.BuildHeaders(context.Background())["cookie"]; got != "csrftoken=c1" {
+	if got := h2.BuildHeaders(t.Context())["cookie"]; got != "csrftoken=c1" {
 		t.Fatalf("cookie = %q, 空值字段应整条跳过", got)
 	}
 
 	// 未出现在 cookieOrder 里的字段不发（顺序未知的字段宁可不发）
 	h3 := &browserHeaders{base: "https://x.example", extraCk: map[string]string{"unknown": "u"}}
-	if got := h3.BuildHeaders(context.Background())["cookie"]; got != "" {
+	if got := h3.BuildHeaders(t.Context())["cookie"]; got != "" {
 		t.Fatalf("cookie = %q, 未登记顺序的字段不该发", got)
 	}
 }
@@ -142,7 +141,7 @@ func TestParseSetCookie(t *testing.T) {
 
 func TestBuildHeaders_头名全小写(t *testing.T) {
 	h := &browserHeaders{base: "https://x.example"}
-	for k := range h.BuildHeaders(context.Background()) {
+	for k := range h.BuildHeaders(t.Context()) {
 		if k != strings.ToLower(k) {
 			t.Fatalf("头名 %q 不是小写——大写形态是明显的机器特征", k)
 		}

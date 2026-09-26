@@ -143,7 +143,7 @@ func TestDialContext_ctx取消时不挂死(t *testing.T) {
 	}
 	dial := netproxy.DialContextWithProxy(d)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // 立即取消
 	if _, err := dial(ctx, "tcp", "127.0.0.1:1"); err == nil {
 		t.Fatal("已取消的 ctx 应立即失败")

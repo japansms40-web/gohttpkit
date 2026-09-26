@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -18,7 +17,7 @@ func (e *changingEvent) Name() string {
 func TestInfoEvent_Name只求值一次(t *testing.T) {
 	buf := captureJSON(t, nil)
 	e := &changingEvent{}
-	InfoEvent(context.Background(), e)
+	InfoEvent(t.Context(), e)
 	got := lastLine(t, buf)
 	t.Logf("calls=%d msg=%v event=%v", e.calls, got["msg"], got["event"])
 	if e.calls != 1 || got["msg"] != "demo.1" || got["event"] != "demo.1" {
@@ -29,7 +28,7 @@ func TestInfoEvent_Name只求值一次(t *testing.T) {
 func TestInfoEvent_nil记录空名(t *testing.T) {
 	buf := captureJSON(t, nil)
 	var e Event
-	InfoEvent(context.Background(), e)
+	InfoEvent(t.Context(), e)
 	got := lastLine(t, buf)
 	t.Logf("nil Event → msg=%v event=%v", got["msg"], got["event"])
 	if got["msg"] != "" || got["event"] != "" {
@@ -42,7 +41,7 @@ func TestInfoEvent_不改调用方容量区域(t *testing.T) {
 	storage := make([]slog.Attr, 2)
 	storage[0] = slog.String("first", "1")
 	storage[1] = slog.String("sentinel", "keep")
-	InfoEvent(context.Background(), NewEvent("demo.done"), storage[:1]...)
+	InfoEvent(t.Context(), NewEvent("demo.done"), storage[:1]...)
 	_ = lastLine(t, buf)
 	t.Logf("storage[1]=%v", storage[1])
 	if storage[1].Key != "sentinel" || storage[1].Value.String() != "keep" {
@@ -68,7 +67,7 @@ func TestAttr_nil输出空事件(t *testing.T) {
 
 func TestEventAttr_不改普通日志msg(t *testing.T) {
 	buf := captureJSON(t, nil)
-	Info(context.Background(), "给人看的文案", EventAttr("demo.finished"))
+	Info(t.Context(), "给人看的文案", EventAttr("demo.finished"))
 	got := lastLine(t, buf)
 	t.Logf("msg=%v event=%v", got["msg"], got["event"])
 	if got["msg"] != "给人看的文案" || got["event"] != "demo.finished" {
@@ -78,7 +77,7 @@ func TestEventAttr_不改普通日志msg(t *testing.T) {
 
 func TestWarnEvent_级别与名称稳定(t *testing.T) {
 	buf := captureJSON(t, nil)
-	WarnEvent(context.Background(), NewEvent("demo.warn"))
+	WarnEvent(t.Context(), NewEvent("demo.warn"))
 	got := lastLine(t, buf)
 	t.Logf("level=%v msg=%v event=%v", got["level"], got["msg"], got["event"])
 	if got["level"] != "WARN" || got["msg"] != "demo.warn" || got["event"] != "demo.warn" {
@@ -88,7 +87,7 @@ func TestWarnEvent_级别与名称稳定(t *testing.T) {
 
 func TestInfoEvent_AddSource指向调用点(t *testing.T) {
 	buf := captureJSON(t, &slog.HandlerOptions{AddSource: true})
-	InfoEvent(context.Background(), NewEvent("demo.source"))
+	InfoEvent(t.Context(), NewEvent("demo.source"))
 	got := lastLine(t, buf)
 	src, _ := got["source"].(map[string]any)
 	file, _ := src["file"].(string)

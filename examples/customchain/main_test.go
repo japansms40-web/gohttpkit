@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -21,11 +20,11 @@ func TestMain_整例跑通(t *testing.T) {
 
 func TestSessionHeaders_回写后下次请求带新值(t *testing.T) {
 	h := &sessionHeaders{base: "https://x.example", token: "t0"}
-	if got := h.BuildHeaders(context.Background())["authorization"]; got != "Bearer t0" {
+	if got := h.BuildHeaders(t.Context())["authorization"]; got != "Bearer t0" {
 		t.Fatalf("got %q", got)
 	}
 	h.setToken("t1")
-	if got := h.BuildHeaders(context.Background())["authorization"]; got != "Bearer t1" {
+	if got := h.BuildHeaders(t.Context())["authorization"]; got != "Bearer t1" {
 		t.Fatalf("回写后 = %q", got)
 	}
 	if h.BaseURL() != "https://x.example" {
@@ -43,7 +42,7 @@ func TestSessionHeaders_并发读写(t *testing.T) {
 		}
 	}()
 	for i := 0; i < 500; i++ {
-		if got := h.BuildHeaders(context.Background())["authorization"]; got == "" {
+		if got := h.BuildHeaders(t.Context())["authorization"]; got == "" {
 			t.Fatal("并发读到了空 authorization——构头器的锁没护住")
 		}
 	}

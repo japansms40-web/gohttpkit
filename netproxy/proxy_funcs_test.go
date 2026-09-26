@@ -162,7 +162,7 @@ func TestApplyProxyToTransport_空串不改已有字段(t *testing.T) {
 	if tr.DialContext == nil || tr.Proxy != nil {
 		t.Fatal("空串不得清掉已有 DialContext，也不得设置 Proxy")
 	}
-	_, _ = tr.DialContext(context.Background(), "tcp", "127.0.0.1:1")
+	_, _ = tr.DialContext(t.Context(), "tcp", "127.0.0.1:1")
 	if !called {
 		t.Fatal("原来的 DialContext 应还能被调用")
 	}
@@ -208,7 +208,7 @@ func TestDialContextWithProxy_ContextDialer成功才包流量(t *testing.T) {
 	backend := newPipeConn()
 	t.Cleanup(func() { _ = backend.Close() })
 	dial := DialContextWithProxy(&ctxDialer{conn: backend})
-	conn, err := dial(context.Background(), "tcp", "1.2.3.4:80")
+	conn, err := dial(t.Context(), "tcp", "1.2.3.4:80")
 	t.Logf("conn=%T err=%v same=%v", conn, err, conn == net.Conn(backend))
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestDialContextWithProxy_ContextDialer失败原样返回(t *testing.T) {
 	leftover := newPipeConn()
 	t.Cleanup(func() { _ = leftover.Close() })
 	dial := DialContextWithProxy(&ctxDialer{conn: leftover, err: sentinel})
-	conn, err := dial(context.Background(), "tcp", "1.2.3.4:80")
+	conn, err := dial(t.Context(), "tcp", "1.2.3.4:80")
 	t.Logf("conn=%T err=%v", conn, err)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("err = %v, want 原样返回底层错误", err)
@@ -235,7 +235,7 @@ func TestDialContextWithProxy_ContextDialer失败原样返回(t *testing.T) {
 
 func TestDialContextWithProxy_ContextDialer尊重已取消ctx(t *testing.T) {
 	dial := DialContextWithProxy(&ctxDialer{conn: newPipeConn()})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	conn, err := dial(ctx, "tcp", "1.2.3.4:80")
 	t.Logf("conn=%v err=%v", conn, err)
@@ -293,7 +293,7 @@ func TestDialContextWithProxy_非ContextDialer返回明确错误(t *testing.T) {
 	if dial == nil {
 		t.Fatal("非 nil dialer 不该返回 nil 函数（nil 会让 transport 静默直连、绕过代理）")
 	}
-	conn, err := dial(context.Background(), "tcp", "1.2.3.4:80")
+	conn, err := dial(t.Context(), "tcp", "1.2.3.4:80")
 	t.Logf("conn=%v err=%v dialCalled=%v", conn, err, d.dialCalled)
 	if conn != nil {
 		t.Fatal("未实现 ContextDialer 时不该返回连接")

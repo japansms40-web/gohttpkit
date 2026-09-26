@@ -1,7 +1,6 @@
 package interceptor_test
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -45,7 +44,7 @@ func newRecordingServer(t *testing.T, handler func(w http.ResponseWriter, r *htt
 	rs.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		<-rs.mu
-		rs.requests = append(rs.requests, r.Clone(context.Background()))
+		rs.requests = append(rs.requests, r.Clone(t.Context()))
 		rs.bodies = append(rs.bodies, body)
 		rs.mu <- struct{}{}
 		handler(w, r)

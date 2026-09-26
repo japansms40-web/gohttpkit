@@ -3,7 +3,6 @@ package httpx_test
 // chain_test.go —— SideChannel、Chain 访问器与缺终端的单元契约。
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -21,7 +20,7 @@ func TestChain_缺终端拦截器给出明确错误(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Get(context.Background(), "/x", nil)
+	_, err = c.Get(t.Context(), "/x", nil)
 	assertChainExhausted(t, err, 1, 1)
 }
 
@@ -89,7 +88,7 @@ func TestChain_访问器返回请求与客户端(t *testing.T) {
 		t.Fatal(err)
 	}
 	c = c2
-	if _, err := c.Get(context.Background(), "/probe", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/probe", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("path=%q sameClient=%v", gotPath, sameClient)

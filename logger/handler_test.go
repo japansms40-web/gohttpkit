@@ -32,7 +32,7 @@ func TestSetLogger_Default不再双写trace_id(t *testing.T) {
 
 	SetLogger(Default())
 
-	Info(WithTraceID(context.Background(), "solo"), "msg")
+	Info(WithTraceID(t.Context(), "solo"), "msg")
 	n := strings.Count(buf.String(), "trace_id")
 	t.Logf("trace_id count=%d body=%s", n, buf.String())
 	if n != 1 {
@@ -46,7 +46,7 @@ func TestHandlerWithAttrs_派生仍注入ctx字段(t *testing.T) {
 
 	derived := l.With(slog.String("svc", "ig"))
 
-	ctx := WithAttrs(WithTraceID(context.Background(), "tid-x"), slog.String("account_id", "u1"))
+	ctx := WithAttrs(WithTraceID(t.Context(), "tid-x"), slog.String("account_id", "u1"))
 	derived.InfoContext(ctx, "hi", slog.String("k", "v"))
 
 	m := lastLine(t, buf)
@@ -71,7 +71,7 @@ func TestHandlerWithGroup_调用点进组且仍有trace(t *testing.T) {
 
 	g := l.WithGroup("grp")
 
-	ctx := WithTraceID(context.Background(), "tid-g")
+	ctx := WithTraceID(t.Context(), "tid-g")
 	g.InfoContext(ctx, "hi", slog.String("k", "v"))
 
 	m := lastLine(t, buf)
@@ -87,7 +87,7 @@ func TestHandlerWithGroup_调用点进组且仍有trace(t *testing.T) {
 
 func TestHandle_只有WithAttrs无trace(t *testing.T) {
 	buf := captureJSON(t, nil)
-	Info(WithAttrs(context.Background(), slog.String("account_id", "u9")), "attrs-only")
+	Info(WithAttrs(t.Context(), slog.String("account_id", "u9")), "attrs-only")
 	m := lastLine(t, buf)
 	t.Logf("attrs-only=%v", m)
 	if m["account_id"] != "u9" {
@@ -109,14 +109,14 @@ func TestLog_inner错误被吞掉(t *testing.T) {
 	SetHandler(errHandler{enabled: true})
 	t.Cleanup(func() { SetLogger(nil) })
 
-	Info(context.Background(), "ignored-1")
-	Error(WithAttrs(WithTraceID(context.Background(), "t"), slog.String("a", "1")), "ignored-2")
+	Info(t.Context(), "ignored-1")
+	Error(WithAttrs(WithTraceID(t.Context(), "t"), slog.String("a", "1")), "ignored-2")
 	t.Logf("Handle 返回 error 后未向上传播")
 }
 
 func TestLog_inner关闭时直接返回(t *testing.T) {
 	SetHandler(errHandler{enabled: false})
 	t.Cleanup(func() { SetLogger(nil) })
-	Info(context.Background(), "should-skip")
+	Info(t.Context(), "should-skip")
 	t.Logf("Enabled=false 时不进 Handle")
 }

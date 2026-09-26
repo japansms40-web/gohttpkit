@@ -4,7 +4,6 @@ package interceptor_test
 // HTML 提纯与错误页标记、非 2xx 状态语义、归类报错、特殊头消化）逐个焊死。
 
 import (
-	"context"
 	stderrors "errors"
 	"net/http"
 	"testing"
@@ -19,7 +18,7 @@ func TestAPIChain_nil归类_空体404变error(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound) // 404 空体
 	})
 	c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.APIChain(nil) })
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("APIChain(nil) 404 空体 → err=%v", err)
 	var se *liberrors.HTTPStatusError
 	if !stderrors.As(err, &se) {
@@ -43,7 +42,7 @@ func TestAPIChain_归类命中body变error(t *testing.T) {
 			return nil
 		})
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("APIChain(fn) 命中 → err=%v", err)
 	if !stderrors.Is(err, sentinel) {
 		t.Fatalf("err=%v，应为归类返回的 sentinel", err)
@@ -58,7 +57,7 @@ func TestStatusSemantics_非2xx带体放行(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewStatusSemanticsInterceptor(nil))
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("400 带体 → body=%q err=%v", body, err)
 	if err != nil {
 		t.Fatalf("非 2xx 带体应放行（4xx 常承载业务体），却 err=%v", err)
@@ -76,7 +75,7 @@ func TestHTMLText_提纯剥script(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewHTMLTextInterceptor())
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("HTML 提纯 → body=%q err=%v", body, err)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +94,7 @@ func TestHTMLText_命中错误页标记报错(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewHTMLTextInterceptor("", "Access Denied"))
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("HTML 命中标记 → err=%v", err)
 	var se *liberrors.HTTPStatusError
 	if !stderrors.As(err, &se) {
@@ -106,7 +105,7 @@ func TestHTMLText_命中错误页标记报错(t *testing.T) {
 func TestApplySpecialHeaders_host头消化(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.DefaultChain() })
-	_, err := c.Do(context.Background(), httpx.RequestSpec{
+	_, err := c.Do(t.Context(), httpx.RequestSpec{
 		Path:         "/x",
 		ExtraHeaders: map[string]string{"host": "custom.example.test", "content-length": "not-a-number"},
 	})

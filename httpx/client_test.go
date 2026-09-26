@@ -3,7 +3,6 @@ package httpx_test
 // client_test.go —— Client 构造访问器与 Do 入口的单元契约。
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -24,7 +23,7 @@ func TestPostJSON_自动带contentType(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})
 	c := newClient(t, srv.Server, nil)
-	if _, err := c.PostJSON(context.Background(), "/x", map[string]int{"n": 1}); err != nil {
+	if _, err := c.PostJSON(t.Context(), "/x", map[string]int{"n": 1}); err != nil {
 		t.Fatal(err)
 	}
 	<-srv.mu
@@ -145,7 +144,7 @@ func TestLogBodyLimit_三种情形(t *testing.T) {
 func TestDo_body编码失败时不发请求(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, nil)
-	_, err := c.Do(context.Background(), httpx.RequestSpec{Method: http.MethodPost, Path: "/x", Body: make(chan int)})
+	_, err := c.Do(t.Context(), httpx.RequestSpec{Method: http.MethodPost, Path: "/x", Body: make(chan int)})
 	t.Logf("encode fail err=%v (%T) served=%d", err, err, srv.count())
 	if err == nil {
 		t.Fatal("want error")
@@ -158,7 +157,7 @@ func TestDo_body编码失败时不发请求(t *testing.T) {
 func TestDo_空Method默认GET(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, nil)
-	if _, err := c.Do(context.Background(), httpx.RequestSpec{Path: "/x"}); err != nil {
+	if _, err := c.Do(t.Context(), httpx.RequestSpec{Path: "/x"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("empty method → %q", srv.last().Method)
@@ -176,7 +175,7 @@ func TestDo_空链不再回落默认链(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Get(context.Background(), "/x", nil)
+	_, err = c.Get(t.Context(), "/x", nil)
 	t.Logf("empty chain err=%v", err)
 	assertChainExhausted(t, err, 0, 0)
 }

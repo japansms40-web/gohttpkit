@@ -28,7 +28,7 @@ func TestStatusSemanticsContext_规则拿到请求ctx(t *testing.T) {
 				return sentinel
 			}))
 	})
-	ctx := context.WithValue(context.Background(), ctxKey{}, "trace-me")
+	ctx := context.WithValue(t.Context(), ctxKey{}, "trace-me")
 	_, err := c.Get(ctx, "/x", nil)
 	t.Logf("err=%v ctxValue=%v status=%d", err, gotValue, gotStatus)
 	if !errors.Is(err, sentinel) {
@@ -49,7 +49,7 @@ func TestStatusSemanticsContext_2xx不进规则(t *testing.T) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(),
 			interceptor.NewStatusSemanticsInterceptorContext(func(context.Context, int, []byte) error { ruleCalls++; return errors.New("x") }))
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("2xx body=%q err=%v ruleCalls=%d", body, err, ruleCalls)
 	if err != nil || string(body) != "ok" {
 		t.Fatalf("body=%q err=%v, want (ok, nil)", body, err)
@@ -64,7 +64,7 @@ func TestStatusSemanticsContext_nil规则回落默认规则(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewStatusSemanticsInterceptorContext(nil))
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("nil rule err=%v", err)
 	var se *kiterrors.HTTPStatusError
 	if !errors.As(err, &se) || se.StatusCode != http.StatusNotFound {
@@ -81,7 +81,7 @@ func TestStatusSemanticsContext_规则放行时原样返回响应(t *testing.T) 
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(),
 			interceptor.NewStatusSemanticsInterceptorContext(func(context.Context, int, []byte) error { return nil }))
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("pass body=%q err=%v status=%d", body, err, c.SnapshotResponseStatusCode())
 	if err != nil || string(body) != `{"msg":"biz"}` {
 		t.Fatalf("body=%q err=%v, want 原样放行", body, err)
@@ -101,7 +101,7 @@ func TestStatusSemanticsContext_内层出错时穿透(t *testing.T) {
 			httpx.InterceptorFunc(func(*httpx.Chain) (*httpx.Response, error) { return nil, sentinel }),
 		},
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("inner err=%v ruleCalls=%d", err, ruleCalls)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("err = %v, want 内层错误原样穿透", err)

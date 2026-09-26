@@ -2,7 +2,6 @@ package logger
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"regexp"
@@ -30,7 +29,7 @@ func allLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 func TestStartSpan_成对事件并带耗时(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	ctx, end := StartSpan(context.Background(), "demo.op")
+	ctx, end := StartSpan(t.Context(), "demo.op")
 	end(slog.String("result", "ok"))
 
 	lines := allLines(t, buf)
@@ -88,7 +87,7 @@ func TestStartSpan_nilContext与空名(t *testing.T) {
 func TestSpanNesting_parent与trace一致(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	parentCtx, endParent := StartSpan(WithTraceID(context.Background(), "tid-1"), "parent")
+	parentCtx, endParent := StartSpan(WithTraceID(t.Context(), "tid-1"), "parent")
 	childCtx, endChild := StartSpan(parentCtx, "child")
 	endChild()
 	endParent()
@@ -119,7 +118,7 @@ func TestSpanNesting_parent与trace一致(t *testing.T) {
 func TestSpanCtx_普通Info自动带span_id(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	ctx, end := StartSpan(context.Background(), "op")
+	ctx, end := StartSpan(t.Context(), "op")
 	Info(ctx, "inside span work")
 	end()
 
@@ -140,7 +139,7 @@ func TestSpanIDFromContext_空与nil(t *testing.T) {
 	if got := SpanIDFromContext(nil); got != "" {
 		t.Fatalf("nil → %q", got)
 	}
-	if got := SpanIDFromContext(context.Background()); got != "" {
+	if got := SpanIDFromContext(t.Context()); got != "" {
 		t.Fatalf("Background → %q", got)
 	}
 	t.Logf("无 span 时为空串")
@@ -157,7 +156,7 @@ func TestNewSpanID_格式为8位hex(t *testing.T) {
 
 func TestStartSpan_end可多次调用(t *testing.T) {
 	buf := captureJSON(t, nil)
-	_, end := StartSpan(context.Background(), "multi.end")
+	_, end := StartSpan(t.Context(), "multi.end")
 	end()
 	end(slog.String("again", "yes"))
 	lines := allLines(t, buf)
@@ -179,7 +178,7 @@ func TestStartSpan_end可多次调用(t *testing.T) {
 
 func TestStartSpan_start带调用方attrs(t *testing.T) {
 	buf := captureJSON(t, nil)
-	_, end := StartSpan(context.Background(), "with.attr", slog.String("method", "GET"))
+	_, end := StartSpan(t.Context(), "with.attr", slog.String("method", "GET"))
 	end()
 	start := allLines(t, buf)[0]
 	t.Logf("start=%v", start)
@@ -193,7 +192,7 @@ func TestStartSpan_start带调用方attrs(t *testing.T) {
 
 func TestStartSpan_不改入参ctx(t *testing.T) {
 	_ = captureJSON(t, nil)
-	parent := context.Background()
+	parent := t.Context()
 	ctx, end := StartSpan(parent, "immutable")
 	end()
 	t.Logf("parent span=%q child span=%q", SpanIDFromContext(parent), SpanIDFromContext(ctx))

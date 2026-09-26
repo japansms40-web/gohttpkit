@@ -40,7 +40,7 @@ func TestSetLogger_注入后自动带trace_id(t *testing.T) {
 	SetLogger(slog.New(slog.NewJSONHandler(buf, nil)))
 	t.Cleanup(func() { SetLogger(nil) })
 
-	Info(WithTraceID(context.Background(), "lg"), "via-setlogger")
+	Info(WithTraceID(t.Context(), "lg"), "via-setlogger")
 	m := lastLine(t, buf)
 	t.Logf("msg=%v trace_id=%v", m["msg"], m["trace_id"])
 	if m["msg"] != "via-setlogger" {
@@ -63,7 +63,7 @@ func TestSetHandler_nil还原默认(t *testing.T) {
 	}
 
 	buf.Reset()
-	Info(context.Background(), "after-nil")
+	Info(t.Context(), "after-nil")
 	t.Logf("old buf after nil = %q", buf.String())
 	if buf.Len() != 0 {
 		t.Fatalf("SetHandler(nil) 后不应再写入旧注入 buf: %s", buf.String())
@@ -149,7 +149,7 @@ func TestInjectionPriority_SetConfig不覆盖external(t *testing.T) {
 	SetHandler(slog.NewJSONHandler(buf, nil))
 	t.Cleanup(func() { SetLogger(nil) })
 
-	Info(context.Background(), "via external")
+	Info(t.Context(), "via external")
 	t.Logf("after SetHandler: %s", buf.String())
 	if !strings.Contains(buf.String(), "via external") {
 		t.Fatal("SetHandler 注入未生效")
@@ -157,7 +157,7 @@ func TestInjectionPriority_SetConfig不覆盖external(t *testing.T) {
 
 	SetConfig(Config{Level: "info", Format: "json", Output: "console"})
 	buf.Reset()
-	Info(context.Background(), "still external")
+	Info(t.Context(), "still external")
 	t.Logf("after SetConfig: %s", buf.String())
 	if !strings.Contains(buf.String(), "still external") {
 		t.Fatal("SetConfig 不应覆盖已注入的 external logger")
@@ -165,7 +165,7 @@ func TestInjectionPriority_SetConfig不覆盖external(t *testing.T) {
 
 	SetLogger(nil)
 	buf.Reset()
-	Info(context.Background(), "to default")
+	Info(t.Context(), "to default")
 	t.Logf("after SetLogger(nil) bufLen=%d", buf.Len())
 	if buf.Len() != 0 {
 		t.Fatal("SetLogger(nil) 后不应再写入注入的 buf")
@@ -187,7 +187,7 @@ func TestLevelFunctions_四级透传msg与attr(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			buf.Reset()
-			c.fn(context.Background(), "the-msg", slog.Int("n", 7))
+			c.fn(t.Context(), "the-msg", slog.Int("n", 7))
 			m := lastLine(t, buf)
 			t.Logf("level=%v msg=%v n=%v", m["level"], m["msg"], m["n"])
 			if m["level"] != c.level {
@@ -206,14 +206,14 @@ func TestLevelFunctions_四级透传msg与attr(t *testing.T) {
 func TestLog_低于阈值不写出(t *testing.T) {
 	buf := captureJSON(t, &slog.HandlerOptions{Level: slog.LevelWarn})
 
-	Debug(context.Background(), "dropped-debug")
-	Info(context.Background(), "dropped-info")
+	Debug(t.Context(), "dropped-debug")
+	Info(t.Context(), "dropped-info")
 	t.Logf("below warn buf=%q", buf.String())
 	if buf.Len() != 0 {
 		t.Fatalf("低于 warn 的日志不应输出: %s", buf.String())
 	}
 
-	Warn(context.Background(), "kept-warn")
+	Warn(t.Context(), "kept-warn")
 	m := lastLine(t, buf)
 	t.Logf("warn → %v", m["msg"])
 	if m["msg"] != "kept-warn" {
@@ -235,7 +235,7 @@ func TestInfo_nilContext回落Background(t *testing.T) {
 func TestErr_nil不产键非nil写出(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	Info(context.Background(), "nil errs", Err(nil), NamedErr("classify_err", nil))
+	Info(t.Context(), "nil errs", Err(nil), NamedErr("classify_err", nil))
 	m := lastLine(t, buf)
 	t.Logf("nil errs keys error=%v classify_err=%v", m["error"], m["classify_err"])
 	if _, ok := m["error"]; ok {
@@ -246,7 +246,7 @@ func TestErr_nil不产键非nil写出(t *testing.T) {
 	}
 
 	buf.Reset()
-	Info(context.Background(), "real err", Err(context.DeadlineExceeded))
+	Info(t.Context(), "real err", Err(context.DeadlineExceeded))
 	m = lastLine(t, buf)
 	t.Logf("Err(DeadlineExceeded) → %v", m["error"])
 	if m["error"] != context.DeadlineExceeded.Error() {
@@ -274,7 +274,7 @@ func TestNamedErr_空键名仍写出(t *testing.T) {
 
 func TestNamedErr_自定义键名(t *testing.T) {
 	buf := captureJSON(t, nil)
-	Info(context.Background(), "named", NamedErr("classify_err", context.Canceled))
+	Info(t.Context(), "named", NamedErr("classify_err", context.Canceled))
 	m := lastLine(t, buf)
 	t.Logf("classify_err=%v", m["classify_err"])
 	if m["classify_err"] != context.Canceled.Error() {
@@ -285,7 +285,7 @@ func TestNamedErr_自定义键名(t *testing.T) {
 func TestSourceLocation_指向本测试文件(t *testing.T) {
 	buf := captureJSON(t, &slog.HandlerOptions{AddSource: true})
 
-	Info(context.Background(), "where am i")
+	Info(t.Context(), "where am i")
 	m := lastLine(t, buf)
 	src, _ := m["source"].(map[string]any)
 	t.Logf("source=%v", src)
@@ -317,7 +317,7 @@ func TestConcurrentSetAndLog_混跑不炸(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			ctx := WithTraceID(context.Background(), "race")
+			ctx := WithTraceID(t.Context(), "race")
 			for j := 0; j < 100; j++ {
 				Info(ctx, "concurrent", slog.Int("j", j))
 			}

@@ -61,7 +61,7 @@ func TestBodyDecode_四种编码roundtrip(t *testing.T) {
 			_, _ = w.Write(body)
 		})
 		c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.DefaultChain() })
-		got, err := c.Get(context.Background(), "/x", nil)
+		got, err := c.Get(t.Context(), "/x", nil)
 		t.Logf("encoding=%s → 解压 %d 字节 err=%v", name, len(got), err)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -78,7 +78,7 @@ func TestBodyDecode_损坏gzip报ContentEncodingError(t *testing.T) {
 		_, _ = w.Write([]byte("这不是合法的 gzip 流")) // 头就非法，gzip.NewReader 立即失败
 	})
 	c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.DefaultChain() })
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("损坏 gzip → err=%v", err)
 	var ce *httpx.ContentEncodingError
 	if !stderrors.As(err, &ce) {
@@ -99,7 +99,7 @@ func TestResponseHeaderCache_OnResponseHeaders回调(t *testing.T) {
 		o.Interceptors = interceptor.DefaultChain()
 		o.OnResponseHeaders = func(_ context.Context, h http.Header) { gotToken = h.Get("x-new-token") }
 	})
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("hook 收到 x-new-token=%q", gotToken)
@@ -116,7 +116,7 @@ func TestRequestMutator_非nil改写生效(t *testing.T) {
 				req.HTTPReq.Header.Set("x-mutated", "1")
 			}))
 	})
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	<-srv.mu

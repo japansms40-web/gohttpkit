@@ -11,7 +11,7 @@ import (
 func TestTraceIDFromContext_有则写出无则省略(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	Info(WithTraceID(context.Background(), "abc123"), "with trace")
+	Info(WithTraceID(t.Context(), "abc123"), "with trace")
 	m := lastLine(t, buf)
 	t.Logf("with trace → %v", m["trace_id"])
 	if m["trace_id"] != "abc123" {
@@ -19,7 +19,7 @@ func TestTraceIDFromContext_有则写出无则省略(t *testing.T) {
 	}
 
 	buf.Reset()
-	Info(context.Background(), "no trace")
+	Info(t.Context(), "no trace")
 	m = lastLine(t, buf)
 	t.Logf("no trace keys trace_id=%v", m["trace_id"])
 	if m["trace_id"] != nil {
@@ -34,8 +34,8 @@ func TestTraceIDFromContext_nil与空串(t *testing.T) {
 		want string
 	}{
 		{"nil ctx", nil, ""},
-		{"裸 Background", context.Background(), ""},
-		{"显式空串", WithTraceID(context.Background(), ""), ""},
+		{"裸 Background", t.Context(), ""},
+		{"显式空串", WithTraceID(t.Context(), ""), ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -59,7 +59,7 @@ func TestWithTraceID_nilContext不panic(t *testing.T) {
 }
 
 func TestEnsureTraceID_生成幂等且不覆盖调用方(t *testing.T) {
-	ctx := EnsureTraceID(context.Background())
+	ctx := EnsureTraceID(t.Context())
 	tid := TraceIDFromContext(ctx)
 	t.Logf("generated = %q", tid)
 	if !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(tid) {
@@ -72,14 +72,14 @@ func TestEnsureTraceID_生成幂等且不覆盖调用方(t *testing.T) {
 		t.Fatalf("EnsureTraceID 不幂等: %q != %q", TraceIDFromContext(ctx2), tid)
 	}
 
-	pre := WithTraceID(context.Background(), "caller-set")
+	pre := WithTraceID(t.Context(), "caller-set")
 	got := TraceIDFromContext(EnsureTraceID(pre))
 	t.Logf("caller-set after Ensure = %q", got)
 	if got != "caller-set" {
 		t.Fatalf("调用方 trace_id 被覆盖: %q", got)
 	}
 
-	empty := WithTraceID(context.Background(), "")
+	empty := WithTraceID(t.Context(), "")
 	filled := EnsureTraceID(empty)
 	t.Logf("empty then Ensure = %q", TraceIDFromContext(filled))
 	if TraceIDFromContext(filled) == "" {
@@ -113,7 +113,7 @@ func TestNewTraceID_不重复且格式正确(t *testing.T) {
 func TestWithAttrs_追加且不改父切片(t *testing.T) {
 	buf := captureJSON(t, nil)
 
-	parent := WithAttrs(context.Background(), slog.String("account_id", "u1"))
+	parent := WithAttrs(t.Context(), slog.String("account_id", "u1"))
 	child := WithAttrs(parent, slog.String("task_id", "t9"))
 
 	Info(child, "both attrs")
@@ -144,14 +144,14 @@ func TestWithAttrs_追加且不改父切片(t *testing.T) {
 }
 
 func TestWithAttrs_空切片原样返回(t *testing.T) {
-	parent := WithAttrs(context.Background(), slog.String("a", "1"))
+	parent := WithAttrs(t.Context(), slog.String("a", "1"))
 	got := WithAttrs(parent)
 	t.Logf("empty attrs same=%v", got == parent)
 	if got != parent {
 		t.Fatal("空 attrs 应原样返回同一父 ctx")
 	}
 
-	base := context.Background()
+	base := t.Context()
 	if WithAttrs(base) != base {
 		t.Fatal("无 attrs 应返回原 ctx")
 	}
@@ -168,7 +168,7 @@ func TestWithAttrs_nilContext加字段(t *testing.T) {
 }
 
 func TestWithAttrs_改子切片不影响父(t *testing.T) {
-	parent := WithAttrs(context.Background(), slog.String("a", "1"))
+	parent := WithAttrs(t.Context(), slog.String("a", "1"))
 	child := WithAttrs(parent, slog.String("b", "2"))
 	got := attrsFromContext(child)
 	if len(got) != 2 {
@@ -183,7 +183,7 @@ func TestWithAttrs_改子切片不影响父(t *testing.T) {
 }
 
 func TestEnsureTraceID_不改入参Background(t *testing.T) {
-	base := context.Background()
+	base := t.Context()
 	got := EnsureTraceID(base)
 	t.Logf("base tid=%q derived=%q", TraceIDFromContext(base), TraceIDFromContext(got))
 	if TraceIDFromContext(base) != "" {
@@ -205,7 +205,7 @@ func TestAttrsFromContext_nil返回nil(t *testing.T) {
 
 func TestConcurrentContextDerive_无数据竞争(t *testing.T) {
 	buf := captureJSON(t, nil)
-	base := WithAttrs(context.Background(), slog.String("base", "0"))
+	base := WithAttrs(t.Context(), slog.String("base", "0"))
 
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {

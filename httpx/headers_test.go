@@ -3,7 +3,6 @@ package httpx_test
 // headers_test.go —— HeaderProvider 与白名单过滤的单元契约。
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -15,13 +14,13 @@ import (
 
 func TestStaticHeaders_返回副本且key转小写(t *testing.T) {
 	sh := httpx.StaticHeaders{Base: "https://x.example", Headers: map[string]string{"Accept": "*/*"}}
-	got := sh.BuildHeaders(context.Background())
+	got := sh.BuildHeaders(t.Context())
 	t.Logf("BuildHeaders=%v BaseURL=%q", got, sh.BaseURL())
 	if got["accept"] != "*/*" {
 		t.Fatalf("key 未转小写: %v", got)
 	}
 	got["injected"] = "boom"
-	if _, leaked := sh.BuildHeaders(context.Background())["injected"]; leaked {
+	if _, leaked := sh.BuildHeaders(t.Context())["injected"]; leaked {
 		t.Fatal("StaticHeaders 返回了内部 map")
 	}
 	if sh.BaseURL() != "https://x.example" {
@@ -33,7 +32,7 @@ func TestHeaderProviderFunc_Build为nil时返回空表而非nil(t *testing.T) {
 	// 返回 nil 会被 bridge 判为「构头失败」，一个没配 Build 的 provider
 	// 不该表现成构头失败，而该表现成「没有任何头」。
 	f := httpx.HeaderProviderFunc{Base: "https://x.example"}
-	got := f.BuildHeaders(context.Background())
+	got := f.BuildHeaders(t.Context())
 	t.Logf("Build=%v nil=%v BaseURL=%q", got, got == nil, f.BaseURL())
 	if got == nil {
 		t.Fatal("应返回空 map 而不是 nil")

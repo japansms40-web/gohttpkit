@@ -1,7 +1,6 @@
 package interceptor_test
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"testing"
@@ -22,7 +21,7 @@ func TestHTTPXNewClient_未传链时装默认链(t *testing.T) {
 	if got := len(c.Interceptors()); got != len(interceptor.DefaultChain()) {
 		t.Fatalf("len = %d, want %d", got, len(interceptor.DefaultChain()))
 	}
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +38,7 @@ func TestHTTPXNewClient_空切片不回落默认链(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Get(context.Background(), "/x", nil)
+	_, err = c.Get(t.Context(), "/x", nil)
 	var ce *httpx.ChainExhaustedError
 	if !errors.As(err, &ce) {
 		t.Fatalf("err = %v (%T), want *ChainExhaustedError", err, err)

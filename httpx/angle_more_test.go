@@ -160,7 +160,7 @@ func TestBuildOriginAndReferer_空边界(t *testing.T) {
 }
 
 func TestStaticHeaders_Headers为nil是空表(t *testing.T) {
-	got := httpx.StaticHeaders{Base: "https://a.example"}.BuildHeaders(context.Background())
+	got := httpx.StaticHeaders{Base: "https://a.example"}.BuildHeaders(t.Context())
 	t.Logf("Headers=nil → %v nil=%v", got, got == nil)
 	if got == nil || len(got) != 0 {
 		t.Fatalf("应为空 map，got %v", got)
@@ -172,7 +172,7 @@ func TestHeaderProviderFunc_Build返回nil原样nil(t *testing.T) {
 		Base:  "https://a.example",
 		Build: func(context.Context) map[string]string { return nil },
 	}
-	got := f.BuildHeaders(context.Background())
+	got := f.BuildHeaders(t.Context())
 	t.Logf("Build=nil 函数 → %v", got)
 	if got != nil {
 		t.Fatal("显式返回 nil 应原样（bridge 会当成构头失败）")

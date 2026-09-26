@@ -69,7 +69,7 @@ func TestConcurrent_共享Client并发请求(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < perWorker; i++ {
-				if _, err := c.Get(context.Background(), fmt.Sprintf("/w%d/%d", w, i), nil); err != nil {
+				if _, err := c.Get(t.Context(), fmt.Sprintf("/w%d/%d", w, i), nil); err != nil {
 					errs <- err
 					return
 				}
@@ -108,8 +108,8 @@ func TestConcurrent_派生子Client与父并发互不干扰(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < pairs; i++ {
 		wg.Add(2)
-		go func() { defer wg.Done(); _, _ = c.Get(context.Background(), "/p", nil) }()
-		go func() { defer wg.Done(); _, _ = derived.Get(context.Background(), "/d", nil) }()
+		go func() { defer wg.Done(); _, _ = c.Get(t.Context(), "/p", nil) }()
+		go func() { defer wg.Done(); _, _ = derived.Get(t.Context(), "/d", nil) }()
 	}
 	wg.Wait()
 }

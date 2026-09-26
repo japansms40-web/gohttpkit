@@ -2,7 +2,6 @@ package logger
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -64,7 +63,7 @@ func TestSetConfig_file写入指定路径并建目录(t *testing.T) {
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile, FilePath: path})
 
-	Info(context.Background(), "to-file-unique-xyz")
+	Info(t.Context(), "to-file-unique-xyz")
 
 	data, err := os.ReadFile(path)
 	t.Logf("path=%s err=%v body=%s", path, err, data)
@@ -92,7 +91,7 @@ func TestSetConfig_both同时写stdout与文件(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: "info", Format: "console", Output: "both", FilePath: path})
-	Info(context.Background(), "both-unique-abc")
+	Info(t.Context(), "both-unique-abc")
 
 	os.Stdout = origStdout
 	_ = w.Close()
@@ -175,8 +174,8 @@ func TestSetConfig_零值回落info且走JSON(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Output: OutputFile, FilePath: path})
-	Debug(context.Background(), "zero-debug-should-drop")
-	Info(context.Background(), "zero-info-keep")
+	Debug(t.Context(), "zero-debug-should-drop")
+	Info(t.Context(), "zero-info-keep")
 
 	data, err := os.ReadFile(path)
 	t.Logf("zero config body=%s err=%v", data, err)
@@ -198,7 +197,7 @@ func TestSetConfig_非法Format按JSON(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: "XML", Output: OutputFile, FilePath: path})
-	Info(context.Background(), "xml-as-json")
+	Info(t.Context(), "xml-as-json")
 
 	data, err := os.ReadFile(path)
 	t.Logf("illegal format body=%s err=%v", data, err)
@@ -220,7 +219,7 @@ func TestSetConfig_FormatConsole走文本(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatConsole, Output: OutputFile, FilePath: path})
-	Info(context.Background(), "console-line")
+	Info(t.Context(), "console-line")
 
 	data, err := os.ReadFile(path)
 	t.Logf("console body=%s err=%v", data, err)
@@ -248,7 +247,7 @@ func TestSetConfig_未知Output当console写stdout(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: "syslog"})
-	Info(context.Background(), "unknown-output-stdout")
+	Info(t.Context(), "unknown-output-stdout")
 
 	os.Stdout = origStdout
 	_ = w.Close()
@@ -266,10 +265,10 @@ func TestSetConfig_LevelError过滤低级别(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelError, Format: FormatJSON, Output: OutputFile, FilePath: path})
-	Debug(context.Background(), "drop-debug")
-	Info(context.Background(), "drop-info")
-	Warn(context.Background(), "drop-warn")
-	Error(context.Background(), "keep-error")
+	Debug(t.Context(), "drop-debug")
+	Info(t.Context(), "drop-info")
+	Warn(t.Context(), "drop-warn")
+	Error(t.Context(), "keep-error")
 
 	data, err := os.ReadFile(path)
 	t.Logf("error-level body=%s err=%v", data, err)
@@ -294,7 +293,7 @@ func TestSetConfig_LevelDebug放行Debug(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelDebug, Format: FormatJSON, Output: OutputFile, FilePath: path})
-	Debug(context.Background(), "debug-ok")
+	Debug(t.Context(), "debug-ok")
 
 	data, err := os.ReadFile(path)
 	t.Logf("debug body=%s err=%v", data, err)
@@ -320,7 +319,7 @@ func TestSetConfig_空FilePath回落默认路径(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile})
-	Info(context.Background(), "default-path-msg")
+	Info(t.Context(), "default-path-msg")
 
 	data, err := os.ReadFile(filepath.Join(dir, "logs", "app.log"))
 	t.Logf("default path body=%s err=%v", data, err)
@@ -383,7 +382,7 @@ func TestSetConfig_AddSource指向业务调用点(t *testing.T) {
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile, FilePath: path})
-	Info(context.Background(), "src-line")
+	Info(t.Context(), "src-line")
 
 	data, err := os.ReadFile(path)
 	t.Logf("source body=%s err=%v", data, err)

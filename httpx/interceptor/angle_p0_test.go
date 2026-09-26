@@ -55,7 +55,7 @@ func TestTransaction_成功sink字段与Clone隔离(t *testing.T) {
 				return resp, err
 			}))
 	})
-	if _, err := c.PostForm(context.Background(), "/create", "a=1"); err != nil {
+	if _, err := c.PostForm(t.Context(), "/create", "a=1"); err != nil {
 		t.Fatal(err)
 	}
 	if liveHeader != nil {
@@ -104,7 +104,7 @@ func TestNoRedirect_302原样返回不跟随(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = interceptor.NoRedirectChain()
 	})
-	body, err := c.Get(context.Background(), "/from", nil)
+	body, err := c.Get(t.Context(), "/from", nil)
 	t.Logf("302 body=%q status=%d location=%q hits=%d", body, c.SnapshotResponseStatusCode(), c.SnapshotResponseHeaders().Get("location"), srv.count())
 	if err != nil {
 		t.Fatalf("302 空体不该报错: %v", err)
@@ -164,7 +164,7 @@ func TestRetry_不可重试包装底层错误(t *testing.T) {
 		},
 		Interceptors: httpx.Interceptors{interceptor.NewRetryInterceptor(), term},
 	})
-	_, err := c.Get(context.Background(), "/x", nil)
+	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("不可重试 err=%v attempts=%d", err, term.n)
 	if term.n != 1 {
 		t.Fatalf("不可重试应只试 1 次，got %d", term.n)
@@ -182,7 +182,7 @@ func TestRetry_不可重试包装底层错误(t *testing.T) {
 }
 
 func TestRetry_退避时ctx取消成RetryableError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	term := &transportFailTerminal{
 		err:   errors.New("connection reset by peer"),
 		after: cancel,
@@ -286,7 +286,7 @@ func TestRetry_第二次成功打retrySucceeded(t *testing.T) {
 		Retry:        httpx.WithRetry(2, time.Millisecond, 0),
 		Interceptors: httpx.Interceptors{interceptor.NewRetryInterceptor(), term},
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("重试成功 body=%q err=%v attempts=%d logs=%s", body, err, term.n, buf.String())
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +307,7 @@ func TestBridge_POST体与白名单与空ExtraHeaders(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = interceptor.DefaultChain()
 	})
-	_, err := c.Do(context.Background(), httpx.RequestSpec{
+	_, err := c.Do(t.Context(), httpx.RequestSpec{
 		Method:          http.MethodPost,
 		Path:            "/x",
 		Body:            []byte("hello!!"),
@@ -349,7 +349,7 @@ func TestBridge_DisableOriginReferer不注入(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.DisableOriginReferer = true
 	})
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	<-srv.mu
@@ -380,7 +380,7 @@ func TestBodyDecode_Close失败仍返回体(t *testing.T) {
 	// InterceptorFunc 不是终端……但 Proceed 会调用它并返回，不需要终端如果它是最后一层？
 	// Chain.Proceed: 如果 index >= len，ChainExhausted。所以最后一层必须自己不 Proceed，或是终端。
 	// InterceptorFunc 会作为最后一层被调用，只要它不 Proceed 就行。OK。
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("Close 失败 body=%q err=%v logs=%s", body, err, buf.String())
 	if err != nil {
 		t.Fatalf("Close 失败不应淹没已读体，err=%v", err)
@@ -406,7 +406,7 @@ func TestHTMLText_空marker忽略不误伤(t *testing.T) {
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
 		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewHTMLTextInterceptor("", ""))
 	})
-	body, err := c.Get(context.Background(), "/x", nil)
+	body, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("空 marker body=%q err=%v", body, err)
 	if err != nil {
 		t.Fatalf("空 marker 不应把正文当错误页: %v", err)
@@ -422,7 +422,7 @@ func TestStatusCodeCache_成功写入快照(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})
 	c := newClient(t, srv.Server, nil)
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("status snapshot=%d", c.SnapshotResponseStatusCode())
@@ -443,7 +443,7 @@ func TestResponseHeaderCache_多值SetCookie进hook(t *testing.T) {
 			cookies = append([]string(nil), h.Values("set-cookie")...)
 		}
 	})
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("hook cookies=%v snapshot=%v", cookies, c.SnapshotResponseHeaders().Values("set-cookie"))
@@ -456,7 +456,7 @@ func TestLogging_摘要2xx字段可被抓到(t *testing.T) {
 	buf := captureInterceptorLogs(t)
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, func(o *httpx.Options) { o.LogSummaryOnly = true })
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("logs=%s", buf.String())

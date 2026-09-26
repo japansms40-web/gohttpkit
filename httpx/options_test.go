@@ -3,7 +3,6 @@ package httpx_test
 // options_test.go —— Options / RetryPolicy 归一化的单元契约。
 
 import (
-	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -166,7 +165,7 @@ func TestOptions_自带Transport则不再调优也不接代理(t *testing.T) {
 func TestOptions_DisableOriginReferer(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, func(o *httpx.Options) { o.DisableOriginReferer = true })
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+	if _, err := c.Get(t.Context(), "/x", nil); err != nil {
 		t.Fatal(err)
 	}
 	h := srv.last().Header
