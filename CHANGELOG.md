@@ -5,12 +5,20 @@
 
 ## [Unreleased]
 
-### 修复
+## [v0.7.0] - 2026-09-26
+
+> 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API；
+> 本版的 agentguard 修复随 `tools/agentguard/v0.1.3` 发布。
+
+### 变更
 
 - `interceptor.NewRetryInterceptor`：发送失败正由调用方 ctx 结束引起时（`req.Ctx.Err()` 非空且错误链含该 ctx 错误）不再重试、
   不再打 `http.retry` 告警，返回 `failed to send request: %w`（可 `errors.Is` 判 `context.DeadlineExceeded` / `Canceled`），
   不再包成 `*errors.RetryableError`。此前 `"context deadline exceeded"` 命中可重试关键词，调用方超时会被当成网络抖动。
   `http.Client.Timeout` 引起的超时（调用方 ctx 仍存活）照常重试；可重试失败后在退避中取消仍返回 `*errors.RetryableError`，不变。
+
+### 修复
+
 - `tools/agentguard`：git 子命令改用 `exec.CommandContext` 并加 1 分钟超时，git 卡在锁或凭据提示时钩子不再无限等待。
 
 ## [v0.6.0] - 2026-09-25

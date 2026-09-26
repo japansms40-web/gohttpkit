@@ -10,6 +10,14 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.7.0（相对 v0.6.0）
+
+行为变更（签名不变，0.x 阶段按 minor）：
+
+- 重试拦截器：调用方 ctx 结束引起的发送失败不再重试，返回 `failed to send request: %w` 而非 `*errors.RetryableError`。
+  下游若用 `errors.As(err, &RetryableError)` 决定「换出口重试」，调用方自己的超时 / 取消将不再命中该分支——
+  这正是修复目的；需要识别超时请改用 `errors.Is(err, context.DeadlineExceeded)` / `errors.Is(err, context.Canceled)`。
+
 ## v0.6.0（相对 v0.5.0）
 
 新增（不破坏现有签名）：
