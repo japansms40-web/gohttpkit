@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -208,6 +209,72 @@ func TestRetry_退避时ctx取消成RetryableError(t *testing.T) {
 	}
 	if term.n != 1 {
 		t.Fatalf("取消后不应再发，attempts=%d", term.n)
+	}
+}
+
+// errThenOKTerminal 前 fails 次返回 err 的传输错误，之后成功。
+type errThenOKTerminal struct {
+	httpx.TerminalMarker
+	err   error
+	fails int
+	n     int
+}
+
+func (t *errThenOKTerminal) Intercept(*httpx.Chain) (*httpx.Response, error) {
+	t.n++
+	if t.n <= t.fails {
+		return nil, &httpx.TransportError{Err: t.err}
+	}
+	return &httpx.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: []byte("ok")}, nil
+}
+
+func TestRetry_调用方ctx到期引起的失败不重试(t *testing.T) {
+	buf := captureInterceptorLogs(t)
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	// 文案含 "context deadline exceeded"，默认关键词表判为可重试；但它正是调用方 ctx 到期造成的。
+	term := &transportFailTerminal{err: fmt.Errorf("Get \"https://x.example/x\": %w", context.DeadlineExceeded)}
+	c := newClientWith(t, httpx.Options{
+		Headers:      httpx.StaticHeaders{Base: "https://x.example"},
+		Retry:        httpx.WithRetry(3, time.Hour, 0),
+		Interceptors: httpx.Interceptors{interceptor.NewRetryInterceptor(), term},
+	})
+	_, err := c.Get(ctx, "/x", nil)
+	t.Logf("调用方 ctx 到期 err=%v attempts=%d", err, term.n)
+	if term.n != 1 {
+		t.Fatalf("调用方 ctx 已到期不应重试，attempts=%d", term.n)
+	}
+	var re *kiterrors.RetryableError
+	if errors.As(err, &re) {
+		t.Fatalf("调用方 ctx 到期不得包成 *RetryableError，err=%v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("应保留 context.DeadlineExceeded，err=%v", err)
+	}
+	if strings.Contains(buf.String(), httpx.EventHTTPRetry.Name()) {
+		t.Fatalf("不应打 http.retry 事件，logs=%s", buf.String())
+	}
+}
+
+func TestRetry_ctx仍存活时超时类错误照常重试(t *testing.T) {
+	// 模拟 http.Client.Timeout：错误链含 DeadlineExceeded，但调用方 ctx 仍存活，属网络层超时，应重试。
+	buf := captureInterceptorLogs(t)
+	term := &errThenOKTerminal{err: fmt.Errorf("Get \"https://x.example/x\": %w", context.DeadlineExceeded), fails: 1}
+	c := newClientWith(t, httpx.Options{
+		Headers:      httpx.StaticHeaders{Base: "https://x.example"},
+		Retry:        httpx.WithRetry(3, time.Millisecond, 0),
+		Interceptors: httpx.Interceptors{interceptor.NewRetryInterceptor(), term},
+	})
+	body, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("ctx 存活的超时 err=%v attempts=%d", err, term.n)
+	if err != nil {
+		t.Fatalf("第二次应成功，err=%v", err)
+	}
+	if string(body) != "ok" || term.n != 2 {
+		t.Fatalf("body=%q attempts=%d，want ok / 2", body, term.n)
+	}
+	if !strings.Contains(buf.String(), httpx.EventHTTPRetry.Name()) {
+		t.Fatalf("网络层超时应打 http.retry 事件，logs=%s", buf.String())
 	}
 }
 
