@@ -62,7 +62,7 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-// KindOf 返回 err 链上从外到内第一个非 nil 的 Kind。
+// KindOf 返回 err 树上按前序（外层先于内层、左分支先于右分支）第一个非 nil 的 Kind。
 // 输入：err 可为 nil，可被任意 %w / Join / 其它 Unwrap 层包装。
 // 返回：找到则为该 Kind；没有 *Error 或都未分类则为 nil。外层分类优先于内层。
 func KindOf(err error) Kind {
@@ -74,7 +74,7 @@ func KindOf(err error) Kind {
 	return nil
 }
 
-// IsKind 判断 err 链上是否有任意一层 *Error 的 Kind 等于 k。
+// IsKind 判断 err 树上是否有任意一个 *Error 的 Kind 等于 k（含多个 %w、errors.Join 的所有分支）。
 // 输入：err、k 可为 nil（均返回 false）。
 // 返回：按值比较；k 或链上 Kind 的动态类型不可比较时视为不相等，不 panic。
 func IsKind(err error, k Kind) bool {
@@ -89,7 +89,7 @@ func IsKind(err error, k Kind) bool {
 	return false
 }
 
-// AttrsOf 合并 err 链上所有 *Error 的 Attrs，从外到内。
+// AttrsOf 按前序合并 err 树上所有 *Error 的 Attrs（外层先于内层、左分支先于右分支）。
 // 输入：err 可为 nil。
 // 返回：新切片（不共享调用方底层数组）；链上没有 Attrs 时为 nil。给日志一次打全上下文用。
 func AttrsOf(err error) []slog.Attr {
@@ -100,22 +100,42 @@ func AttrsOf(err error) []slog.Attr {
 	return out
 }
 
-// chain 从外到内遍历 err 链上的每个非 nil *Error。
+// chain 按前序深度优先遍历 err 整棵错误树上的每个非 nil *Error。
 // 输入：err 可为 nil。
-// 返回：迭代器；每步用 errors.AsType 找下一个 *Error（支持 Join 与任意 Unwrap 层），再从其 Err 继续。
+// 返回：迭代器。遍历借用标准库 errors.As：它按前序访问每个节点（含多个 %w、errors.Join 的所有分支），
+// 并对实现了 As(any) bool 的节点调用该方法；*Error.As 遇到 *probe 就把自己交给 yield，
+// 返回 true（yield 叫停）则 errors.As 停止遍历。不直接断言 error，避免漏掉被其它层包装的分支。
 func chain(err error) func(yield func(*Error) bool) {
 	return func(yield func(*Error) bool) {
-		for err != nil {
-			e, ok := errors.AsType[*Error](err)
-			if !ok || e == nil {
-				return
-			}
-			if !yield(e) {
-				return
-			}
-			err = e.Err
+		if err == nil {
+			return
 		}
+		p := probe{visit: func(e *Error) bool { return !yield(e) }}
+		_ = errors.As(err, &p)
 	}
+}
+
+// probe 是 chain 专用的遍历探针，只作为 errors.As 的 target 使用，不会作为错误返回。
+// 实现 error 只为满足 errors.As 对 target 的类型要求。
+type probe struct {
+	// visit 对每个 *Error 调用；返回 true 表示停止遍历。
+	visit func(*Error) bool
+}
+
+// Error 实现 error（仅为满足 errors.As 的 target 约束）。
+// 输入：值接收者。
+// 返回：固定文案。
+func (probe) Error() string { return "errors: traversal probe" }
+
+// As 让 errors.As 遍历时把本节点交给 *probe。
+// 输入：target 为 errors.As 的目标；只处理 *probe，其余返回 false 不干扰标准 As 语义。
+// 返回：probe.visit 的结果（true 即停止遍历）；nil 接收者返回 false。
+func (e *Error) As(target any) bool {
+	p, ok := target.(*probe)
+	if !ok || e == nil {
+		return false
+	}
+	return p.visit(e)
 }
 
 // kindName 安全取名。

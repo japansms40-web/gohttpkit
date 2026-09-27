@@ -132,3 +132,27 @@ func TestAttrsOf(t *testing.T) {
 		t.Fatal("无 *Error 时应为 nil")
 	}
 }
+
+// 多分支包装（fmt.Errorf 多个 %w、errors.Join）下，第二个分支上的 *Error 也要能判定到，
+// 遍历顺序同 errors.Is / errors.As：前序深度优先。
+func TestKindHelpers_遍历整棵错误树(t *testing.T) {
+	a := &kiterrors.Error{Kind: kindLogin, Attrs: []slog.Attr{slog.String("a", "1")}}
+	b := &kiterrors.Error{Kind: kindRate, Attrs: []slog.Attr{slog.String("b", "2")}}
+	for name, err := range map[string]error{
+		"多个 %w":       fmt.Errorf("x: %w: %w", a, b),
+		"errors.Join": stderrors.Join(a, b),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !kiterrors.IsKind(err, kindRate) || !kiterrors.IsKind(err, kindLogin) {
+				t.Fatal("两个分支的 Kind 都应命中")
+			}
+			if got := kiterrors.KindOf(err); got != kindLogin {
+				t.Fatalf("KindOf 应取前序第一个：%v", got)
+			}
+			got := kiterrors.AttrsOf(err)
+			if len(got) != 2 || got[0].Key != "a" || got[1].Key != "b" {
+				t.Fatalf("AttrsOf 应按前序合并两个分支：%v", got)
+			}
+		})
+	}
+}
