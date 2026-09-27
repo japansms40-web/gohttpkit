@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [v0.9.0] - 2026-09-27
+
 ### 新增
 
 - `Logger.InfoEvent(e, attrs...)` / `Logger.WarnEvent(e, attrs...)`：具名 Logger 的事件日志，语义同包级 `InfoEvent` / `WarnEvent`

@@ -10,6 +10,13 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.9.0（相对 v0.8.0）
+
+新增（不破坏现有签名）：
+
+- `Logger.InfoEvent` / `Logger.WarnEvent`：具名 Logger 的事件日志，语义同包级 `InfoEvent` / `WarnEvent`，另带 `module` 字段。
+  既有方法签名与行为不变，下游无需迁移。
+
 ## v0.8.0（相对 v0.7.0）
 
 新增（不破坏现有签名）：
