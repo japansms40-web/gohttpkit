@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `Logger.InfoEvent(e, attrs...)` / `Logger.WarnEvent(e, attrs...)`：具名 Logger 的事件日志，语义同包级 `InfoEvent` / `WarnEvent`
+  （`Name` 只求值一次、msg 与 event 同值、不改调用方 attrs），另带 `module` 固定字段；nil 接收者与 nil 事件可用。
+
 ## [v0.8.0] - 2026-09-26
 
 > tag `v0.8.0` 指向 `3924fc6`；本段定版在 tag 之后补提交，故 tag 内的 CHANGELOG 仍把这些条目记在 `[Unreleased]` 下。

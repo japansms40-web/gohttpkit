@@ -230,3 +230,90 @@ func TestLogger_并发With与Set混跑(t *testing.T) {
 	wg.Wait()
 	t.Logf("8×2 goroutine ×100 次 With/Info 与 Set 混跑结束")
 }
+
+func TestLoggerEvent_两级msg与event同值且带module(t *testing.T) {
+	buf := captureJSON(t, nil)
+	l := Named("m")
+	cases := []struct {
+		name  string
+		fn    func(Event, ...slog.Attr)
+		level string
+	}{
+		{"InfoEvent", l.InfoEvent, "INFO"},
+		{"WarnEvent", l.WarnEvent, "WARN"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			buf.Reset()
+			c.fn(NewEvent("demo.done"), slog.Int("n", 7))
+			m := lastLine(t, buf)
+			t.Logf("line=%v", m)
+			if m["level"] != c.level || m["msg"] != "demo.done" || m[FieldEvent] != "demo.done" {
+				t.Fatalf("level/msg/event 不符: %v", m)
+			}
+			if m[FieldModule] != "m" || m["n"] != float64(7) {
+				t.Fatalf("module/attr 未透传: %v", m)
+			}
+		})
+	}
+}
+
+func TestLoggerEvent_nil事件记录空名(t *testing.T) {
+	buf := captureJSON(t, nil)
+	var e Event
+	Named("m").InfoEvent(e)
+	m := lastLine(t, buf)
+	t.Logf("line=%v", m)
+	if m["msg"] != "" || m[FieldEvent] != "" {
+		t.Fatalf("msg=%v event=%v, want 空", m["msg"], m[FieldEvent])
+	}
+}
+
+func TestLoggerEvent_Name只求值一次(t *testing.T) {
+	buf := captureJSON(t, nil)
+	e := &changingEvent{}
+	Named("m").WarnEvent(e)
+	m := lastLine(t, buf)
+	t.Logf("calls=%d line=%v", e.calls, m)
+	if e.calls != 1 || m["msg"] != "demo.1" || m[FieldEvent] != "demo.1" {
+		t.Fatalf("calls=%d msg=%v event=%v", e.calls, m["msg"], m[FieldEvent])
+	}
+}
+
+func TestLoggerEvent_不改调用方容量区域(t *testing.T) {
+	buf := captureJSON(t, nil)
+	storage := make([]slog.Attr, 2)
+	storage[0] = slog.String("first", "1")
+	storage[1] = slog.String("sentinel", "keep")
+	Named("m").InfoEvent(NewEvent("demo.done"), storage[:1]...)
+	_ = lastLine(t, buf)
+	if storage[1].Key != "sentinel" || storage[1].Value.String() != "keep" {
+		t.Fatalf("调用方底层数组被覆盖: %v", storage[1])
+	}
+}
+
+func TestLoggerEvent_nil接收者可用(t *testing.T) {
+	buf := captureJSON(t, nil)
+	var l *Logger
+	l.InfoEvent(NewEvent("demo.nil"))
+	m := lastLine(t, buf)
+	t.Logf("line=%v", m)
+	if m[FieldEvent] != "demo.nil" {
+		t.Fatalf("event=%v", m[FieldEvent])
+	}
+	if _, ok := m[FieldModule]; ok {
+		t.Fatalf("nil 接收者不应带 module: %v", m)
+	}
+}
+
+func TestLoggerEvent_AddSource指向调用点(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{AddSource: true})
+	Named("m").WarnEvent(NewEvent("demo.source"))
+	got := lastLine(t, buf)
+	src, _ := got["source"].(map[string]any)
+	file, _ := src["file"].(string)
+	t.Logf("source.file=%q", file)
+	if !strings.HasSuffix(file, "named_test.go") {
+		t.Fatalf("source.file=%q, want *named_test.go", file)
+	}
+}
