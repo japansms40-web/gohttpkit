@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-09-27
+
 ### 新增
 
 - `errors.Error{Op, Kind, Attrs, Err}`：统一的结构化错误类型。`Op` 记录发生在哪一步（取代 `fmt.Errorf` 文本前缀），

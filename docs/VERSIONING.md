@@ -10,6 +10,13 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.10.0（相对 v0.9.0）
+
+新增（不破坏现有签名）：
+
+- `errors.Error`、`errors.Kind`、`errors.NewKind`、`errors.KindOf`、`errors.IsKind`、`errors.AttrsOf`：结构化错误与分类接口。
+  现有错误类型与判定函数不变，下游无需迁移；新代码建议统一返回 `&errors.Error{Op, Kind, Attrs, Err}`。
+
 ## v0.9.0（相对 v0.8.0）
 
 新增（不破坏现有签名）：
