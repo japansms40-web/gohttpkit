@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `errors.Error{Op, Kind, Attrs, Err}`：统一的结构化错误类型。`Op` 记录发生在哪一步（取代 `fmt.Errorf` 文本前缀），
+  `Kind` 记录分类，`Attrs`（`[]slog.Attr`）记录结构化附加信息，`Err` 经 `Unwrap` 保留内层错误；
+  `Error()` 输出 `op: kind: k=v: 内层`，空段跳过，nil 接收者可用。构造直接写字面量。
+- `errors.Kind` 接口（`Name() string`）与默认实现 `errors.NewKind(name)`：写法同 `logger.Event`，
+  各系统维护自己的分类常量；默认实现可比较、可作 map 键。
+- `errors.KindOf(err)`（从外到内第一个非 nil 分类）、`errors.IsKind(err, k)`（链上任意一层命中）、
+  `errors.AttrsOf(err)`（从外到内合并附加信息）：穿过 `%w`、`errors.Join`、`RetryableError` 等任意包装；
+  不可比较的 Kind 实现判为不相等，不 panic。
+
 ## [v0.9.0] - 2026-09-27
 
 ### 新增
