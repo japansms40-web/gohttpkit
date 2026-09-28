@@ -113,6 +113,25 @@ func TestScanPkgDoc_包注释写在非doc文件报违规(t *testing.T) {
 	}
 }
 
+func TestScanPkgDoc_紧贴包子句的纯指令注释不算包注释(t *testing.T) {
+	root := t.TempDir()
+	initRepo(t, root, map[string]string{
+		"pkg/doc.go": pkgDocWithTree("pkg", "a.go  抓包数据", "b.go  指令加文字", "doc.go  包文档"),
+		// 文件级 //nolint 必须紧贴 package 才对整个文件生效；go/ast 的 CommentGroup.Text() 与 go doc 都不把指令当文档。
+		"pkg/a.go": "//nolint:goconst // 抓包契约数据，不提常量\npackage pkg\n",
+		// 指令之外还有正文，仍是包注释。
+		"pkg/b.go": "// Package pkg 混了正文。\n//\n//nolint:goconst // 理由\npackage pkg\n",
+	})
+	got, err := scanPkgDoc(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%v", got)
+	if len(got) != 1 || !strings.HasPrefix(got[0], "pkg/b.go: 包注释只能写在 doc.go") {
+		t.Fatalf("只应报带正文的 b.go，纯指令的 a.go 不算包注释，得到 %v", got)
+	}
+}
+
 func TestScanPkgDoc_文件树与实际不一致报违规(t *testing.T) {
 	root := t.TempDir()
 	initRepo(t, root, map[string]string{

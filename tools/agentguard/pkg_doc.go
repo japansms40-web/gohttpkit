@@ -81,7 +81,9 @@ func checkPkgDoc(root, dir string, names []string, subdirs map[string]bool) ([]s
 		if err != nil {
 			return nil, err
 		}
-		if f.Doc != nil {
+		// 只含指令（如文件级 //nolint:xxx，必须紧贴 package 才对整个文件生效）的注释组 Text() 为空，
+		// go doc 也不当包文档，不算违规。
+		if f.Doc != nil && strings.TrimSpace(f.Doc.Text()) != "" {
 			out = append(out, rel+": 包注释只能写在 doc.go，请移入 "+docRel)
 		}
 	}

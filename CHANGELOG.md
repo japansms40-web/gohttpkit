@@ -14,6 +14,11 @@
   「只打事件」的规则下 error 级日志没有合规写法。
 - `httpx.EventHTTPBodyClose`（`http.body_close_failed`）：关闭响应体失败的机器事件。
 
+### 修复
+
+- `tools/agentguard check-pkg-doc`：紧贴 `package` 子句、只含指令的注释（如文件级 `//nolint:goconst // 理由`）不再被当成包注释报违规。
+  这类指令必须紧贴 `package` 才对整个文件生效，`go/ast` 的 `CommentGroup.Text()` 与 `go doc` 也都不把它当文档。
+
 ### 变更
 
 - 解压层关闭响应体失败的日志由自由文案 `msg="failed to close response body"` 改为 `ErrorEvent`：

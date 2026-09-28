@@ -287,7 +287,8 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 - **MUST** 删除或改变导出符号前先弃用至少一个 minor 版本：doc comment 末段加标准格式
   `// Deprecated: 用 Xxx 替代。将在 vX.Y.0 移除。`（`staticcheck` SA1019 会提示调用方）。
 - **MUST** 每个 Go 包目录（含 `examples/*`、`tools/agentguard`，不含 `testdata/`）有 `doc.go`，包注释写明包的职责边界与入口，
-  且**只写在 `doc.go`**，其它源文件不得在 `package` 子句上方写包注释。
+  且**只写在 `doc.go`**，其它源文件不得在 `package` 子句上方写包注释。只含指令的注释（如必须紧贴 `package` 才对整文件生效的
+  `//nolint:xxx // 理由`）不算包注释，`go doc` 也不显示它。
 - **MUST** 包注释末尾带一层「文件结构：」树，逐项列出本目录全部非测试 `.go` 文件（含 `doc.go` 自身）与含 Go 包的直接子目录（带 `/`），
   每项一句用途；`_test.go` 不列，下层由子包自己的 `doc.go` 登记。增删文件时同步改树：
 
