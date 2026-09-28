@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 )
 
 func TestRun_打通一次请求(t *testing.T) {
@@ -45,6 +47,17 @@ func TestRun_参数与错误分支(t *testing.T) {
 				t.Fatal("want error")
 			}
 		})
+	}
+}
+
+func TestRun_不完整URL有分类且不回显原地址(t *testing.T) {
+	var out bytes.Buffer
+	err := run(&out, []string{"-url", "user:secret@example.com/path"})
+	if !kiterrors.IsKind(err, kiterrors.NewKind("quickstart.invalid_url")) {
+		t.Fatalf("不完整 URL 应返回结构化分类，got %T %v", err, err)
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("错误文案不应回显 URL 中的凭据：%v", err)
 	}
 }
 

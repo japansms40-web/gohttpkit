@@ -5,7 +5,7 @@
 
 BASE_REV ?= HEAD~1
 
-.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check
+.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check check-errors
 
 # 覆盖率门禁（核心库，排除 examples）：低于 MIN_COVERAGE 直接失败。
 # 已达标 98%（补齐 interceptor 角度测试后）；100% 为追求，只许上调、不许下调——
@@ -74,13 +74,17 @@ lint-new:
 tidy-check:
 	go mod tidy -diff
 
+# 全仓生产 Go 源码禁止直接 errors.New / fmt.Errorf 与非类型错误 panic；测试夹具豁免。
+check-errors:
+	@go run -C tools/agentguard . check-errors
+
 # 两个离线示例（fidelity/customchain 自带假服务器，不需要外网）。
 # quickstart 默认请求真实 URL（httpbin.org），需要外网，故不在这里跑：go run ./examples/quickstart
 examples:
 	go run ./examples/customchain
 	go run ./examples/fidelity
 
-check: build vet cover tidy-check
+check: check-errors build vet cover tidy-check
 
 # 本地「我要完整跑」与 CI 对齐的聚合目标。race 需要 C 编译器。
 ci: check lint-new race char agents-sync-check governance tools-check

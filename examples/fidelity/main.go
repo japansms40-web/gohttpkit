@@ -31,6 +31,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 	"github.com/japansms40-web/gohttpkit/httpx"
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
@@ -212,7 +213,7 @@ func run(out io.Writer, args []string) error {
 		OnResponseHeaders: func(_ context.Context, h http.Header) { hp.applySetCookie(h) },
 	})
 	if err != nil {
-		return fmt.Errorf("创建客户端失败: %w", err)
+		return &kiterrors.Error{Op: "创建客户端失败", Err: err}
 	}
 	ctx := context.Background()
 
@@ -224,7 +225,7 @@ func run(out io.Writer, args []string) error {
 		Path:            "/",
 		HeaderWhitelist: endpointFetchPage,
 	}); err != nil {
-		return fmt.Errorf("step 1 失败: %w", err)
+		return &kiterrors.Error{Op: "step 1 失败", Err: err}
 	}
 	fmt.Fprintf(out, "  status=%d location=%q\n\n",
 		noRedirect.SnapshotResponseStatusCode(), noRedirect.SnapshotResponseHeaders().Get("location"))
@@ -239,7 +240,7 @@ func run(out io.Writer, args []string) error {
 		HeaderWhitelist: endpointSubmit,
 	})
 	if err != nil {
-		return fmt.Errorf("step 2 失败: %w", err)
+		return &kiterrors.Error{Op: "step 2 失败", Err: err}
 	}
 	fmt.Fprintf(out, "  响应: %s\n", strings.TrimSpace(string(respBody)))
 	return nil

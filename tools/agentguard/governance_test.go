@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -188,6 +189,10 @@ func TestParseCharRule(t *testing.T) {
 			if c.wantErrText != "" {
 				if err == nil || !strings.Contains(err.Error(), c.wantErrText) {
 					t.Fatalf("期望含 %q 的错误，得到 %v", c.wantErrText, err)
+				}
+				var typed *configParseError
+				if !errors.As(err, &typed) || typed.Unwrap() == nil {
+					t.Fatalf("配置解析错误应保留类型和底层原因，得到 %T %v", err, err)
 				}
 				return
 			}

@@ -176,6 +176,10 @@ func TestRetry_不可重试包装底层错误(t *testing.T) {
 	if !errors.Is(err, cause) {
 		t.Fatalf("应 %%w 保留底层 cause，err=%v", err)
 	}
+	var outer *kiterrors.Error
+	if !errors.As(err, &outer) || outer.Op != "failed to send request" || !errors.Is(outer.Err, cause) {
+		t.Fatalf("不可重试错误应保留结构化步骤和底层原因，got %T %v", err, err)
+	}
 	if !strings.Contains(err.Error(), "failed to send request") {
 		t.Fatalf("应走 sendRequest 包装，err=%v", err)
 	}

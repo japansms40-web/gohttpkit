@@ -87,6 +87,7 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | gofmt / go vet | pre-commit、CI test | ✅ |
 | lint 全量规则（errorlint、bodyclose、noctx、gosec、gocyclo、goconst、revive…） | pre-commit 增量、CI lint 全量 | ✅ |
 | 禁止裸 `fmt.Print` / `log.*` / `slog.*`（CS §6） | `forbidigo` | ✅ |
+| 生产代码禁止直接 `errors.New`、`fmt.Errorf` 与非类型错误 panic（CS §5） | `make check-errors`：pre-commit、`make check`、CI test；扫描主模块与 agentguard 子模块，测试夹具豁免；对 `panic(err)` 的实际类型仍需代码审查 | ✅ |
 | 覆盖率 ≥ `MIN_COVERAGE`=98（TESTING §1） | pre-push、CI `make cover` | ✅ |
 | `MIN_COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
 | 并发无竞态（CS §4） | pre-push、CI `go test -race` | ✅ |
@@ -102,7 +103,7 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | goroutine 不泄漏（CS §11、TESTING §8） | `goleak` in `TestMain` | ⬜ |
 | 解压有大小上限（CS §10） | 代码实现 + characterization | ⬜ |
 | 破坏性变更升版本（VERSIONING） | CI `apidiff` 对比上一个 tag | ⬜ |
-| 类型错误非哨兵（CS §5） | `errorlint` 部分；自定义检查 `var Err… = errors.New` | 🟡 |
+| 其它类型错误契约（CS §5） | `errorlint` 部分；`errors.As` / `errors.IsKind` 断言与评审 | 🟡 |
 | panic 仅限 `Must*` / 初始化（CS §11） | 👁 评审；可选 `forbidigo` 规则按路径放行 | 👁 |
 | 注释「输入：/返回：」、导出符号「给谁用」（CS §7） | `revive exported` 管存在性；格式靠评审 | 🟡 |
 | IO 函数首参 `ctx`（CS §3） | `noctx` 管 HTTP；其余评审 | 🟡 |
@@ -162,8 +163,8 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 7. **apidiff** CI job（PR 对比最近 tag，破坏性变化且未升 minor 时失败）+ **release workflow**（tag 触发：全量门禁 → GitHub Release）。
 8. **供应链**：actions 钉 SHA、`.github/dependabot.yml`（gomod + github-actions，每周）、`go-licenses check`。Go 与直接依赖、CI 的 Go / golangci-lint / govulncheck 跟最新稳定版，不钉死。
 9. nightly 长时 fuzz。CI 不建旧 Go 版本矩阵。
-10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）；`versionreg.Registry.MustRegister` 的裸字符串 panic 改为类型错误（CS §11）。
-11. **治理守卫扩展**：检测新增 `var Err… = errors.New(` 生产代码（CS §5）。
+10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）。`versionreg.Registry.MustRegister` 的裸字符串 panic 已改为类型错误。
+11. ~~**错误构造门禁**：检查生产代码直接 `errors.New` / `fmt.Errorf` 与字符串 panic~~ ✅ 已落地：`make check-errors`。
 
 ## 8. 分支保护（独立开发：可选）
 

@@ -17,6 +17,26 @@ const configPath = ".agentguard.yml"
 // defaultMainBranch 是未配置 main_branch 时的主干分支名。
 const defaultMainBranch = "main"
 
+// configParseError 保留配置字段与原始解析错误，供治理守卫向用户解释原因。
+type configParseError struct {
+	Field string
+	Err   error
+}
+
+// Error 返回与旧配置检查一致的可读文案。
+// 输入 e 的 Field 为空表示 YAML 解析失败，否则表示具体字段非法。
+// 返回包含配置路径、字段和原始原因的字符串。
+func (e *configParseError) Error() string {
+	if e.Field == "" {
+		return fmt.Sprintf("%s 无法解析：%v", configPath, e.Err)
+	}
+	return fmt.Sprintf("%s 的 %s 非法：%v", configPath, e.Field, e.Err)
+}
+
+// Unwrap 暴露原始 YAML 或正则解析错误。
+// 输入 e 为当前配置错误。返回 Err。
+func (e *configParseError) Unwrap() error { return e.Err }
+
 // repoConfig 对应 .agentguard.yml 的结构。
 type repoConfig struct {
 	// MainBranch 是主干分支名（如 insgo 的 insgo190），用于取治理基线 merge-base(HEAD, origin/<MainBranch>)；空表示 main。
@@ -45,13 +65,13 @@ type charRule struct {
 func parseCharRule(src string) (charRule, error) {
 	var cfg repoConfig
 	if err := yaml.Unmarshal([]byte(src), &cfg); err != nil {
-		return charRule{}, fmt.Errorf("%s 无法解析：%w", configPath, err)
+		return charRule{}, &configParseError{Err: err}
 	}
 	rule := charRule{path: cfg.Characterization.File}
 	if p := cfg.Characterization.FuncPattern; p != "" {
 		re, err := regexp.Compile(p)
 		if err != nil {
-			return charRule{}, fmt.Errorf("%s 的 characterization.func_pattern 非法：%w", configPath, err)
+			return charRule{}, &configParseError{Field: "characterization.func_pattern", Err: err}
 		}
 		rule.funcRe = re
 	}

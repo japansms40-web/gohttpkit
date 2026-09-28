@@ -23,12 +23,12 @@ package httpx
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 	"github.com/japansms40-web/gohttpkit/logger"
 )
 
@@ -68,7 +68,7 @@ type Client struct {
 // Interceptors 为 nil 或空切片时不装默认链（空链 Do 得到 *ChainExhaustedError）；
 // 开箱即用请走 NewClient（default_chain.go）。传了 Transport 则整份沿用（不再接代理、不再调优）。
 // 返回：成功 *Client；Headers==nil 是 *MissingHeaderProviderError{Field:"Options.Headers"}；
-// 自建 Transport 失败是 fmt.Errorf("httpx: build transport: %w", err)，里层仍是 netproxy 类型。
+// 自建 Transport 失败是 *errors.Error，里层仍是 netproxy 类型。
 // 例：New(Options{Headers: StaticHeaders{Base: "https://api.example.com"}}) → (*Client, nil)；
 // New(Options{}) → *MissingHeaderProviderError。
 func New(opts Options) (*Client, error) {
@@ -80,7 +80,7 @@ func New(opts Options) (*Client, error) {
 	if transport == nil {
 		t, err := newTransport(opts.ProxyURL, opts.responseHeaderTimeout())
 		if err != nil {
-			return nil, fmt.Errorf("httpx: build transport: %w", err)
+			return nil, &kiterrors.Error{Op: "httpx: build transport", Err: err}
 		}
 		transport = t
 	}

@@ -4,7 +4,7 @@
 //   - 请求签名：对最终 URL + body 计算签名头（必须在 bridge 之后才拿得到最终请求）
 //   - 出网计数：只在真实发送时 +1（含每次重试），用于限速 / 计费
 //   - 状态回写：把服务端下发的新 token 写回构头器，下一次请求自动带上
-//   - 业务归类：把 {"status":"fail"} 统一翻译成 sentinel error，业务代码只 errors.Is
+//   - 业务归类：把 {"status":"fail"} 翻译成带 Kind 的结构化错误，业务代码用 IsKind
 //
 // 示例跑在一个内置的假服务器上，不需要外网：
 //
@@ -17,20 +17,38 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 	"github.com/japansms40-web/gohttpkit/httpx"
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
-// ErrAccountBanned 业务 sentinel：由归类拦截器产出，业务代码只需 errors.Is 判断。
-var ErrAccountBanned = errors.New("account banned")
+var kindAccountBanned = kiterrors.NewKind("customchain.account_banned")
+
+// classifyResponse 把示例响应中的封禁业务码转成可按 Kind 判断的结构化错误。
+// 输入 body 是响应体；状态码只由拦截器决定何时调用本函数。
+// 返回未命中时为 nil；命中时保留业务 code。
+func classifyResponse(_ int, body []byte) error {
+	var payload struct {
+		Status string `json:"status"`
+		Code   string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil
+	}
+	if payload.Status == "fail" && payload.Code == "banned" {
+		return &kiterrors.Error{Op: "customchain.classify", Kind: kindAccountBanned,
+			Attrs: []slog.Attr{slog.String("code", payload.Code)}}
+	}
+	return nil
+}
 
 // sessionHeaders 带会话状态的构头器：token 会被响应回写改写。
 type sessionHeaders struct {
@@ -85,20 +103,8 @@ func main() {
 	}
 
 	// ── 四、业务错误归类：2xx 与非 2xx 用不同强度的规则
-	classify := func(_ int, body []byte) error {
-		var payload struct {
-			Status string `json:"status"`
-			Code   string `json:"code"`
-		}
-		// 2xx 只认结构化字段。用关键词去扫 2xx 响应体，迟早会被用户生成内容误伤。
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return nil
-		}
-		if payload.Status == "fail" && payload.Code == "banned" {
-			return fmt.Errorf("%w (code=%s)", ErrAccountBanned, payload.Code)
-		}
-		return nil
-	}
+	// 2xx 只认结构化字段。用关键词去扫 2xx 响应体，迟早会被用户生成内容误伤。
+	classify := classifyResponse
 
 	chain := httpx.Prepend(interceptor.DefaultChain(),
 		interceptor.NewClassifyInterceptor(classify), // 最外层：只在内层判定成功时才轮到它
@@ -125,7 +131,7 @@ func main() {
 
 	fmt.Println("③ 命中业务错误（HTTP 200，但业务判定为封禁）")
 	_, err = client.Get(ctx, "/api/banned", nil)
-	fmt.Printf("  errors.Is(err, ErrAccountBanned) = %v  (%v)\n", errors.Is(err, ErrAccountBanned), err)
+	fmt.Printf("  errors.IsKind(err, kindAccountBanned) = %v  (%v)\n", kiterrors.IsKind(err, kindAccountBanned), err)
 
 	fmt.Printf("\n真实出网次数: %d\n", sends.Load())
 }

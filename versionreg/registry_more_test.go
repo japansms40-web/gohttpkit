@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 	"github.com/japansms40-web/gohttpkit/versionreg"
 )
 
@@ -40,16 +41,6 @@ func mustPanicError(t *testing.T, fn func()) error {
 		t.Fatalf("panic 值应是 error，得到 %T", r)
 	}
 	return err
-}
-
-func mustPanicString(t *testing.T, fn func()) string {
-	t.Helper()
-	r := mustPanic(t, fn)
-	s, ok := r.(string)
-	if !ok {
-		t.Fatalf("panic 值应是 string，得到 %T（Validate 失败才是 error）", r)
-	}
-	return s
 }
 
 func TestID_String边界与不做trim(t *testing.T) {
@@ -118,12 +109,12 @@ func TestMustRegister_失败不写入(t *testing.T) {
 	}
 
 	r.MustRegister(versionreg.NewConfig("v1", moreBaseURL))
-	dup := mustPanicString(t, func() {
+	dup := mustPanicError(t, func() {
 		r.MustRegister(versionreg.NewConfig("v1", "https://b.example"))
 	})
-	t.Logf("重复注册 panic=%q Len=%d", dup, r.Len())
-	if !strings.Contains(dup, "test") || !strings.Contains(dup, "v1") {
-		t.Fatalf("重复注册 panic 文案应含表名和版本: %q", dup)
+	if !kiterrors.IsKind(dup, kiterrors.NewKind("versionreg.register.duplicate")) ||
+		!strings.Contains(dup.Error(), "registry=test") || !strings.Contains(dup.Error(), "version=v1") {
+		t.Fatalf("重复注册 panic 应含分类、表名和版本: %v", dup)
 	}
 	if r.Len() != 1 {
 		t.Fatalf("重复注册 panic 后 Len 应仍为 1，得到 %d", r.Len())
@@ -133,12 +124,12 @@ func TestMustRegister_失败不写入(t *testing.T) {
 	}
 
 	empty := versionreg.New[emptyIDConfig]("test")
-	emptyMsg := mustPanicString(t, func() {
+	emptyErr := mustPanicError(t, func() {
 		empty.MustRegister(emptyIDConfig{})
 	})
-	t.Logf("空 VersionID panic=%q Len=%d", emptyMsg, empty.Len())
-	if !strings.Contains(emptyMsg, "test") {
-		t.Fatalf("空 VersionID panic 文案应含表名: %q", emptyMsg)
+	if !kiterrors.IsKind(emptyErr, kiterrors.NewKind("versionreg.register.empty_id")) ||
+		!strings.Contains(emptyErr.Error(), "registry=test") {
+		t.Fatalf("空 VersionID panic 应含分类和表名: %v", emptyErr)
 	}
 	if empty.Len() != 0 {
 		t.Fatalf("空 VersionID panic 后不应写入，Len=%d", empty.Len())
@@ -155,6 +146,9 @@ func TestMustRegister_Validate任意错误仍包装可Is(t *testing.T) {
 	t.Logf("自定义 Validate 错误包装后 %v", err)
 	if !errors.Is(err, errBoomValidate) {
 		t.Fatalf("Validate 错误应以 %%w 包装，errors.Is 应命中原因，得到 %v", err)
+	}
+	if !kiterrors.IsKind(err, kiterrors.NewKind("versionreg.register.invalid")) {
+		t.Fatalf("Validate 错误应有结构化分类，得到 %v", err)
 	}
 }
 

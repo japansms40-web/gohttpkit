@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 生产 Go 代码统一使用专用类型错误或 `errors.Error`，以 `Err` 保留内层原因；示例改用 `Kind` 判断业务错误。
+- `versionreg.Registry.MustRegister` 的空标识、重复注册从字符串 panic 改为 `*errors.Error`，恢复后可读分类与字段。这是可见行为变化，后续 0.x 发布按 minor 处理。
+
+### 新增
+
+- `make check-errors` 扫描核心库、示例与独立 `agentguard` 子模块，并在提交钩子和 CI 拦截生产代码直接 `errors.New`、`fmt.Errorf` 与字符串 panic；测试夹具豁免。
+
 ## [v0.10.1] - 2026-09-28
 
 ### 新增

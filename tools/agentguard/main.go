@@ -4,6 +4,7 @@
 // 子命令：
 //
 //	agentguard governance [--base REV] [--worktree]   CI / pre-push / agent 收尾共用的治理检查
+//	agentguard check-errors   检查生产 Go 源码的直接错误构造与 panic 语法
 //	agentguard hook --agent claude|cursor|codex --event <事件>   三家 agent 钩子的薄适配
 //
 // 规范出处：docs/ENGINEERING_GOVERNANCE.md §3（agent 钩子语义）、§4（规则 → 强制手段）。
@@ -29,6 +30,25 @@ func run(args []string) int {
 	switch args[0] {
 	case "governance":
 		return runGovernance(args[1:])
+	case "check-errors":
+		root, err := repoRoot("")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "check-errors：不在 Git 仓库内")
+			return 1
+		}
+		violations, err := scanErrorPolicy(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "check-errors：检查失败：", err)
+			return 1
+		}
+		for _, v := range violations {
+			fmt.Fprintln(os.Stderr, v)
+		}
+		if len(violations) > 0 {
+			return 1
+		}
+		fmt.Println("check-errors：生产代码错误构造符合规范")
+		return 0
 	case "hook":
 		return runHook(args[1:])
 	default:
@@ -38,5 +58,5 @@ func run(args []string) int {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard hook --agent claude|cursor|codex --event EVENT")
+	fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard hook --agent claude|cursor|codex --event EVENT")
 }

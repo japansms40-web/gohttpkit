@@ -19,6 +19,8 @@ jobs:
           check-latest: true
       - name: 跨 agent 指令同源（CLAUDE/GEMINI 必须软链到 AGENTS）
         run: make agents-sync-check
+      - name: 生产代码错误构造规范
+        run: make check-errors
       - name: build
         run: go build ./...
       - name: vet

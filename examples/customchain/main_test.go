@@ -1,10 +1,11 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
+
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 )
 
 // TestMain_整例跑通 直接把示例跑一遍：它自带假服务器，不需要外网。
@@ -49,10 +50,14 @@ func TestSessionHeaders_并发读写(t *testing.T) {
 	<-done
 }
 
-func TestErrAccountBanned_可被errorsIs识别(t *testing.T) {
-	wrapped := errors.Join(ErrAccountBanned, errors.New("extra"))
-	if !errors.Is(wrapped, ErrAccountBanned) {
-		t.Fatal("sentinel 应可被 errors.Is 识别")
+func TestClassifyResponse_封禁有分类与响应码(t *testing.T) {
+	err := classifyResponse(http.StatusOK, []byte(`{"status":"fail","code":"banned"}`))
+	if !kiterrors.IsKind(err, kiterrors.NewKind("customchain.account_banned")) {
+		t.Fatalf("封禁应有稳定分类，got %T %v", err, err)
+	}
+	attrs := kiterrors.AttrsOf(err)
+	if len(attrs) != 1 || attrs[0].Key != "code" || attrs[0].Value.String() != "banned" {
+		t.Fatalf("应保留业务 code 字段，got %v", attrs)
 	}
 }
 

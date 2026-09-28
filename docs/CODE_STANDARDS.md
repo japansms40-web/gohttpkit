@@ -48,19 +48,21 @@
 
 本库返回给调用方的错误是契约：必须能对比类型、读出字段。禁止用一句话哨兵冒充身份。
 
-- **MUST** 本库错误定义为带字段的类型（`type XxxError struct` + `Error()`），直接 `return &XxxError{...}`。
-  对比用 `errors.As` 解出类型和字段，不要扫 `Error()` 文案。
+- **MUST** 本库错误使用带字段的专用类型（`type XxxError struct` + `Error()`）或统一结构化类型
+  `errors.Error{Op, Kind, Attrs, Err}`。对比用 `errors.As` / `errors.IsKind`，不要扫 `Error()` 文案。
   范例：`geo.UnknownCountryError`、`geo.InvalidExtraLanguageCountError`、
   `geo.ExtraLanguageCountExceedsPoolError`、`errors.RetryableError`、`errors.HTTPStatusError`。
-- **MUST NOT** 用 `errors.New` / `fmt.Errorf("...")`（无 `%w`）/ `var ErrXxx = errors.New(...)`
-  作为本库错误的身份。哨兵没有字段，对比只能 `errors.Is` 或扫文案，`extra=3`、国家码、状态码都会丢。
-  `fmt.Errorf("%w: ...", err)` 只允许包一层上下文，里层必须仍是上面的类型错误。
-- **MUST** 包装错误一律用 `%w`（`errorlint` 硬卡）。
-- **MUST** 对本库错误的测试用 `errors.As` 断言类型和字段，禁止 `errors.Is` 对自造哨兵、禁止比文案当身份。
+- **MUST NOT** 生产代码（核心库、示例、`tools/agentguard`）直接用标准库 `errors.New`、
+  `fmt.Errorf` 构造错误，或 `panic("...")` / `panic(fmt.Sprintf(...))`。新增上下文用
+  `&errors.Error{Op: "步骤", Err: err}`；专用错误可自定义 `Error()` / `Unwrap()`。
+  普通字符串格式化（包括 `Error()` 文案）不受禁令影响。`make check-errors` 在本地和 CI 检查直接构造语法；
+  `panic` 只放行 `panic(err)` 或直接构造 `&XxxError{...}`，调用点仍须确保 `err` 是错误类型。
+- **MUST** 包装错误保留内层 `Err` 并通过 `Unwrap` 暴露，确保 `errors.Is` / `errors.As` 仍可到达原始原因。
+- **MUST** 对本库错误的测试用 `errors.As` / `errors.IsKind` 断言类型、分类和字段，禁止 `errors.Is` 对自造哨兵、禁止比文案当身份。
   范例：`geo/errors_test.go` 的 `assertUnknownCountry` / `assertInvalidExtra` / `assertExtraExceedsPool`。
 - **MUST** 网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见它。
 - **MAY** `errors.Is` 只认本库没定义、对方已经是哨兵的错误（`io.EOF`、`context.Canceled`、第三方）。
-  测试里用 `errors.New("boom")` 冒充「别人的错误」可以；本库自己的返回值不行。
+  测试夹具可用 `errors.New("boom")` / `fmt.Errorf` 模拟「别人的错误」及外部包装链；生产代码不行。
 - **SHOULD** 超时类 `Options` 的零值回落默认常量，禁止把 0 解释成「关闭保护」。
   范例：`Options.Timeout`、`Options.ResponseHeaderTimeout`。
 
@@ -197,7 +199,6 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
   1. `Must*` 前缀函数（名字即声明，panic 值必须是本库类型错误，`recover` 后可 `errors.As`）；
   2. 进程初始化期的注册 / 配置（如 `versionreg.Registry.MustRegister` 重复注册）。
   范例：`versionreg.Registry.MustGet`。新代码的 panic 值一律用类型错误，不用裸字符串。
-  现状差距：`MustRegister` 的「标识为空」「重复注册」两处仍 panic 裸字符串（`versionreg/registry.go`），待改为类型错误。
 - **MUST** 可阻塞的等待（退避、读、写）同时 `select` 在 `ctx.Done()` 上，ctx 取消后立即返回，且返回的错误链里含 `ctx.Err()`（调用方可 `errors.Is(err, context.Canceled)`）。
   范例：`httpx/interceptor/retry.go` 退避等待。
 

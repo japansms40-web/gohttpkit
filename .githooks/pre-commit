@@ -31,7 +31,14 @@ if [ -n "$staged_go" ]; then
   fi
   rm -f /tmp/gohttpkit_vet.$$
 
-  # 3) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
+  # 3) 生产源码错误构造规范（含 tools/agentguard 独立子模块）
+  if make check-errors; then
+    green "✓ check-errors"
+  else
+    fail "生产代码存在直接 errors.New / fmt.Errorf 或字符串 panic"
+  fi
+
+  # 4) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
   if command -v golangci-lint >/dev/null 2>&1; then
     if git rev-parse --verify -q HEAD >/dev/null; then
       if golangci-lint run --timeout 5m --new-from-rev=HEAD 2>/tmp/gohttpkit_lint.$$; then
@@ -45,7 +52,7 @@ if [ -n "$staged_go" ]; then
     gray "· golangci-lint 未装，跳过增量 lint（建议：go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest）"
   fi
 
-  # 4) go.mod 整洁
+  # 5) go.mod 整洁
   if go mod tidy -diff >/dev/null 2>&1; then
     green "✓ go mod tidy"
   else

@@ -14,7 +14,7 @@ import (
 
 type retryInterceptor struct{}
 
-const sendRequestErrFmt = "failed to send request: %w"
+const sendRequestOp = "failed to send request"
 
 // computeBackoff 第 attempt 次重试的退避时长：base * 2^attempt，封顶 limit（limit<=0 表示不封顶）。
 // 输入 base：退避基数（已由 normalizeRetry 保证 >0）；limit：单次封顶；attempt：从 0 起的重试序号。
@@ -56,7 +56,7 @@ func NewRetryInterceptor() httpx.Interceptor { return &retryInterceptor{} }
 // Intercept 按 RetryPolicy 循环调用 Proceed。
 // 输入 ch：会改写 Request.Attempt；成功或不可重试时立即返回，不改 Client。
 // 返回：内层成功 → 原样 resp；非 *httpx.TransportError → 原样穿透；
-// 不可重试网络错、或失败正由调用方 ctx 结束引起 → fmt.Errorf("failed to send request: %w", err)；
+// 不可重试网络错、或失败正由调用方 ctx 结束引起 → *errors.Error（保留底层原因）；
 // 用尽次数、或可重试失败后在退避中 ctx 取消 → *errors.RetryableError。
 func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 	policy := ch.Client().RetryPolicy()
@@ -92,11 +92,11 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 		// 原样交还（调用方可 errors.Is 判 Canceled / DeadlineExceeded）。
 		// http.Client.Timeout 的错误链同样含 DeadlineExceeded，但那时 req.Ctx 仍存活，照常重试。
 		if ctxErr := req.Ctx.Err(); ctxErr != nil && stderrors.Is(doErr, ctxErr) {
-			return nil, fmt.Errorf(sendRequestErrFmt, doErr)
+			return nil, &errors.Error{Op: sendRequestOp, Err: doErr}
 		}
 
 		if !policy.IsRetryable(doErr) {
-			return nil, fmt.Errorf(sendRequestErrFmt, doErr)
+			return nil, &errors.Error{Op: sendRequestOp, Err: doErr}
 		}
 
 		if attempt == policy.MaxRetries {
@@ -127,5 +127,5 @@ func (i *retryInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, error) {
 	}
 
 	// coverage:ignore  normalizeRetry 保证 MaxRetries>=0，循环必从 return 退出
-	return nil, fmt.Errorf(sendRequestErrFmt, lastErr)
+	return nil, &errors.Error{Op: sendRequestOp, Err: lastErr}
 }
