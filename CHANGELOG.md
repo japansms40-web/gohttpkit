@@ -5,7 +5,9 @@
 
 ## [Unreleased]
 
-> 本节只涉及测试与仓库工具，不影响库的导出 API；agentguard 变更需随下一个 `tools/agentguard/vX.Y.0` 发布。
+## [v0.13.0] - 2026-09-28
+
+> 本版只涉及测试与仓库工具，不影响库的导出 API。agentguard 的 `check-test-layout` 随 `tools/agentguard/v0.1.4` 发布。
 
 ### 新增
 
@@ -24,7 +26,7 @@
 ## [v0.12.0] - 2026-09-28
 
 > 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API；
-> 本版与 v0.11.0 的 agentguard 变更（`check-errors` 子命令及新规则）随 `tools/agentguard/v0.2.0` 发布。
+> 本版与 v0.11.0 的 agentguard 变更（`check-errors` 子命令及新规则）随 `tools/agentguard/v0.1.4` 发布（未发布过 `v0.2.0`）。
 
 ### 新增
 

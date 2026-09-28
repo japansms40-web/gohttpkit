@@ -10,6 +10,14 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.13.0（相对 v0.12.0）
+
+无导出 API 变化，下游直接升级。
+
+- 仓库内测试文件按「一源一测」归并，并补齐缺失的测试。
+- `tools/agentguard/v0.1.4` 新增 `check-test-layout`（同版本首次带上 `check-errors` 及其 Op / Kind 规则）。
+  下游升级 agentguard 不会自动启用这两项检查；在自己的 Makefile / 钩子里接入前，先按 `CODE_STANDARDS.md` §5.1、§8 整改。
+
 ## v0.12.0（相对 v0.11.0）
 
 新增与行为变更（0.x 阶段按 minor）：
@@ -19,7 +27,7 @@
 - 外层 `*errors.Error` 的 `Op` 改为 `<包>.<步骤>`：`"httpx: build transport"` → `"httpx.build_transport"`，
   `"failed to send request"` → `"interceptor.send_request"`，`Error()` 前缀随之变化。错误类型与错误链不变；
   下游若按文案前缀匹配，改为 `errors.As` / `errors.Is`。
-- `tools/agentguard` 的 `check-errors` 新增 Op / Kind 规则（见 `CODE_STANDARDS.md` §5.1）。下游升级到 `tools/agentguard/v0.2.0`
+- `tools/agentguard` 的 `check-errors` 新增 Op / Kind 规则（见 `CODE_STANDARDS.md` §5.1）。下游升级到 `tools/agentguard/v0.1.4`
   前，先把 `errors.Error` 字面量里的字符串 Op 改为具名 const、把函数体内的 `NewKind` 提到包级 var。
 
 ## v0.11.0（相对 v0.10.1）
