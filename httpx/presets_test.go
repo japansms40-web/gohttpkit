@@ -43,33 +43,30 @@ func TestChainEditors(t *testing.T) {
 	isA := func(it httpx.Interceptor) bool { return it == a }
 	never := func(httpx.Interceptor) bool { return false }
 
-	t.Run("InsertBefore", func(t *testing.T) {
-		got := httpx.InsertBefore(base, isA, b)
-		t.Logf("InsertBefore len=%d miss=%d emptyItems=%d", len(got), len(httpx.InsertBefore(base, never, b)), len(httpx.InsertBefore(base, isA)))
-		if len(got) != 3 || got[0] != b || got[1] != a {
-			t.Fatalf("got %v", got)
-		}
-		if got := httpx.InsertBefore(base, never, b); len(got) != 2 {
-			t.Fatal("无匹配应原样返回")
-		}
-		if got := httpx.InsertBefore(base, isA); len(got) != 2 {
-			t.Fatal("不传拦截器应原样返回")
-		}
-	})
-
-	t.Run("InsertAfter", func(t *testing.T) {
-		got := httpx.InsertAfter(base, isA, b)
-		t.Logf("InsertAfter len=%d miss=%d emptyItems=%d", len(got), len(httpx.InsertAfter(base, never, b)), len(httpx.InsertAfter(base, isA)))
-		if len(got) != 3 || got[0] != a || got[1] != b {
-			t.Fatalf("got %v", got)
-		}
-		if got := httpx.InsertAfter(base, never, b); len(got) != 2 {
-			t.Fatal("无匹配应原样返回")
-		}
-		if got := httpx.InsertAfter(base, isA); len(got) != 2 {
-			t.Fatal("不传拦截器应原样返回")
-		}
-	})
+	// InsertBefore / InsertAfter 断言形状相同，只差插入点：命中 a 后 b 在前或在后。
+	inserts := []struct {
+		name          string
+		insert        func(httpx.Interceptors, func(httpx.Interceptor) bool, ...httpx.Interceptor) httpx.Interceptors
+		first, second httpx.Interceptor
+	}{
+		{"InsertBefore", httpx.InsertBefore, b, a},
+		{"InsertAfter", httpx.InsertAfter, a, b},
+	}
+	for _, tc := range inserts {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.insert(base, isA, b)
+			t.Logf("%s len=%d miss=%d emptyItems=%d", tc.name, len(got), len(tc.insert(base, never, b)), len(tc.insert(base, isA)))
+			if len(got) != 3 || got[0] != tc.first || got[1] != tc.second {
+				t.Fatalf("got %v", got)
+			}
+			if got := tc.insert(base, never, b); len(got) != 2 {
+				t.Fatal("无匹配应原样返回")
+			}
+			if got := tc.insert(base, isA); len(got) != 2 {
+				t.Fatal("不传拦截器应原样返回")
+			}
+		})
+	}
 
 	t.Run("Replace", func(t *testing.T) {
 		got := httpx.Replace(base, isA, b)

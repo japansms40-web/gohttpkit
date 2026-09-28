@@ -50,17 +50,7 @@ func TestLoggerLevels_四级透传msg与attr(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			buf.Reset()
 			c.fn("the-msg", slog.Int("n", 7))
-			m := lastLine(t, buf)
-			t.Logf("level=%v msg=%v n=%v", m["level"], m["msg"], m["n"])
-			if m["level"] != c.level {
-				t.Errorf("level = %v, want %v", m["level"], c.level)
-			}
-			if m["msg"] != "the-msg" {
-				t.Errorf("msg = %v, want the-msg", m["msg"])
-			}
-			if m["n"] != float64(7) {
-				t.Errorf("attr n = %v, want 7", m["n"])
-			}
+			assertLevelMsgN(t, buf, c.level)
 		})
 	}
 }

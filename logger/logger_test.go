@@ -35,6 +35,22 @@ func lastLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	return m
 }
 
+// assertLevelMsgN 断言 buf 最后一行日志是 level 级、msg 为 the-msg、带 n=7，供四级透传用例共用。
+func assertLevelMsgN(t *testing.T, buf *bytes.Buffer, level string) {
+	t.Helper()
+	m := lastLine(t, buf)
+	t.Logf("level=%v msg=%v n=%v", m["level"], m["msg"], m["n"])
+	if m["level"] != level {
+		t.Errorf("level = %v, want %v", m["level"], level)
+	}
+	if m["msg"] != "the-msg" {
+		t.Errorf("msg = %v, want the-msg", m["msg"])
+	}
+	if m["n"] != float64(7) {
+		t.Errorf("attr n = %v, want 7", m["n"])
+	}
+}
+
 func TestSetLogger_注入后自动带trace_id(t *testing.T) {
 	buf := &bytes.Buffer{}
 	SetLogger(slog.New(slog.NewJSONHandler(buf, nil)))
@@ -188,17 +204,7 @@ func TestLevelFunctions_四级透传msg与attr(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			buf.Reset()
 			c.fn(t.Context(), "the-msg", slog.Int("n", 7))
-			m := lastLine(t, buf)
-			t.Logf("level=%v msg=%v n=%v", m["level"], m["msg"], m["n"])
-			if m["level"] != c.level {
-				t.Errorf("level = %v, want %v", m["level"], c.level)
-			}
-			if m["msg"] != "the-msg" {
-				t.Errorf("msg = %v, want the-msg", m["msg"])
-			}
-			if m["n"] != float64(7) {
-				t.Errorf("attr n = %v, want 7", m["n"])
-			}
+			assertLevelMsgN(t, buf, c.level)
 		})
 	}
 }
