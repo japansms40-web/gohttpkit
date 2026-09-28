@@ -9,6 +9,9 @@
 
 - `versionreg` 导出 `KindRegisterInvalid`、`KindRegisterEmptyID`、`KindRegisterDuplicate`，
   recover `MustRegister` 的 panic 后可直接 `errors.IsKind(err, versionreg.KindRegisterDuplicate)`，不必手写分类名；名称与 v0.11.0 一致。
+- `make check-errors`（`tools/agentguard`）新增三条规则，落实 `docs/CODE_STANDARDS.md` §5.1：
+  `errors.Error` 字面量的 `Op` 须引用具名 const；`errors.NewKind` 只能出现在包级 `var` 声明里；
+  Kind 名须为 `<包>.<分类>` 小写点分字符串字面量。测试文件豁免。下游升级 agentguard 前需先按此整改。
 
 ## [v0.11.0] - 2026-09-28
 

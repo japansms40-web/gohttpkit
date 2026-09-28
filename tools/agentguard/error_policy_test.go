@@ -90,8 +90,9 @@ import (
   "fmt"
   kiterrors "github.com/japansms40-web/gohttpkit/errors"
 )
+const opF = "sample.f"
 var kind = kiterrors.NewKind("sample.bad")
-func f(err error) error { return &kiterrors.Error{Op: "sample.f", Kind: kind, Err: err} }
+func f(err error) error { return &kiterrors.Error{Op: opF, Kind: kind, Err: err} }
 func message() string { return fmt.Sprintf("err=%v", f(nil)) }
 // fmt.Errorf("comment")
 var example = "errors.New(\"string\")"
@@ -111,5 +112,112 @@ var cause = errors.New("fixture")`))
 	}
 	if _, err := findDirectErrorConstructors("broken.go", []byte("package sample\nfunc (")); err == nil {
 		t.Fatal("生产源码解析失败应阻断")
+	}
+}
+
+func TestFindDirectErrorConstructors_Op须引用具名常量(t *testing.T) {
+	src := []byte(`package sample
+import kit "github.com/japansms40-web/gohttpkit/errors"
+const opF = "sample.f"
+func f(err error) error {
+  _ = kit.Error{Op: "sample.literal", Err: err}
+  _ = &kit.Error{Op: "sample." + "concat", Err: err}
+  return &kit.Error{Op: opF, Err: err}
+}
+`)
+	got, err := findDirectErrorConstructors("sample.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !strings.Contains(got[0], "sample.go:5:") || !strings.Contains(got[1], "sample.go:6:") {
+		t.Fatalf("应只拦截第 5、6 行的非具名 Op，got %v", got)
+	}
+	for _, v := range got {
+		if !strings.Contains(v, "Op 须引用具名 const") {
+			t.Fatalf("违规说明不对：%v", got)
+		}
+	}
+}
+
+func TestFindDirectErrorConstructors_NewKind只能在包级var(t *testing.T) {
+	src := []byte(`package sample
+import kiterrors "github.com/japansms40-web/gohttpkit/errors"
+var (
+  KindA = kiterrors.NewKind("sample.a")
+  kindB = kiterrors.NewKind("sample.sub.b_c")
+)
+var kinds = []kiterrors.Kind{kiterrors.NewKind("sample.nested")}
+func f() bool {
+  k := kiterrors.NewKind("sample.inline")
+  return kiterrors.IsKind(nil, k) || kiterrors.IsKind(nil, kiterrors.NewKind("sample.arg"))
+}
+`)
+	got, err := findDirectErrorConstructors("sample.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, "\n")
+	if len(got) != 3 || !strings.Contains(joined, "sample.go:7:") || !strings.Contains(joined, "sample.go:9:") ||
+		!strings.Contains(joined, "sample.go:10:") || strings.Contains(joined, "sample.go:4:") {
+		t.Fatalf("应拦截第 7、9、10 行（嵌套 / 函数体内），放行包级 var，got %v", got)
+	}
+	if !strings.Contains(joined, "NewKind 只能在包级 var 声明") {
+		t.Fatalf("违规说明不对：%v", got)
+	}
+}
+
+func TestFindDirectErrorConstructors_Kind名须小写点分(t *testing.T) {
+	src := []byte(`package sample
+import kiterrors "github.com/japansms40-web/gohttpkit/errors"
+const name = "sample.const"
+var (
+  kOK      = kiterrors.NewKind("sample.ok_1")
+  kNoDot   = kiterrors.NewKind("sample")
+  kUpper   = kiterrors.NewKind("Sample.Bad")
+  kSpace   = kiterrors.NewKind("sample.bad name")
+  kEmpty   = kiterrors.NewKind("")
+  kTrail   = kiterrors.NewKind("sample.")
+  kIdent   = kiterrors.NewKind(name)
+  kNoArg   = kiterrors.NewKind()
+)
+`)
+	got, err := findDirectErrorConstructors("sample.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 7 {
+		t.Fatalf("除 sample.ok_1 外 7 处都应拦截，got %v", got)
+	}
+	for _, v := range got {
+		if !strings.Contains(v, "Kind 名须为 <包>.<分类> 小写点分字符串字面量") || strings.Contains(v, "sample.go:5:") {
+			t.Fatalf("违规说明或行号不对：%v", got)
+		}
+	}
+}
+
+func TestFindDirectErrorConstructors_只认gohttpkit的errors包(t *testing.T) {
+	src := []byte(`package sample
+import (
+  other "example.com/other/errors"
+  kiterrors "github.com/japansms40-web/gohttpkit/errors"
+)
+type Error struct{ Op string }
+var _ = Error{Op: "local.literal"}
+var _ = other.Error{Op: "other literal"}
+func f() { _ = other.NewKind("Whatever") }
+var _ = kiterrors.KindOf(nil)
+`)
+	got, err := findDirectErrorConstructors("sample.go", src)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("非 gohttpkit/errors 的同名符号不应拦截：violations=%v err=%v", got, err)
+	}
+}
+
+func TestFindDirectErrorConstructors_Kind与Op规则测试文件豁免(t *testing.T) {
+	got, err := findDirectErrorConstructors("fixture_test.go", []byte(`package sample
+import kiterrors "github.com/japansms40-web/gohttpkit/errors"
+func f() error { return &kiterrors.Error{Op: "x", Kind: kiterrors.NewKind("Bad")} }`))
+	if err != nil || len(got) != 0 {
+		t.Fatalf("测试文件应豁免：violations=%v err=%v", got, err)
 	}
 }
