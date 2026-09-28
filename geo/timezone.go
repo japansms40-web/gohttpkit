@@ -13,7 +13,7 @@ package geo
 // 数据基于 IANA tzdata 2024 版本。已实行永久标准时间的国家（如 RU/MX/BR/AZ 等）
 // 直接使用永久偏移；NZ/AU/CL/PY 等南半球国家使用其冬令时（北半球夏季）偏移。
 //
-// **维护规约**：本表 keyset 必须与 countryToMobileLocale 完全对齐——任一边新增 country
+// **维护规约**：本表 keyset 必须与 countryToWebAcceptTag 完全对齐——任一边新增 country
 // 都必须同步加，由 TestTimezoneTableKeysetMatchesLocaleTable 守护。
 var countryToTimezoneOffset = map[string]int{
 	"AD": 3600, "AE": 14400, "AF": 16200, "AG": -14400, "AI": -14400, "AL": 3600,

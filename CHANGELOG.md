@@ -5,7 +5,14 @@
 
 ## [Unreleased]
 
-> 含新增导出 API（`geo.LookupCountry`），下次发版升 minor。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
+> 含一项导出 API 删除（`geo.MobileLocaleForCountry`），下次发版升 minor。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
+
+### 破坏
+
+- 删除 `geo.MobileLocaleForCountry`（及 `geo/locale_mobile.go` 的 Android 下划线 locale 表）：它与子包 `localemobile` 的
+  `DeviceLocaleForCountry` 是同一事实的两份数据（去 script、旧语言码换新码后相同），且已在 MO 上不一致（`zh_HK` vs `zh_MO_#Hant`）。
+  按维护者决定未经弃用周期直接删除。迁移：Android locale 取值改用 `localemobile` 的五个 `XxxForCountry`；
+  需要无 script 的 `zh_CN` 形态时由调用方从 `DeviceLocaleForCountry` 裁剪。
 
 ### 新增
 

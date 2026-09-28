@@ -41,8 +41,8 @@ func (e *ExtraLanguageCountExceedsPoolError) Error() string {
 	return fmt.Sprintf("geo: extra language count exceeds candidate pool: extra=%d available=%d", e.Extra, e.Available)
 }
 
-// UnknownCountryError 国家码为空，或不在 countryToWebAcceptTag / countryToMobileLocale
-// （及对齐的 timezone offset 表）。
+// UnknownCountryError 国家码为空，或不在所查的国家表（countryToWebAcceptTag 及对齐的 timezone offset 表、
+// localemobile 各表、调用方传给 LookupCountry 的表）。
 // 判定请用 errors.As，不要扫 Error() 文案；Country 是归一化后的 ISO 3166-1 alpha-2，
 // 空输入时为 ""，便于上层区分「没给国家」和「给了但不在表里」。
 type UnknownCountryError struct {

@@ -96,7 +96,7 @@ func TestKeyset_五表一致且与geo对齐(t *testing.T) {
 	for a := 'A'; a <= 'Z'; a++ {
 		for b := 'A'; b <= 'Z'; b++ {
 			cc := string([]rune{a, b})
-			if _, err := geo.MobileLocaleForCountry(cc); err == nil {
+			if _, err := geo.TimezoneOffsetForCountry(cc); err == nil {
 				fromGeo = append(fromGeo, cc)
 			}
 		}
@@ -107,11 +107,9 @@ func TestKeyset_五表一致且与geo对齐(t *testing.T) {
 	}
 }
 
-// 全表不变量：五个值之间满足 APK 的派生关系，与 geo.MobileLocaleForCountry 的语言、国家一致。
+// 全表不变量：五个值之间满足 APK 的派生关系。
 func TestInvariant_全表派生关系(t *testing.T) {
 	newCode := map[string]string{"in": "id", "iw": "he", "ji": "yi"}
-	// geo 表里 MO 借用 zh_HK；本包按 Android 可选列表是 zh-Hant-MO。
-	geoOverride := map[string]string{"MO": "zh_MO"}
 	for _, cc := range sortedKeys(countryToAcceptLanguage) {
 		al := countryToAcceptLanguage[cc]
 		app := countryToAppLocale[cc]
@@ -130,17 +128,6 @@ func TestInvariant_全表派生关系(t *testing.T) {
 		if n, ok := newCode[lang]; ok {
 			lang = n
 		}
-		want, err := geo.MobileLocaleForCountry(cc)
-		if err != nil {
-			t.Fatalf("%s: geo err %v", cc, err)
-		}
-		if v, ok := geoOverride[cc]; ok {
-			want = v
-		}
-		if got := lang + "_" + country; got != want {
-			t.Errorf("%s: device %q 还原为 %q，geo 为 %q", cc, dev, got, want)
-		}
-
 		tag := lang + "-" + country
 		wantAL := tag + ", en-US"
 		if cc == "US" {

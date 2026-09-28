@@ -56,7 +56,7 @@ go run ./examples/fidelity                      # 高保真复刻抓包
 | `errors` | 可重试网络错误的判定与包装（关键词表可扩展）、HTTP 状态码错误 |
 | `netproxy` | socks5 / http / https 代理接入 `http.Transport`，或拿裸 `proxy.Dialer` 给 TCP 链路用 |
 | `traffic` | TCP 层真实收发字节计数，零注入时零开销，贴近代理商计费口径 |
-| `geo` | 国家码 → Web data-code / Android locale / 时区，按 Chromium 拼 Accept-Language |
+| `geo` | 国家码 → Web data-code / 时区，按 Chromium 拼 Accept-Language |
 | `geo/locale_mobile` | 国家码 → Android 5 个 locale 头（包名 `localemobile`），未命中返回 `*geo.UnknownCountryError` |
 | `versionreg` | 「按版本隔离协议实现」的泛型注册表骨架 + 按 endpoint 的白名单访问器 |
 

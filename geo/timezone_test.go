@@ -57,9 +57,7 @@ func TestTimezoneTableKeysetMatchesLocaleTable(t *testing.T) {
 	for cc := range countryToTimezoneOffset {
 		tz[cc] = ""
 	}
-	t.Logf("key 数 web=%d mobile=%d tz=%d", len(countryToWebAcceptTag), len(countryToMobileLocale), len(countryToTimezoneOffset))
+	t.Logf("key 数 web=%d tz=%d", len(countryToWebAcceptTag), len(countryToTimezoneOffset))
 	assertSameKeys("countryToTimezoneOffset", countryToWebAcceptTag, tz)
 	assertSameKeys("countryToWebAcceptTag", tz, countryToWebAcceptTag)
-	assertSameKeys("countryToMobileLocale", tz, countryToMobileLocale)
-	assertSameKeys("countryToTimezoneOffset(mobile)", countryToMobileLocale, tz)
 }
