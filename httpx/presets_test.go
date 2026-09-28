@@ -164,3 +164,16 @@ func TestAPIChain_classify为nil时只加状态语义层(t *testing.T) {
 		t.Fatalf("len = %d / %d", len(withClassify), len(without))
 	}
 }
+
+func TestPrepend_空items是新切片(t *testing.T) {
+	base := httpx.Interceptors{interceptor.NewLoggingInterceptor()}
+	got := httpx.Prepend(base)
+	t.Logf("Prepend(base) len=%d", len(got))
+	if len(got) != 1 {
+		t.Fatalf("len=%d", len(got))
+	}
+	got[0] = interceptor.NewRetryInterceptor()
+	if base[0] == got[0] {
+		t.Fatal("Prepend 应新切片，改 got 不得写回 base")
+	}
+}

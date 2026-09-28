@@ -27,3 +27,11 @@ func TestExtractHTMLText_空输入(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestExtractHTMLText_畸形不panic(t *testing.T) {
+	in := "<<<>}{{{not-html"
+	got := httpx.ExtractHTMLText(in)
+	t.Logf("畸形 → %q", got)
+	// x/net/html 解析器极宽，几乎不返回 error；此用例锁「不 panic、有确定输出」。
+	_ = got
+}

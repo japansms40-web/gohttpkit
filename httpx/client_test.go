@@ -3,9 +3,14 @@ package httpx_test
 // client_test.go —— Client 构造访问器与 Do 入口的单元契约。
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -206,4 +211,155 @@ func TestNew_非法代理URL仍可As到netproxy类型(t *testing.T) {
 		t.Fatalf("err = %v (%T), want *netproxy.UnsupportedProxySchemeError Scheme=ftp", err, err)
 	}
 	t.Logf("As → scheme=%q wrapped=%v", ue.Scheme, err)
+}
+
+func TestWithChain_nil只保留最外层旁路(t *testing.T) {
+	parent, err := httpx.NewClient(httpx.Options{
+		Headers: httpx.StaticHeaders{Base: "https://a.example"},
+		Interceptors: httpx.Prepend(interceptor.DefaultChain(),
+			interceptor.NewTransactionInterceptor(nil)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := parent.WithChain(nil)
+	got := child.Interceptors()
+	t.Logf("WithChain(nil) len=%d", len(got))
+	if len(got) != 1 {
+		t.Fatalf("默认链最外层只有 transaction 是 SideChannel，len=%d", len(got))
+	}
+	if !httpx.IsSideChannel(got[0]) {
+		t.Fatal("继承层应是 SideChannel")
+	}
+}
+
+func TestSlowMS_亚毫秒截断为0(t *testing.T) {
+	c, err := httpx.New(httpx.Options{
+		Headers: httpx.StaticHeaders{Base: "https://a.example"},
+		SlowMS:  500 * time.Microsecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("500µs → SlowMS()=%d", c.SlowMS())
+	if c.SlowMS() != 0 {
+		t.Fatalf("不足 1ms 应截断为 0（关闭），got %d", c.SlowMS())
+	}
+}
+
+func TestCacheResponseHeaders_nil清空(t *testing.T) {
+	c, err := httpx.New(httpx.Options{Headers: httpx.StaticHeaders{Base: "https://a.example"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SnapshotResponseHeaders() != nil || c.SnapshotResponseStatusCode() != 0 {
+		t.Fatal("New 后快照应为零值")
+	}
+	c.CacheResponseHeaders(map[string][]string{"x": {"1"}})
+	c.CacheResponseHeaders(nil)
+	t.Logf("清空后 Snapshot=%v", c.SnapshotResponseHeaders())
+	if c.SnapshotResponseHeaders() != nil {
+		t.Fatal("CacheResponseHeaders(nil) 应清空")
+	}
+}
+
+// —— 并发回归。
+// 单个 *Client 会被多 goroutine 共享（几十上百路并发是常态），
+// 「最近一次响应」缓存与 HeaderProvider 的读写必须扛得住。
+// 在装了 C 编译器的机器上用 `make race` 跑，才能真正发挥这些用例的价值。
+
+// statefulHeaders 模拟带会话状态的构头器：token 会被响应回写改写，
+// 同时被并发的构头读取 —— 这正是最容易出 race 的形态。
+type statefulHeaders struct {
+	base  string
+	mu    sync.RWMutex
+	token string
+}
+
+func (h *statefulHeaders) BuildHeaders(context.Context) map[string]string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return map[string]string{"accept": "application/json", "x-token": h.token}
+}
+func (h *statefulHeaders) BaseURL() string { return h.base }
+func (h *statefulHeaders) setToken(v string) {
+	h.mu.Lock()
+	h.token = v
+	h.mu.Unlock()
+}
+
+func TestConcurrent_共享Client并发请求(t *testing.T) {
+	var served atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := served.Add(1)
+		w.Header().Set("x-new-token", fmt.Sprintf("t-%d", n))
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	hp := &statefulHeaders{base: srv.URL, token: "t-0"}
+	c, err := httpx.NewClient(httpx.Options{
+		Headers: hp,
+		// 响应回写：把服务端下发的新 token 写回构头器，下一次请求带上。
+		OnResponseHeaders: func(_ context.Context, h http.Header) {
+			if v := h.Get("x-new-token"); v != "" {
+				hp.setToken(v)
+			}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const workers, perWorker = 32, 8
+	var wg sync.WaitGroup
+	errs := make(chan error, workers*perWorker)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < perWorker; i++ {
+				if _, err := c.Get(t.Context(), fmt.Sprintf("/w%d/%d", w, i), nil); err != nil {
+					errs <- err
+					return
+				}
+				// 并发读快照：不加锁直读字段会被 race detector 抓到
+				_ = c.SnapshotResponseStatusCode()
+				_ = c.SnapshotResponseHeaders()
+			}
+		}(w)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("并发请求失败: %v", err)
+	}
+	got := served.Load()
+	t.Logf("workers=%d perWorker=%d served=%d", workers, perWorker, got)
+	if got != workers*perWorker {
+		t.Fatalf("服务端收到 %d 次，want %d", got, workers*perWorker)
+	}
+}
+
+func TestConcurrent_派生子Client与父并发互不干扰(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c, err := httpx.NewClient(httpx.Options{Headers: httpx.StaticHeaders{Base: srv.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	derived := c.WithChain(interceptor.NoRedirectChain())
+
+	const pairs = 16
+	t.Logf("parent+derived pairs=%d", pairs)
+	var wg sync.WaitGroup
+	for i := 0; i < pairs; i++ {
+		wg.Add(2)
+		go func() { defer wg.Done(); _, _ = c.Get(t.Context(), "/p", nil) }()
+		go func() { defer wg.Done(); _, _ = derived.Get(t.Context(), "/d", nil) }()
+	}
+	wg.Wait()
 }

@@ -3,6 +3,7 @@ package httpx_test
 // headers_test.go —— HeaderProvider 与白名单过滤的单元契约。
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -112,5 +113,62 @@ func TestBuildOriginAndReferer(t *testing.T) {
 	t.Logf("base=%q path=%q → origin=%q referer=%q", "https://x.example", "/a/b", o, r)
 	if o != "https://x.example" || r != "https://x.example/a/b" {
 		t.Fatalf("origin=%q referer=%q", o, r)
+	}
+}
+
+func TestFilterHeadersByWhitelist_固定值与大小写回退与缺键(t *testing.T) {
+	all := map[string]string{"Accept": "*/*", "x-app": "1"}
+	got := httpx.FilterHeadersByWhitelist(all, map[string]string{
+		"accept":  "",
+		"x-app":   "fixed",
+		"missing": "",
+	})
+	t.Logf("filtered=%v", got)
+	if got["accept"] != "*/*" {
+		t.Fatalf("空值应回退大小写命中 Accept，got %q", got["accept"])
+	}
+	if got["x-app"] != "fixed" {
+		t.Fatalf("非空白名单值应覆盖，got %q", got["x-app"])
+	}
+	if _, ok := got["missing"]; ok {
+		t.Fatal("allHeaders 没有的键应跳过")
+	}
+
+	nilAll := httpx.FilterHeadersByWhitelist(nil, map[string]string{"a": "1"})
+	t.Logf("all=nil 固定值 → %v", nilAll)
+	if nilAll["a"] != "1" {
+		t.Fatalf("all=nil 时固定值仍应写入，got %v", nilAll)
+	}
+}
+
+func TestBuildOriginAndReferer_空边界(t *testing.T) {
+	o, r := httpx.BuildOriginAndReferer("", "")
+	t.Logf("空 → origin=%q referer=%q", o, r)
+	if o != "" || r != "" {
+		t.Fatalf("空 base+path 应都是空串，got %q %q", o, r)
+	}
+	o, r = httpx.BuildOriginAndReferer("https://a.example", "")
+	if o != "https://a.example" || r != "https://a.example" {
+		t.Fatalf("空 path → %q %q", o, r)
+	}
+}
+
+func TestStaticHeaders_Headers为nil是空表(t *testing.T) {
+	got := httpx.StaticHeaders{Base: "https://a.example"}.BuildHeaders(t.Context())
+	t.Logf("Headers=nil → %v nil=%v", got, got == nil)
+	if got == nil || len(got) != 0 {
+		t.Fatalf("应为空 map，got %v", got)
+	}
+}
+
+func TestHeaderProviderFunc_Build返回nil原样nil(t *testing.T) {
+	f := httpx.HeaderProviderFunc{
+		Base:  "https://a.example",
+		Build: func(context.Context) map[string]string { return nil },
+	}
+	got := f.BuildHeaders(t.Context())
+	t.Logf("Build=nil 函数 → %v", got)
+	if got != nil {
+		t.Fatal("显式返回 nil 应原样（bridge 会当成构头失败）")
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"testing"
+	"unsafe"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
 )
@@ -81,5 +83,59 @@ func TestTruncateBodyForLog_边界(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEncodeRequestBody_nil与字节同引用与string与表单(t *testing.T) {
+	got, err := httpx.EncodeRequestBody(nil)
+	t.Logf("nil → %v err=%v", got, err)
+	if got != nil || err != nil {
+		t.Fatalf("nil → (%v, %v)", got, err)
+	}
+
+	in := []byte("hi")
+	got, err = httpx.EncodeRequestBody(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unsafe.SliceData(got) != unsafe.SliceData(in) {
+		t.Fatal("[]byte 应返回同一份切片，不复制")
+	}
+
+	got, err = httpx.EncodeRequestBody("a=1&b=2")
+	t.Logf("string → %q", got)
+	if err != nil || string(got) != "a=1&b=2" {
+		t.Fatalf("string 应原样，got %q err=%v", got, err)
+	}
+
+	got, err = httpx.EncodeRequestBody(url.Values{"b": {"2"}, "a": {"1"}})
+	t.Logf("url.Values → %q", got)
+	if err != nil || string(got) != "a=1&b=2" {
+		t.Fatalf("url.Values 应按字典序，got %q", got)
+	}
+}
+
+func TestDecodeResponse_空与非指针(t *testing.T) {
+	var m map[string]any
+	err := httpx.DecodeResponse(nil, &m)
+	t.Logf("nil data → err=%v", err)
+	var de *httpx.ResponseJSONDecodeError
+	if !errors.As(err, &de) {
+		t.Fatalf("空输入要 *ResponseJSONDecodeError，got %v", err)
+	}
+
+	var val map[string]any
+	err = httpx.DecodeResponse([]byte(`{"a":1}`), val)
+	t.Logf("非指针 → err=%v TargetType=%s", err, "")
+	if !errors.As(err, &de) {
+		t.Fatalf("非指针要 *ResponseJSONDecodeError，got %v", err)
+	}
+}
+
+func TestTruncateBodyForLog_nil体(t *testing.T) {
+	got := httpx.TruncateBodyForLog(nil, 3)
+	t.Logf("nil → %v nil=%v", got, got == nil)
+	if got != nil {
+		t.Fatalf("nil 体应原样返回 nil，got %v", got)
 	}
 }

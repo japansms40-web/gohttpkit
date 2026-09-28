@@ -52,3 +52,46 @@ func TestRetryableTextRule_空关键词被忽略(t *testing.T) {
 		t.Fatalf("空关键词不该命中一切, got %v", err)
 	}
 }
+
+func TestDefaultStatusRule_空体与有体(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    []byte
+		wantErr bool
+	}{
+		{"空体404", 404, nil, true},
+		{"空切片404", 404, []byte{}, true},
+		{"1字节放行", 400, []byte("{"), false},
+		{"有体放行", 500, []byte(`{"e":1}`), false},
+		{"2xx空体仍报错(纯函数不管谁调用)", 200, nil, true},
+	}
+	for _, c := range cases {
+		err := httpx.DefaultStatusRule(c.status, c.body)
+		t.Logf("%s status=%d len(body)=%d err=%v", c.name, c.status, len(c.body), err)
+		if !c.wantErr {
+			if err != nil {
+				t.Errorf("%s: 有体应放行，got %v", c.name, err)
+			}
+			continue
+		}
+		var se *kiterrors.HTTPStatusError
+		if !errors.As(err, &se) || se.StatusCode != c.status {
+			t.Errorf("%s: 要 *HTTPStatusError{%d}，got %v", c.name, c.status, err)
+		}
+	}
+}
+
+func TestRetryableTextRule_空体命中状态码As字段(t *testing.T) {
+	rule := httpx.RetryableTextRule(nil, 503)
+	err := rule(503, nil)
+	t.Logf("503 空体 → %v", err)
+	var re *kiterrors.RetryableError
+	if !errors.As(err, &re) {
+		t.Fatalf("要 *RetryableError，got %v", err)
+	}
+	var se *kiterrors.HTTPStatusError
+	if !errors.As(err, &se) || se.StatusCode != 503 {
+		t.Fatalf("应包装 HTTPStatusError(503)，got %v", err)
+	}
+}

@@ -99,3 +99,19 @@ func TestChain_访问器返回请求与客户端(t *testing.T) {
 		t.Fatal("Client() 应返回发起请求的那个客户端")
 	}
 }
+
+func TestMarker方法体可直接调用(t *testing.T) {
+	httpx.SideChannelMarker{}.SideChannel()
+	httpx.TerminalMarker{}.Terminal()
+	t.Logf("SideChannel/Terminal 空方法可调用、无副作用")
+	if httpx.IsSideChannel(nil) {
+		t.Fatal("IsSideChannel(nil) 应为 false")
+	}
+}
+
+func TestSideChannel与Terminal方法体(t *testing.T) {
+	// 空方法体没有语句，cover 百分比恒为 0；这里只锁「可直接调用、无副作用」。
+	httpx.SideChannelMarker{}.SideChannel()
+	httpx.TerminalMarker{}.Terminal()
+	t.Logf("marker 方法体已执行")
+}
