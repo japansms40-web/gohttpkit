@@ -248,6 +248,66 @@ func TestLoggerEvent_两级msg与event同值且带module(t *testing.T) {
 	}
 }
 
+func TestLoggerEvent_Error与Debug级别msg与event同值且带module(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{Level: slog.LevelDebug})
+	l := Named("m")
+	cases := []struct {
+		name  string
+		fn    func(Event, ...slog.Attr)
+		level string
+	}{
+		{"DebugEvent", l.DebugEvent, "DEBUG"},
+		{"ErrorEvent", l.ErrorEvent, "ERROR"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			buf.Reset()
+			c.fn(NewEvent("demo.done"), slog.Int("n", 7))
+			m := lastLine(t, buf)
+			t.Logf("line=%v", m)
+			if m["level"] != c.level || m["msg"] != "demo.done" || m[FieldEvent] != "demo.done" {
+				t.Fatalf("level/msg/event 不符: %v", m)
+			}
+			if m[FieldModule] != "m" || m["n"] != float64(7) {
+				t.Fatalf("module/attr 未透传: %v", m)
+			}
+		})
+	}
+}
+
+func TestLoggerEvent_Error与Debug的nil接收者与nil事件可用(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{Level: slog.LevelDebug})
+	var l *Logger
+	var e Event
+	l.ErrorEvent(e)
+	m := lastLine(t, buf)
+	t.Logf("ErrorEvent line=%v", m)
+	if m["level"] != "ERROR" || m["msg"] != "" || m[FieldEvent] != "" {
+		t.Fatalf("ErrorEvent: %v", m)
+	}
+	l.DebugEvent(NewEvent("demo.nil"))
+	m = lastLine(t, buf)
+	t.Logf("DebugEvent line=%v", m)
+	if m["level"] != "DEBUG" || m[FieldEvent] != "demo.nil" {
+		t.Fatalf("DebugEvent: %v", m)
+	}
+	if _, ok := m[FieldModule]; ok {
+		t.Fatalf("nil 接收者不应带 module: %v", m)
+	}
+}
+
+func TestLoggerEvent_ErrorEvent的AddSource指向调用点(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{AddSource: true})
+	Named("m").ErrorEvent(NewEvent("demo.source"))
+	got := lastLine(t, buf)
+	src, _ := got["source"].(map[string]any)
+	file, _ := src["file"].(string)
+	t.Logf("source.file=%q", file)
+	if !strings.HasSuffix(file, "named_test.go") {
+		t.Fatalf("source.file=%q, want *named_test.go", file)
+	}
+}
+
 func TestLoggerEvent_nil事件记录空名(t *testing.T) {
 	buf := captureJSON(t, nil)
 	var e Event

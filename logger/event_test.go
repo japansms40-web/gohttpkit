@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -83,6 +84,84 @@ func TestWarnEvent_级别与名称稳定(t *testing.T) {
 	t.Logf("level=%v msg=%v event=%v", got["level"], got["msg"], got["event"])
 	if got["level"] != "WARN" || got["msg"] != "demo.warn" || got["event"] != "demo.warn" {
 		t.Fatalf("level=%v msg=%v event=%v", got["level"], got["msg"], got["event"])
+	}
+}
+
+func TestErrorEventDebugEvent_四级事件级别与名称稳定(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{Level: slog.LevelDebug})
+	cases := []struct {
+		name  string
+		fn    func(context.Context, Event, ...slog.Attr)
+		level string
+	}{
+		{"DebugEvent", DebugEvent, "DEBUG"},
+		{"InfoEvent", InfoEvent, "INFO"},
+		{"WarnEvent", WarnEvent, "WARN"},
+		{"ErrorEvent", ErrorEvent, "ERROR"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			buf.Reset()
+			c.fn(t.Context(), NewEvent("demo.level"), slog.Int("n", 7))
+			got := lastLine(t, buf)
+			t.Logf("level=%v msg=%v event=%v n=%v", got["level"], got["msg"], got["event"], got["n"])
+			if got["level"] != c.level || got["msg"] != "demo.level" || got["event"] != "demo.level" || got["n"] != float64(7) {
+				t.Fatalf("level=%v msg=%v event=%v n=%v", got["level"], got["msg"], got["event"], got["n"])
+			}
+		})
+	}
+}
+
+func TestErrorEvent_Name只求值一次且nil记空名(t *testing.T) {
+	buf := captureJSON(t, nil)
+	e := &changingEvent{}
+	ErrorEvent(t.Context(), e)
+	got := lastLine(t, buf)
+	t.Logf("calls=%d msg=%v event=%v", e.calls, got["msg"], got["event"])
+	if e.calls != 1 || got["msg"] != "demo.1" || got["event"] != "demo.1" {
+		t.Fatalf("calls=%d msg=%v event=%v", e.calls, got["msg"], got["event"])
+	}
+	var empty Event
+	ErrorEvent(t.Context(), empty)
+	got = lastLine(t, buf)
+	t.Logf("nil Event → msg=%v event=%v", got["msg"], got["event"])
+	if got["msg"] != "" || got["event"] != "" {
+		t.Fatalf("nil Event: msg=%v event=%v", got["msg"], got["event"])
+	}
+}
+
+func TestErrorEvent_不改调用方容量区域(t *testing.T) {
+	buf := captureJSON(t, nil)
+	storage := make([]slog.Attr, 2)
+	storage[0] = slog.String("first", "1")
+	storage[1] = slog.String("sentinel", "keep")
+	ErrorEvent(t.Context(), NewEvent("demo.done"), storage[:1]...)
+	_ = lastLine(t, buf)
+	t.Logf("storage[1]=%v", storage[1])
+	if storage[1].Key != "sentinel" || storage[1].Value.String() != "keep" {
+		t.Fatalf("调用方底层数组被覆盖: %v", storage[1])
+	}
+}
+
+func TestDebugEvent_低于阈值不写出(t *testing.T) {
+	buf := captureJSON(t, nil)
+	e := &changingEvent{}
+	DebugEvent(t.Context(), e)
+	t.Logf("默认 info 阈值下 DebugEvent 输出=%q", buf.String())
+	if buf.Len() != 0 {
+		t.Fatalf("低于阈值不应输出: %s", buf.String())
+	}
+}
+
+func TestErrorEvent_AddSource指向调用点(t *testing.T) {
+	buf := captureJSON(t, &slog.HandlerOptions{AddSource: true})
+	ErrorEvent(t.Context(), NewEvent("demo.source"))
+	got := lastLine(t, buf)
+	src, _ := got["source"].(map[string]any)
+	file, _ := src["file"].(string)
+	t.Logf("source.file=%q", file)
+	if !strings.HasSuffix(file, "event_test.go") {
+		t.Fatalf("source.file=%q, want *event_test.go", file)
 	}
 }
 

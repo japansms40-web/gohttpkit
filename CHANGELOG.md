@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+> 含新增导出 API，下次发版升 minor。
+
+### 新增
+
+- `logger.DebugEvent` / `logger.ErrorEvent` 与 `(*logger.Logger).DebugEvent` / `ErrorEvent`：补齐 debug、error 两级的事件日志，
+  语义同 `InfoEvent` / `WarnEvent`（Name 只求值一次，msg 与 event 同值，attrs 不被修改）。此前只有 info / warn 两级，
+  「只打事件」的规则下 error 级日志没有合规写法。
+
 ## [v0.14.0] - 2026-09-28
 
 > 含一项导出 API 删除（`geo.MobileLocaleForCountry`），升 minor。agentguard 的 `check-pkg-doc` 随 `tools/agentguard/v0.1.5` 发布。

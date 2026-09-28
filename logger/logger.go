@@ -95,7 +95,7 @@ func Error(ctx context.Context, msg string, attrs ...slog.Attr) {
 	log(ctx, slog.LevelError, msg, attrs...)
 }
 
-// log 是包级 ctx 门面（Debug/Info/Warn/Error、InfoEvent/WarnEvent）的公共出口。
+// log 是包级 ctx 门面（Debug/Info/Warn/Error、DebugEvent/InfoEvent/WarnEvent/ErrorEvent）的公共出口。
 // 输入 ctx：nil 回落 Background；level / msg / attrs 写入 Record。
 // 返回：无。skip=4：0=Callers 1=output 2=log 3=门面函数 4=业务调用点，保证 AddSource 定位正确。
 func log(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {

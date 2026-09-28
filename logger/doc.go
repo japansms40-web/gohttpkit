@@ -16,7 +16,7 @@
 // HTTP 日志补 trace；要让 Do 前后的业务日志同链，必须在业务入口先保留派生 ctx。
 // SetHandler 是可选的进程级注入点，不用每个请求重复设置。
 //
-// InfoEvent / WarnEvent 的 msg 与 event 同值。需要人类文案与机器事件分离时，
+// DebugEvent / InfoEvent / WarnEvent / ErrorEvent 的 msg 与 event 同值。需要人类文案与机器事件分离时，
 // 才用 Info(ctx, msg, EventAttr(name))。
 // 保留字段（trace_id / span_id / parent_span_id / span_name / event / duration_ms / error / module）
 // 不得由业务 attrs 重用；slog 允许重名 key，不同 JSON 消费器的取值可能不一致。

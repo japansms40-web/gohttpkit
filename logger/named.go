@@ -71,6 +71,14 @@ func (l *Logger) Error(msg string, attrs ...slog.Attr) {
 	output(context.Background(), slog.LevelError, msg, 3, l.fixed(), attrs)
 }
 
+// DebugEvent 打 debug 事件日志；语义同 InfoEvent。
+// 输入 e：可为 nil 接口（记空名）；attrs 不会被修改。
+// 返回：无。低于阈值时不写。
+func (l *Logger) DebugEvent(e Event, attrs ...slog.Attr) {
+	name := eventName(e)
+	output(context.Background(), slog.LevelDebug, name, 3, l.fixed(), attrsWithEvent(attrs, name))
+}
+
 // InfoEvent 打 info 事件日志；Name 只求值一次，msg 与 event 同值。
 // 输入 e：可为 nil 接口（记空名）；attrs 不会被修改，排在固定字段之后、event 之前。
 // 返回：无。低于阈值时不写。
@@ -88,10 +96,18 @@ func (l *Logger) WarnEvent(e Event, attrs ...slog.Attr) {
 	output(context.Background(), slog.LevelWarn, name, 3, l.fixed(), attrsWithEvent(attrs, name))
 }
 
+// ErrorEvent 打 error 事件日志；语义同 InfoEvent。
+// 输入 e：可为 nil 接口（记空名）；attrs 不会被修改。
+// 返回：无。低于阈值时不写。
+func (l *Logger) ErrorEvent(e Event, attrs ...slog.Attr) {
+	name := eventName(e)
+	output(context.Background(), slog.LevelError, name, 3, l.fixed(), attrsWithEvent(attrs, name))
+}
+
 // fixed 取固定字段。
 // 输入：接收者可为 nil。
 // 返回：nil 接收者返回 nil，否则返回只读切片，调用方不得改。
-// skip=3 依赖级别方法直接调用 output（0=Callers 1=output 2=Debug/Info/Warn/Error/InfoEvent/WarnEvent 3=业务调用点），
+// skip=3 依赖级别方法直接调用 output（0=Callers 1=output 2=Debug/Info/Warn/Error 与四个 XxxEvent 3=业务调用点），
 // fixed 在进入 output 前已求值，不占调用栈帧。
 func (l *Logger) fixed() []slog.Attr {
 	if l == nil {

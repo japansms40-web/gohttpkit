@@ -63,6 +63,14 @@ func attrsWithEvent(attrs []slog.Attr, name string) []slog.Attr {
 	return append(cloned, EventAttr(name))
 }
 
+// DebugEvent 打 debug 事件日志；Name 只求值一次，msg 与 event 同值。
+// 输入：ctx 可为 nil；e 可为 nil 接口；attrs 不会被修改。
+// 返回：无；级别过滤和 handler 错误处理沿用 log。
+func DebugEvent(ctx context.Context, e Event, attrs ...slog.Attr) {
+	name := eventName(e)
+	log(ctx, slog.LevelDebug, name, attrsWithEvent(attrs, name)...)
+}
+
 // InfoEvent 打 info 事件日志；Name 只求值一次，msg 与 event 同值。
 // 输入：ctx 可为 nil；e 可为 nil 接口；attrs 不会被修改。
 // 返回：无；级别过滤和 handler 错误处理沿用 log。
@@ -78,4 +86,13 @@ func InfoEvent(ctx context.Context, e Event, attrs ...slog.Attr) {
 func WarnEvent(ctx context.Context, e Event, attrs ...slog.Attr) {
 	name := eventName(e)
 	log(ctx, slog.LevelWarn, name, attrsWithEvent(attrs, name)...)
+}
+
+// ErrorEvent 打 error 事件日志；Name 只求值一次，msg 与 event 同值。
+// 输入：ctx 可为 nil；e 可为 nil 接口；attrs 不会被修改。
+// 返回：无；级别过滤和 handler 错误处理沿用 log。
+// 例：ErrorEvent(ctx, httpx.EventHTTPBodyClose, logger.Err(err)) → level=ERROR msg=event=http.body_close_failed。
+func ErrorEvent(ctx context.Context, e Event, attrs ...slog.Attr) {
+	name := eventName(e)
+	log(ctx, slog.LevelError, name, attrsWithEvent(attrs, name)...)
 }
