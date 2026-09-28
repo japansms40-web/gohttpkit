@@ -9,6 +9,8 @@ alwaysApply: false
 包职责与用法以 `logger/doc.go` 为准。本包是门面实现，允许直呼 `slog`（`.golangci.yml` 已豁免 forbidigo），其它包不行。
 
 - 门面签名固定 `Debug/Info/Warn/Error(ctx, msg, attrs...)`，ctx 必传首参；新增 API 同样 ctx 首参。
+- 事件方法四级齐全：`DebugEvent` / `InfoEvent` / `WarnEvent` / `ErrorEvent`（包级带 ctx，具名 `Logger` 同名方法无 ctx），msg 与 event 同值、Name 只求值一次；新增级别方法两处同时加。
+- 本包之外的生产代码只打事件，不写自由 msg；自由 msg 的 `Info(ctx, msg)` 只留给本包自身与 `examples/`。
 - ctx 值不可变：`EnsureTraceID` / `WithAttrs` / `StartSpan` / `WithTraceID` 返回派生 ctx，文档与示例都写成 `ctx = ...`。
 - 保留字段（`trace_id` / `span_id` / `parent_span_id` / `span_name` / `event` / `duration_ms` / `error`）集中在 `fields.go`，不得新增同名字面量。
 - `SetLogger` / `SetHandler` / `SetConfig` 是进程级全局状态：读写经锁或原子；测试改它们必须 `t.Cleanup` 还原且不得 `t.Parallel()`。

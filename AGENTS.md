@@ -64,9 +64,14 @@
 
 - **导出即契约**：新符号默认小写；确需导出的，doc comment 写明「给谁用、什么场景」。改导出符号的类型/字段/行为要按 `docs/VERSIONING.md` 升版本。
 - **错误是类型不是哨兵**：专用 `XxxError` 与 `errors.Error{Op, Kind, Attrs, Err}` 均可使用；生产 Go 代码（含示例与 agentguard）禁止直接用标准库 `errors.New`、`fmt.Errorf` 构造错误，也禁止字符串 panic；测试夹具可模拟外部错误。判定用 `errors.As` / `errors.IsKind`，保留内层 `Err`；网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见。错误定义留在产生它的包的 `errors.go`（不搬进 `errors/`）：`Op` 为未导出 const、值 `<包>.<步骤>`；`Kind` 为导出包级 var、值 `<包>.<分类>`（名称即契约），细则见 CODE_STANDARDS §5.1。执行 `make check-errors` 检查。
+  错误要么处理要么返回，不既打日志又返回；已有 `Error()` 文案可能被调用方匹配，扩展信息用新增字段 / `Attrs`，不改旧文案。
 - **默认链不做业务判断**：任何「替调用方对响应下结论」的逻辑都是可选拦截器，不进 `DefaultChain`。链顺序即语义，改序或插层前先 `make char`。
-- **IO 函数第一参是 `context.Context`** 并沿链透传；超时用 `context.WithTimeout(ctx, …)`，不新建根 ctx。
-- **日志走 `logger` 门面**（`logger.Info(ctx, …)`，ctx 必传），禁止裸 `fmt.Print` / `log.*` / `slog.*`（`logger/`、`examples/` 除外）；测试观察走 `t.Log` / `t.Logf`，不在 `*_test.go` 打 `logger`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度。
+- **IO 函数第一参是 `context.Context`** 并沿链透传，不中途换成 `context.Background()`；超时用 `context.WithTimeout(ctx, …)`，不新建根 ctx；
+  后台 goroutine 需要保留日志上下文时用 `context.WithoutCancel(ctx)`（请求结束即 cancel，不能直接缓存请求 ctx）；可阻塞的等待必须 `select` 上 `ctx.Done()`。
+- **日志走 `logger` 门面且只打事件**：包内 `events.go` 用 `logger.NewEvent("<域>.<动作>")` 声明事件（名称即下游过滤契约，由测试锁定），
+  调用 `logger.DebugEvent` / `InfoEvent` / `WarnEvent` / `ErrorEvent`（ctx 必传，msg 与 event 同值），不写自由 msg；拿不到 ctx 的调用点用包级
+  `var log = logger.Named("<模块>")` 后 `log.XxxEvent(ev)`，不硬造 `context.Background()`。禁止裸 `fmt.Print` / `log.*` / `slog.*`
+  （`logger/`、`examples/` 除外）；测试观察走 `t.Log` / `t.Logf`，不在 `*_test.go` 打 `logger`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度。
 - **含锁结构体**头部写并发模型注释（谁共享、哪把锁保护哪些字段）；受锁字段跨包只经访问器读写；锁内不做分配/IO。
 - **常量与魔法值**：闭合集合且进 `switch` 的用 `type X string` 枚举；header 名/日志 key 用具名 const（不套 type）；状态码用 `StatusClass` / stdlib 常量。`geo/` 表内字面量与 `examples/` 豁免。
 - **大数据表**（geo）独立成文件、表头写数据源，禁止文件名以 `_<GOOS>.go` 结尾（会被构建约束丢弃）。

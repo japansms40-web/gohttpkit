@@ -11,7 +11,7 @@ alwaysApply: true
 - 开工前 `git status --short`，只动任务需要的文件与 hunk。
 - 改代码先开 worktree（`git worktree add .worktrees/<type>-<topic> -b <type>/<topic>`），完成后 `--ff-only` 合回 `main` 并移除 worktree；提交、打 tag 直接在 `main` 上做，不切分支。
 - 工作流：读 → 计划 → 先写失败测试 → 最小实现 → 最小测试 → `make check` / `make ci` → 如实报告实际命令与结果。
-- 编码要点：导出即契约；错误是带字段的类型（`errors.As`），不是哨兵；IO 函数首参 `ctx`；日志走 `logger` 门面；默认链不做业务判断。详见 `docs/CODE_STANDARDS.md`。
+- 编码要点：导出即契约；错误是带字段的类型（`errors.As`），不是哨兵；IO 函数首参 `ctx` 且沿链透传（后台 goroutine 用 `context.WithoutCancel`）；日志走 `logger` 门面且只打事件（`XxxEvent`）；默认链不做业务判断。详见 `docs/CODE_STANDARDS.md`。
 - 测试要点：按角度补测、边界必测、错误断言「是哪个错」、离线确定性。详见 `docs/TESTING.md`。
 
 ## 禁止（MUST NOT）

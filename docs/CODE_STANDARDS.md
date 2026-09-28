@@ -25,6 +25,13 @@
 ## 3. API 设计
 
 - **MUST** 所有会发起 IO 的函数第一参是 `context.Context`。
+- **MUST** ctx 沿调用链透传，不得中途替换为 `context.Background()` / `context.TODO()`；派生超时用
+  `context.WithTimeout(ctx, …)`，不新建根 ctx。拿不到 ctx 的日志调用点用具名 Logger（见 §6），不为打日志硬造 ctx。
+- **MUST** 后台 goroutine 不直接缓存请求 ctx（请求结束即 cancel）；需要保留 trace 等日志上下文时用
+  `context.WithoutCancel(ctx)` 派生，退出路径另由 `Close` / channel 控制（见 §11）。
+- **MUST NOT** 为无 ctx 感知的外部调用做「goroutine + select 赛跑」式降级：取消后后台调用仍在跑，对端不响应就泄漏 goroutine。
+  优先用库的 ctx 版接口；没有就返回类型错误。范例：`netproxy.DialContextWithProxy` 只接受 `proxy.ContextDialer`，
+  只实现 `Dial` 的 dialer 返回 `*UnsupportedDialerError`。
 - **MUST** 参数超过 2 个业务字段时用结构体，不写长参数列表。
   范例：`httpx.RequestSpec` 取代 insgo 的 7 参数位置调用。
 - **MUST** 不导出私有类型别名到公开签名里（godoc 会显示一个外部拿不到的名字）。
@@ -63,6 +70,9 @@
 - **MUST** 网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见它。
 - **MAY** `errors.Is` 只认本库没定义、对方已经是哨兵的错误（`io.EOF`、`context.Canceled`、第三方）。
   测试夹具可用 `errors.New("boom")` / `fmt.Errorf` 模拟「别人的错误」及外部包装链；生产代码不行。
+- **MUST** 已有错误的 `Error()` 文案视为契约：可能被 characterization 测试或调用方匹配，改文案前先全局检索使用方，
+  扩展信息用**新增字段** / `Attrs`，不改旧输出。新错误仍禁止把文案当身份（见上）。
+- **SHOULD** 错误要么处理要么返回，不双份（既打日志又 return 会重复告警）；确需忽略时 `_ =` 显式丢弃并注释原因。
 - **SHOULD** 超时类 `Options` 的零值回落默认常量，禁止把 0 解释成「关闭保护」。
   范例：`Options.Timeout`、`Options.ResponseHeaderTimeout`。
 
@@ -99,6 +109,8 @@ errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 - **MUST** `Op` 是未导出 const，命名 `opXxx`，值为 `<包名>.<步骤>`：全小写 snake_case、点分，
   写「在哪一步」，不写句子、不写「失败」。同一函数多处失败共用一个 `Op`，用 `Kind` 区分原因。
   `Op` 只用于诊断，不是契约，禁止拿来判定。范例：`opMustRegister = "versionreg.must_register"`。
+  函数同时开 span 时 `logger.StartSpan(ctx, opXxx)` 与错误共用同一个 const，不另起名字。
+  下游仓库包名跨目录重名时（如 insgo 的 `android/api` 与 `web/api`），值可带路径前缀：`<平台>.<包>.<步骤>`。
 - **MUST** `Kind` 是导出包级 var，命名 `Kind<领域><原因>`，值为 `<包名>.<领域>.<原因>` 或
   `<包名>.<原因>`（全小写 snake_case、点分）。**Kind 名称是契约**，改名按破坏性变更处理。
   `NewKind` 只能出现在包级 `var` 声明里；调用方与测试用导出变量判定，不要再手写同名字符串。
@@ -125,9 +137,15 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 
 ## 6. 日志
 
-- **MUST** 生产代码统一走 `logger` 门面（`logger.Info(ctx, msg, attrs...)`），ctx 必传首参。
+- **MUST** 生产代码统一走 `logger` 门面且**只打事件**：`logger.DebugEvent` / `InfoEvent` / `WarnEvent` / `ErrorEvent(ctx, ev, attrs...)`，
+  ctx 必传首参，msg 与 event 同值；不写自由 msg（`logger.Info(ctx, "文案")` 视为回归）。
   `forbidigo` 会拦截裸 `fmt.Print` / `log.*` / `slog.*`（`logger/` 包自身与 `examples/` 除外）。
   测试观察日志走 `t.Log` / `t.Logf`，见第 8 节，不要在 `*_test.go` 里打 `logger` 或 `fmt.Print`。
+- **MUST** 事件在包内 `events.go` 用 `logger.NewEvent("<域>.<动作>")` 声明为包级 var（全小写点分），
+  事件名是下游过滤契约，由 `events_test.go` 锁定名称；打点处引用变量，不再写同名字面量。
+  范例：`httpx/events.go`（`EventHTTPTransaction` / `EventHTTPRetry` / `EventHTTPBodyClose`）。
+- **MUST** 拿不到 ctx 的调用点（`init`、包级构造、纯本地工具函数）用具名 Logger：包级 `var log = logger.Named("<模块>")`，
+  调用 `log.XxxEvent(ev, attrs...)`；它不带 trace_id，手上有 ctx 时仍必须用包级 `logger.XxxEvent(ctx, …)`。
 - **MUST** 打协议 body 时经 `TruncateBodyForLog(b, client.LogBodyLimit())` 截断，
   并同时输出原始长度（`slog.Int("..._len", len(b))`）。响应体可达数百 KB，
   全量打印会撑爆磁盘与日志聚合系统。

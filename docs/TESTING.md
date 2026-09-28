@@ -47,6 +47,9 @@
 
 - **一个测试一个行为**；命名 `Test<被测函数>_<中文行为短句>`（如 `TestParseCountry_拒绝空国家码`），
   按行为不按行号，不是 `Test_validate_2`。测试名需要「和」就拆开。（与 CODE_STANDARDS §8 一致。）
+- **测试名以被测对象开头**：函数 `f` → `Test<F>_<行为>`（未导出函数首字母大写）；方法 `T.M` → `Test<T>_<M>_<行为>`；
+  拦截器 → `Test<类型>_Intercept_<行为>`；类型级并发 / 跨方法场景 → `Test<类型>_<行为>`。不用缩写前缀；helper 可带文件前缀防重名。
+  characterization 用例受治理守卫锁定，不参与改名。
 - **边界必测**：0 / 1 / 空 / 满 / 越限各一条（角度 #2），不是只有一个中间值。
 - **错误要断言「是哪个错」**（角度 #4）：本库类型错误用 `errors.As` 解出类型和字段，**不只判 `err != nil`**；
   `io.EOF`/`context.Canceled`/第三方哨兵用 `errors.Is`。（与 CODE_STANDARDS §5「类型错误非哨兵」一致。）
@@ -132,6 +135,9 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
   并用 `t.Cleanup` 还原。
 - **SHOULD** 单个测试 < 1s，包级 < 30s；挂死由 `go test` 默认的 10m 超时兜底（CI 未另设 `-timeout`）。
 - **SHOULD** golden 文件放 `testdata/`，更新走 `-update` 标志并在 PR 说明为什么变；禁止手改 golden 迁就实现。
+- **SHOULD** 环境变量用 `t.Setenv`（自动还原，且与 `t.Parallel()` 互斥，能暴露误并行）；并发行为测试在注释写明「必须 -race 跑」。
+- **SHOULD** 成对的数据表（如国家→locale 与国家→时区）加 keyset 守护测试，任一表增删 key 另一表不跟就失败。
+  范例：`geo/timezone_test.go`。
 
 ## 11. 测试的地位高于实现
 

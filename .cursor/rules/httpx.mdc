@@ -22,7 +22,7 @@ alwaysApply: false
 
 ## 日志
 
-生产代码走 `logger` 门面（ctx 必传），禁止裸 `fmt.Print` / `slog.*`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度（`slog.Int("..._len", len(b))`）。测试观察走 `t.Log` / `t.Logf`。
+生产代码走 `logger` 门面且只打事件：事件在 `httpx/events.go` 声明（名称由 `events_test.go` 锁定），调用 `logger.XxxEvent(ctx, ev, attrs...)`，不写自由 msg；禁止裸 `fmt.Print` / `slog.*`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度（`slog.Int("..._len", len(b))`）。测试观察走 `t.Log` / `t.Logf`。
 
 ## 测试
 
