@@ -75,6 +75,9 @@
 
 - 先跑覆盖改动的最小测试（具体包 / 具体 `-run`），再按风险扩大范围；离线优先，需要网络的测试自带 `httptest`。
 - 对外行为改动**必须有 characterization 覆盖**（`make char`），或确认等价重构且 char 全绿。
+- **一源一测**：`foo.go` 的全部用例（含 fuzz、内部实现测试）只写在 `foo_test.go`，不开 `_more` / `_fuzz` / `_internal` / `angle_*` 等附加文件；
+  声明了函数的源文件必须有 `foo_test.go`（`doc.go`、纯声明文件豁免）。独立存在的只允许 `characterization_test.go`、`helpers_test.go`（夹具）、
+  `export_test.go`（未导出桥），后两者不写测试函数。执行 `make check-test-layout` 检查，细则见 CODE_STANDARDS §8。
 - 覆盖率按**角度**驱动、不是凑行 %：对每个函数走查 [`docs/TESTING.md`](docs/TESTING.md) §2 角度表
   （边界 / 错误路径 / nil-零值 / 并发 / 契约 / 副作用…），补「能真出错」的角度；边界必测、错误分支断言
   「是哪个错」（`errors.As`/`errors.Is`）；禁止「调一次不断言」凑覆盖。
@@ -94,7 +97,7 @@
    改文件后 gofmt + vet；回合结束前跑治理守卫，有未提交 Go 改动时跑 `make check`、改到 `tools/agentguard` 时跑 `make tools-check`，
    不过不许收尾（连续 3 次后放行并提示人）。仓库差异（char 用例、主干分支名）写在 `.agentguard.yml`。规则与人工放行方式见 `docs/ENGINEERING_GOVERNANCE.md` §3。
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
-   - `pre-commit`：`gofmt`、`go vet`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
+   - `pre-commit`：`gofmt`、`go vet`、`check-errors`、`check-test-layout`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
    - `commit-msg`：校验 `<type>(<scope>): 摘要` 约定。
    - `pre-push`：`make governance race char cover`。
    - 应急可 `--no-verify` 绕过，但**禁止常规使用**；绕过后 CI 仍会拦。

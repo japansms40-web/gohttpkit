@@ -8,7 +8,7 @@ alwaysApply: false
 
 全文见 `docs/TESTING.md`，这里只列写测试时最常踩的点。
 
-- 文件：`foo.go` → `foo_test.go`；fuzz 用 `foo_fuzz_test.go`。用例名中文短句，说清锁的是什么行为。
+- 文件：`foo.go` 的全部用例（含 fuzz / 内部实现）只写在 `foo_test.go`；共享夹具进 `helpers_test.go`，未导出桥进 `export_test.go`（`make check-test-layout` 强制）。用例名中文短句，说清锁的是什么行为。
 - 角度：对被测函数走查 TESTING §2 角度表，边界（0/1/空/满/越限）必测；只补「能真出错」的角度，out-of-scope 写理由。
 - 错误：本库类型错误用 `errors.As` 断言类型和字段；`io.EOF` / `context.Canceled` 用 `errors.Is`。禁止只判 `err != nil`、禁止比文案。
 - 日志：只用 `t.Log` / `t.Logf`，默认 `go test` 不刷屏；禁止 `fmt.Print` / `logger.*`。

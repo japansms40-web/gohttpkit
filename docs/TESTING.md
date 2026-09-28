@@ -114,7 +114,8 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 ## 9. fuzz 与 benchmark
 
 - **SHOULD** 解析外部原文的函数（代理 URL、content-encoding、版本标识、header 白名单、Accept-Language 拼装）配 fuzz。
-  范例：`netproxy/proxy_fuzz_test.go`、`httpx/encoding_fuzz_test.go`、`versionreg/registry_fuzz_test.go`。
+  fuzz 与被测函数写在同一个 `foo_test.go`（CODE_STANDARDS §8，`make check-test-layout` 强制）。
+  范例：`netproxy/proxy_test.go`、`httpx/encoding_test.go`、`versionreg/registry_test.go` 里的 `FuzzXxx`。
 - **MUST** fuzz 发现的崩溃输入会写入 `testdata/fuzz/FuzzXxx/`，**必须提交**，作为永久回归种子（`go test` 默认会跑）。
 - **SHOULD** 本地改到解析逻辑时跑 `go test -fuzz=FuzzXxx -fuzztime=30s ./<包路径>/`（如 `./netproxy/`）；CI 定时（nightly）跑长时 fuzz（待落地）。
 - **SHOULD** 热路径配 `BenchmarkXxx`，带 `b.ReportAllocs()`；对比用 `benchstat`，至少 `-count=6`（见 `CODE_STANDARDS.md` §15）。

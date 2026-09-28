@@ -40,7 +40,7 @@
 - **MUST** 受锁字段跨包只能经访问器读写，禁止裸读写绕过锁。
   范例：`Client.SnapshotResponseStatusCode` / `SnapshotResponseHeaders`。
 - **MUST** `make race` 通过是合入门禁（需要 C 编译器）。并发回归必须配并发测试。
-  范例：`httpx/concurrency_test.go`。
+  范例：`httpx/client_test.go` 的 `TestConcurrent_*`。
 - **SHOULD** 锁内不做内存分配 / IO：先在锁外构建完整数据，再加锁整体替换引用（Snapshot 模式）。
   范例：`responseHeaderCacheInterceptor` 在锁外构建 `newHeaders` 再锁内换引用。
 
@@ -169,9 +169,14 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 - **SHOULD** 用例名写成中文短句，直接说明它锁的是什么行为，失败时不用读代码就知道坏了什么。
 - **SHOULD** 需要网络的测试自带假服务器（`httptest` / 最小协议实现），CI 里不依赖外网。
   范例：`netproxy/proxy_test.go` 里的最小 SOCKS5 服务端。
-- **SHOULD** 测试文件与源文件同名：`foo.go` → `foo_test.go`。fuzz 用 `foo_fuzz_test.go`。
-  范例：`geo/locale_web_test.go`、`netproxy/proxy_fuzz_test.go`。不写 `example_test.go`
-  当说明书。
+- **MUST** 测试文件与源文件一一对应：`foo.go` 的全部用例（含 fuzz、benchmark、内部实现测试）只写在
+  `foo_test.go`，不另开 `foo_more_test.go` / `foo_fuzz_test.go` / `foo_internal_test.go` / `angle_*_test.go`。
+  声明了函数或方法的源文件必须有 `foo_test.go`；`doc.go` 与纯 const/var/type 文件豁免。
+  不对应单个源文件、允许独立存在的只有三类：`characterization_test.go`（行为锁）、`helpers_test.go`（共享夹具）、
+  `export_test.go`（给外部测试包暴露未导出实现）；后两者不得声明 `Test*` / `Fuzz*` / `Benchmark*` / `Example*`。
+  同一文件只能有一个 package 子句：需要未导出符号时，无导入环就把该文件改为内部测试包，有环（如 httpx 外部测试
+  依赖 interceptor）就经 `export_test.go` 暴露。执行 `make check-test-layout` 检查（`make check`、pre-commit、CI 均含）。
+  范例：`geo/locale_web_test.go`、`netproxy/proxy_test.go`（含 `FuzzParseProxyURL`）、`httpx/interceptor/export_test.go`。
 
 ### 8.1 测试日志
 
@@ -231,7 +236,7 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
   代理 URL 进日志前先去掉 `User` 信息。（`event=http.transaction` 按原文打头是 §6 的明确例外，只进本地排障日志。）
 - **MUST** 本仓的 git remote、CI、脚本不内嵌 Token。用凭据助手（`gh auth` / osxkeychain）或 CI secrets。
 - **SHOULD** 解析外部原文（代理 URL、content-encoding、版本标识）的函数配 fuzz 测试（见 `TESTING.md` §9）。
-  范例：`netproxy/proxy_fuzz_test.go`、`httpx/encoding_fuzz_test.go`。
+  范例：`netproxy/proxy_test.go` 的 `FuzzParseProxyURL`、`httpx/encoding_test.go` 的 `FuzzParseContentEncoding`。
 
 ## 11. 资源与生命周期
 

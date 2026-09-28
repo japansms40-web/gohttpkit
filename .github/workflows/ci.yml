@@ -21,6 +21,8 @@ jobs:
         run: make agents-sync-check
       - name: 生产代码错误构造规范
         run: make check-errors
+      - name: 测试文件与源文件一一对应
+        run: make check-test-layout
       - name: build
         run: go build ./...
       - name: vet

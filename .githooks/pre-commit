@@ -12,6 +12,8 @@ fail() { red "✗ $1"; failed=1; }
 
 # 本次暂存的 Go 文件（新增/改动/复制，排除删除）。用字符串而非数组，兼容 macOS 自带 bash 3.2（无 mapfile）。
 staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+# 只删 Go 文件（如删掉某个 foo_test.go）也会破坏测试布局，单独检查。
+staged_go_deleted=$(git diff --cached --name-only --diff-filter=D -- '*.go')
 
 # 1) gofmt：暂存的 Go 文件必须已格式化
 if [ -n "$staged_go" ]; then
@@ -38,6 +40,13 @@ if [ -n "$staged_go" ]; then
     fail "生产代码存在直接 errors.New / fmt.Errorf 或字符串 panic"
   fi
 
+  # 3b) 测试文件布局：foo.go ↔ foo_test.go 一一对应
+  if make check-test-layout; then
+    green "✓ check-test-layout"
+  else
+    fail "测试文件与源文件未一一对应（见上方清单，用例并入被测源文件对应的 _test.go）"
+  fi
+
   # 4) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
   if command -v golangci-lint >/dev/null 2>&1; then
     if git rev-parse --verify -q HEAD >/dev/null; then
@@ -57,6 +66,14 @@ if [ -n "$staged_go" ]; then
     green "✓ go mod tidy"
   else
     fail "go.mod/go.sum 不整洁：跑 go mod tidy 后重新 add"
+  fi
+fi
+
+if [ -z "$staged_go" ] && [ -n "$staged_go_deleted" ]; then
+  if make check-test-layout; then
+    green "✓ check-test-layout"
+  else
+    fail "删除 Go 文件后测试文件与源文件未一一对应（见上方清单）"
   fi
 fi
 

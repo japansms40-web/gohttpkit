@@ -61,7 +61,7 @@ gohttpkit/
 └── go.mod                 # 模块声明和三个直接外部依赖
 ```
 
-测试与源码放在同一包目录，测试文件与源文件同名。`httpx/characterization_test.go` 重点锁定对外行为，各源文件同名的 `*_test.go`（如 `httpx/options_test.go`、`httpx/presets_test.go`、`httpx/interceptor/*_test.go`）覆盖单个 API 契约，`httpx/concurrency_test.go` 负责并发回归。用例观察日志用 `t.Logf`，`go test -v` 才输出，规范见 `docs/CODE_STANDARDS.md` 第 8.1 节。
+测试与源码放在同一包目录，测试文件与源文件同名。`httpx/characterization_test.go` 重点锁定对外行为，各源文件同名的 `*_test.go`（如 `httpx/options_test.go`、`httpx/presets_test.go`、`httpx/interceptor/*_test.go`）覆盖单个 API 契约，`httpx/client_test.go` 的「并发回归」分节负责并发回归（`make check-test-layout` 强制一源一测）。用例观察日志用 `t.Logf`，`go test -v` 才输出，规范见 `docs/CODE_STANDARDS.md` 第 8.1 节。
 
 ## 4. 总体分层与依赖关系
 

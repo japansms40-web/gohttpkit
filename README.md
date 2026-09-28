@@ -232,7 +232,7 @@ make examples    # 跑两个离线示例（customchain / fidelity）；quickstar
   而是某个只在生产环境偶发的行为 —— 那就是它存在的理由。
 - 各源文件同名的 `*_test.go`（`httpx/*_test.go` 与 `httpx/interceptor/*_test.go`）—— 每个导出符号自己的契约：
   编解码矩阵、选项归一化、链编辑工具、各类 nil / 零值 / 错误分支。
-- `httpx/concurrency_test.go` —— 并发回归，配合 `make race` 用。
+- `httpx/client_test.go` 末尾的「并发回归」分节 —— 共享 `*Client` 的并发读写，配合 `make race` 用。
 
 示例也在测试里跑（`examples/*/main_test.go`）：示例是给人读的，但读者会照抄，
 所以它必须真的能跑，且行为如注释所述。

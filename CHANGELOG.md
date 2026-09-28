@@ -5,6 +5,22 @@
 
 ## [Unreleased]
 
+> 本节只涉及测试与仓库工具，不影响库的导出 API；agentguard 变更需随下一个 `tools/agentguard/vX.Y.0` 发布。
+
+### 新增
+
+- `make check-test-layout`（`tools/agentguard check-test-layout`）：测试文件必须与源文件一一对应（`foo.go` ↔ `foo_test.go`），
+  声明了函数的源文件必须有同名测试；独立存在的只允许 `characterization_test.go`、`helpers_test.go`、`export_test.go`，
+  后两者不得声明测试函数。已接入 `make check`、pre-commit 与 CI。下游升级 agentguard 后如在 Makefile 接入需先整改。
+
+### 变更
+
+- 全仓测试文件按源文件归并：`*_more_test.go`、`*_fuzz_test.go`、`*_internal_test.go`、`angle_*`、interceptor 的
+  `core/obs/opt_test.go` 等并入被测源文件对应的 `_test.go`；测试函数名不变，fuzz 语料目录不受影响。
+  netproxy 删除一条内外测试包重复的等价用例 `TestApplyProxyToTransport_ftp是UnsupportedScheme`（保留 `errors_test.go` 中的一份）。
+- 补齐此前无同名测试的源文件：interceptor 的 `call_server` / `do_http` / `tracing`，`geo/locale_mobile` 四张表，
+  agentguard 的 `main` / `paths`。
+
 ## [v0.12.0] - 2026-09-28
 
 > 以 `tools/agentguard` 开头的条目只涉及仓库工具（独立子模块，按 `tools/agentguard/vX.Y.Z` 单独打 tag），不影响库的导出 API；
