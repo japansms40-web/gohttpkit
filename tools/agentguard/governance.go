@@ -73,7 +73,7 @@ func runGovernance(args []string) int {
 	}
 	root, err := repoRoot("")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "agentguard: 不在 git 仓库内")
+		_, _ = fmt.Fprintln(os.Stderr, "agentguard: 不在 git 仓库内")
 		return 1
 	}
 	rev := resolveBase(root, *base)

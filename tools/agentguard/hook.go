@@ -90,7 +90,7 @@ func runHook(args []string) int {
 	case eventStop:
 		return h.emitStop(h.stopCheck())
 	default:
-		fmt.Fprintln(os.Stderr, "agentguard hook: 未知事件 "+*event)
+		_, _ = fmt.Fprintln(os.Stderr, "agentguard hook: 未知事件 "+*event)
 		return 1
 	}
 }
@@ -286,7 +286,7 @@ func (h hookCtx) emitPre(v verdict) int {
 		if v.Decision == allow {
 			return 0
 		}
-		fmt.Fprintln(os.Stderr, "agentguard："+v.Reason)
+		_, _ = fmt.Fprintln(os.Stderr, "agentguard："+v.Reason)
 		return 2
 	}
 }
@@ -315,7 +315,7 @@ func (h hookCtx) emitStop(block, notice string) int {
 	case notice != "" && h.agent == agentClaude:
 		printJSON(map[string]any{"systemMessage": notice})
 	case notice != "":
-		fmt.Fprintln(os.Stderr, notice)
+		_, _ = fmt.Fprintln(os.Stderr, notice)
 	}
 	return 0
 }

@@ -18,7 +18,7 @@ import (
 
 func main() {
 	if err := run(os.Stdout, os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -77,8 +77,8 @@ func run(out io.Writer, args []string) error {
 		slog.Int("status", client.SnapshotResponseStatusCode()),
 		slog.Int("body_len", len(body)))
 
-	fmt.Fprintln(out, "──────── 响应体 ────────")
-	fmt.Fprintln(out, preview(string(body), 800))
+	_, _ = fmt.Fprintln(out, "──────── 响应体 ────────")
+	_, _ = fmt.Fprintln(out, preview(string(body), 800))
 	return nil
 }
 

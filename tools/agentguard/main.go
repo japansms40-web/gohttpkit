@@ -40,16 +40,16 @@ func run(args []string) int {
 func runCheck(name string, scan func(root string) ([]string, error), okMsg string) int {
 	root, err := repoRoot("")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, name+"：不在 Git 仓库内")
+		_, _ = fmt.Fprintln(os.Stderr, name+"：不在 Git 仓库内")
 		return 1
 	}
 	violations, err := scan(root)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, name+"：检查失败：", err)
+		_, _ = fmt.Fprintln(os.Stderr, name+"：检查失败：", err)
 		return 1
 	}
 	for _, v := range violations {
-		fmt.Fprintln(os.Stderr, v)
+		_, _ = fmt.Fprintln(os.Stderr, v)
 	}
 	if len(violations) > 0 {
 		return 1
@@ -59,5 +59,5 @@ func runCheck(name string, scan func(root string) ([]string, error), okMsg strin
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard check-pkg-doc | agentguard hook --agent claude|cursor|codex --event EVENT")
+	_, _ = fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard check-pkg-doc | agentguard hook --agent claude|cursor|codex --event EVENT")
 }
