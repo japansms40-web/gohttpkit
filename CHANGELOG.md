@@ -13,6 +13,12 @@
   `errors.Error` 字面量的 `Op` 须引用具名 const；`errors.NewKind` 只能出现在包级 `var` 声明里；
   Kind 名须为 `<包>.<分类>` 小写点分字符串字面量。测试文件豁免。下游升级 agentguard 前需先按此整改。
 
+### 变更
+
+- 外层 `*errors.Error` 的 `Op` 统一为 `<包>.<步骤>`：`httpx.New` 自建 transport 失败由 `"httpx: build transport"`
+  改为 `"httpx.build_transport"`；重试拦截器发送失败由 `"failed to send request"` 改为 `"interceptor.send_request"`。
+  `Error()` 前缀随之变化；错误类型、内层原因与 `errors.As` / `errors.Is` 判定不变。按文案前缀匹配的调用方需改为按错误链判定。
+
 ## [v0.11.0] - 2026-09-28
 
 ### 破坏

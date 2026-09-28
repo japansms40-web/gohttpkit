@@ -80,7 +80,7 @@ func New(opts Options) (*Client, error) {
 	if transport == nil {
 		t, err := newTransport(opts.ProxyURL, opts.responseHeaderTimeout())
 		if err != nil {
-			return nil, &kiterrors.Error{Op: "httpx: build transport", Err: err}
+			return nil, &kiterrors.Error{Op: opBuildTransport, Err: err}
 		}
 		transport = t
 	}

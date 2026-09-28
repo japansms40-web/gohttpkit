@@ -962,8 +962,8 @@ func TestNew_非法代理URL报错(t *testing.T) {
 	if err == nil {
 		t.Fatal("不支持的代理 scheme 应在构造期报错")
 	}
-	if !strings.HasPrefix(err.Error(), "httpx: build transport:") {
-		t.Fatalf("err = %v, want 保留 build transport 前缀", err)
+	if !strings.HasPrefix(err.Error(), "httpx.build_transport:") {
+		t.Fatalf("err = %v, want 保留 httpx.build_transport 前缀", err)
 	}
 	var ue *netproxy.UnsupportedProxySchemeError
 	if !errors.As(err, &ue) || ue.Scheme != "ftp" {

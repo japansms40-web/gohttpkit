@@ -194,11 +194,11 @@ func TestNew_非法代理URL仍可As到netproxy类型(t *testing.T) {
 	if err == nil {
 		t.Fatal("不支持的代理 scheme 应在构造期报错")
 	}
-	if !strings.HasPrefix(err.Error(), "httpx: build transport:") {
-		t.Fatalf("err = %v, want 保留 build transport 前缀", err)
+	if !strings.HasPrefix(err.Error(), "httpx.build_transport:") {
+		t.Fatalf("err = %v, want 保留 httpx.build_transport 前缀", err)
 	}
 	var outer *kiterrors.Error
-	if !errors.As(err, &outer) || outer.Op != "httpx: build transport" {
+	if !errors.As(err, &outer) || outer.Op != "httpx.build_transport" {
 		t.Fatalf("外层应为结构化错误并保留步骤，got %T %v", err, err)
 	}
 	var ue *netproxy.UnsupportedProxySchemeError

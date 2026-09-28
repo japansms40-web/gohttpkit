@@ -4,6 +4,9 @@ import "fmt"
 
 // errors.go —— 本包身份错误。判定请用 errors.As 读字段，不要扫 Error() 文案。
 
+// opBuildTransport New 自建 Transport 失败时外层 *errors.Error 的 Op；内层是 netproxy 类型错误。
+const opBuildTransport = "httpx.build_transport"
+
 // fieldOptionsHeaders 是 MissingHeaderProviderError.Field 的取值（New / NewClient 共用）。
 const fieldOptionsHeaders = "Options.Headers"
 

@@ -17,7 +17,7 @@ import (
 // 输入 proxyURL：空 = 直连；socks5 / http / https。
 // 返回：调优过的 *http.Transport，ResponseHeaderTimeout 固定 15s；
 // 代理失败是 netproxy 类型（*UnsupportedProxySchemeError / *InvalidProxyURLError），
-// 经 httpx.New 时还会再包一层 "httpx: build transport: %w"。
+// 经 httpx.New 时外层再包 *errors.Error{Op: "httpx.build_transport"}。
 // 例：NewTransport("") → 直连 Transport；NewTransport("ftp://h") → *UnsupportedProxySchemeError。
 // 要改响应头超时请走 Options.ResponseHeaderTimeout，或拿到返回值后自己改字段。
 //
