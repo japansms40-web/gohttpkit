@@ -459,7 +459,7 @@ func (d *ctxDialer) Dial(network, addr string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, addr)
 }
 
-func (d *ctxDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+func (d *ctxDialer) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -539,7 +539,7 @@ type dialOnlyDialer struct {
 	dialCalled bool
 }
 
-func (d *dialOnlyDialer) Dial(network, addr string) (net.Conn, error) {
+func (d *dialOnlyDialer) Dial(_, _ string) (net.Conn, error) {
 	d.dialCalled = true
 	return nil, nil
 }

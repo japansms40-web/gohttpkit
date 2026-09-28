@@ -72,23 +72,23 @@ func TestHook_Claude前置裁决(t *testing.T) {
 func TestHook_Codex前置裁决用退出码2(t *testing.T) {
 	root := newRepo(t, "feat/x")
 	in := input(t, map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": []any{"bash", "-lc", "git tag -d v1"}}})
-	code, _, errOut := callHook(t, in, "--agent", "codex", "--event", "pre-tool")
+	code, _, errOut := callHook(t, in, "--agent", string(agentCodex), "--event", "pre-tool")
 	if code != 2 || !strings.Contains(errOut, "tag") {
 		t.Fatalf("Codex 拦截应退出 2 并写 stderr，得到 %d %q", code, errOut)
 	}
 	patch := "*** Begin Patch\n*** Update File: .github/workflows/ci.yml\n@@\n-a\n+b\n*** End Patch"
 	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
-	if code, _, _ = callHook(t, in, "--agent", "codex", "--event", "pre-tool"); code != 0 {
+	if code, _, _ = callHook(t, in, "--agent", string(agentCodex), "--event", "pre-tool"); code != 0 {
 		t.Fatalf("补丁改 CI 配置应放行，得到 %d", code)
 	}
 	patch = "*** Begin Patch\n*** Add File: .env\n+A=1\n*** End Patch"
 	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
-	if code, _, _ = callHook(t, in, "--agent", "codex", "--event", "pre-tool"); code != 2 {
+	if code, _, _ = callHook(t, in, "--agent", string(agentCodex), "--event", "pre-tool"); code != 2 {
 		t.Fatalf("补丁写 .env 应拦截，得到 %d", code)
 	}
 	patch = "*** Begin Patch\n*** Add File: httpx/new.go\n+package httpx\n*** End Patch"
 	in = input(t, map[string]any{"cwd": root, "tool_name": "apply_patch", "tool_input": map[string]any{"command": patch}})
-	if code, _, _ = callHook(t, in, "--agent", "codex", "--event", "pre-tool"); code != 0 {
+	if code, _, _ = callHook(t, in, "--agent", string(agentCodex), "--event", "pre-tool"); code != 0 {
 		t.Fatalf("普通补丁应放行，得到 %d", code)
 	}
 }
@@ -161,7 +161,7 @@ func TestHook_收尾检查与防死循环(t *testing.T) {
 		t.Fatalf("计数已重置，Cursor 应再次要求继续，得到 %s", out)
 	}
 	write(t, root, "Makefile", "check:\n\t@true\n")
-	if out := stop("codex"); out != "" {
+	if out := stop(string(agentCodex)); out != "" {
 		t.Fatalf("检查通过应放行，得到 %s", out)
 	}
 	if n := readCount(gitPath(root, stopCounterRel)); n != 0 {
@@ -205,7 +205,7 @@ func TestHook_参数与仓库外(t *testing.T) {
 	if code, out, _ := callHook(t, outside, "--agent", "claude", "--event", "pre-tool"); code != 0 || out != "" {
 		t.Fatalf("仓库外一律放行，得到 %d %s", code, out)
 	}
-	if code, _, _ := callHook(t, "not json", "--agent", "codex", "--event", "pre-tool"); code != 0 {
+	if code, _, _ := callHook(t, "not json", "--agent", string(agentCodex), "--event", "pre-tool"); code != 0 {
 		t.Fatalf("输入无法解析应放行，得到 %d", code)
 	}
 }

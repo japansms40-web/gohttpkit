@@ -244,15 +244,15 @@ func TestComputeBackoff_封顶(t *testing.T) {
 // 核心 bug 用例：大 attempt 下 base*2^attempt 整型溢出，
 // 退避不能变成 0 / 负数、也不能绕过 MaxBackoff。
 func TestComputeBackoff_大attempt不溢出不绕过封顶(t *testing.T) {
-	base, max := 1*time.Second, 5*time.Second
+	base, maxBackoff := 1*time.Second, 5*time.Second
 	for _, attempt := range []int{34, 40, 62, 63, 64, 100, 200} {
-		got := interceptor.ComputeBackoff(base, max, attempt)
-		t.Logf("base=%v max=%v attempt=%d → %v", base, max, attempt, got)
+		got := interceptor.ComputeBackoff(base, maxBackoff, attempt)
+		t.Logf("base=%v max=%v attempt=%d → %v", base, maxBackoff, attempt, got)
 		if got <= 0 {
 			t.Errorf("attempt=%d：退避为 %v（≤0），指数退避整型溢出", attempt, got)
 		}
-		if got > max {
-			t.Errorf("attempt=%d：退避 %v 超过封顶 %v，MaxBackoff 被绕过", attempt, got, max)
+		if got > maxBackoff {
+			t.Errorf("attempt=%d：退避 %v 超过封顶 %v，MaxBackoff 被绕过", attempt, got, maxBackoff)
 		}
 	}
 }
@@ -283,10 +283,10 @@ func TestComputeBackoff_base非正返回0(t *testing.T) {
 // 超大 max（接近 int64 上限）时，翻倍会先触发溢出保护而非 backoff>=max，结果仍 ∈ (0, max]。
 func TestComputeBackoff_超大max溢出前钳住(t *testing.T) {
 	base := 1 * time.Second
-	max := time.Duration(math.MaxInt64)
-	got := interceptor.ComputeBackoff(base, max, 200)
-	t.Logf("base=%v max=%v attempt=200 → %v", base, max, got)
-	if got <= 0 || got > max {
-		t.Errorf("应 ∈ (0, %v]，得到 %v", max, got)
+	maxBackoff := time.Duration(math.MaxInt64)
+	got := interceptor.ComputeBackoff(base, maxBackoff, 200)
+	t.Logf("base=%v max=%v attempt=200 → %v", base, maxBackoff, got)
+	if got <= 0 || got > maxBackoff {
+		t.Errorf("应 ∈ (0, %v]，得到 %v", maxBackoff, got)
 	}
 }

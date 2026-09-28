@@ -24,14 +24,14 @@ type fakeConn struct {
 	writeErr error
 }
 
-func (f *fakeConn) Read(b []byte) (int, error)         { return f.readN, f.readErr }
-func (f *fakeConn) Write(b []byte) (int, error)        { return f.writeN, f.writeErr }
+func (f *fakeConn) Read(_ []byte) (int, error)         { return f.readN, f.readErr }
+func (f *fakeConn) Write(_ []byte) (int, error)        { return f.writeN, f.writeErr }
 func (f *fakeConn) Close() error                       { return nil }
 func (f *fakeConn) LocalAddr() net.Addr                { return nil }
 func (f *fakeConn) RemoteAddr() net.Addr               { return nil }
-func (f *fakeConn) SetDeadline(t time.Time) error      { return nil }
-func (f *fakeConn) SetReadDeadline(t time.Time) error  { return nil }
-func (f *fakeConn) SetWriteDeadline(t time.Time) error { return nil }
+func (f *fakeConn) SetDeadline(_ time.Time) error      { return nil }
+func (f *fakeConn) SetReadDeadline(_ time.Time) error  { return nil }
+func (f *fakeConn) SetWriteDeadline(_ time.Time) error { return nil }
 
 func TestSetHook_传入nil关闭统计(t *testing.T) {
 	resetHook(t)
