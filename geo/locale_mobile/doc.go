@@ -12,4 +12,15 @@
 // 五张表 keyset 相同，并与 geo 的国家表对齐，由测试守护。
 // 空输入或未命中返回 *geo.UnknownCountryError，上层一律 errors.As，不要扫文案。
 // 目录名 locale_mobile 避开 _android 后缀（Go 会把它当成 GOOS 构建约束）。
+//
+// 文件结构：
+//
+//	locale_mobile/
+//	├── accept_language.go   国家 → Accept-Language
+//	├── app_locale.go        国家 → X-IG-App-Locale
+//	├── device_languages.go  国家 → X-IG-Device-Languages
+//	├── device_locale.go     国家 → X-IG-Device-Locale
+//	├── doc.go               包文档（本文件）
+//	├── lookup.go            查表公用函数，未命中返回 *geo.UnknownCountryError
+//	└── mapped_locale.go     国家 → X-IG-Mapped-Locale
 package localemobile

@@ -42,4 +42,18 @@
 //   - 注入点（SetLogger / SetHandler / SetConfig）是进程级全局状态。
 //
 // 本包只依赖标准库。
+//
+// 文件结构：
+//
+//	logger/
+//	├── config.go   Config（级别 / 格式 / 去向）与 SetConfig、默认输出构造
+//	├── context.go  ctx 里的 trace_id 与 WithAttrs 字段
+//	├── doc.go      包文档（本文件）
+//	├── errors.go   本包类型错误：FileSetupError
+//	├── event.go    机器事件 Event 与 EventAttr
+//	├── fields.go   结构化日志字段 key 常量
+//	├── handler.go  包装任意 slog.Handler，注入 trace_id / span_id / WithAttrs
+//	├── logger.go   门面 Debug / Info / Warn / Error 与 SetLogger / SetHandler
+//	├── named.go    具名 Logger：拿不到 ctx 时用
+//	└── span.go     轻量 span：StartSpan、span_id 与 DurationMs
 package logger

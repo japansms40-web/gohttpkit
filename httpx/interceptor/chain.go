@@ -1,9 +1,3 @@
-// Package interceptor 汇集 httpx 的内建拦截器与预设链。
-//
-// httpx 只保留链框架（Interceptor / Chain / Request / Response / Client）；所有具体拦截器
-// （重试、桥接、终端、解压、日志、缓存、状态语义、归类、HTML 处理）以及 DefaultChain /
-// NoRedirectChain / APIChain 的装配都在本包，单向依赖 httpx，避免父子包循环引用。
-// 一拦截器一文件；开箱即用入口是 httpx.NewClient（import 本包即注册默认链）。
 package interceptor
 
 import "github.com/japansms40-web/gohttpkit/httpx"

@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+> 本版只涉及文档与仓库工具，不影响库的导出 API。
+
+### 变更
+
+- 各包包注释迁入 `doc.go`（`errors`、`httpx`、`httpx/interceptor`、`netproxy`、`traffic`、`versionreg`、`examples/*`、`tools/agentguard`），
+  全部 13 个包的 `doc.go` 补上文件结构树；`go doc` 输出只多出文件树，原有文字不变（`geo` 精简了一条与树重复的逐文件说明）。
+
 ## [v0.13.0] - 2026-09-28
 
 > 本版只涉及测试与仓库工具，不影响库的导出 API。agentguard 的 `check-test-layout` 随 `tools/agentguard/v0.1.4` 发布。

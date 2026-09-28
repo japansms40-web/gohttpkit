@@ -1,24 +1,3 @@
-// Package httpx 提供一套可直接复用的 HTTP 客户端基建：OkHttp 风格的拦截器链、
-// 网络层重试与指数退避、四种压缩解码、代理接入、结构化日志、header 白名单精确发头、
-// 请求/响应整包快照落盘。
-//
-// 它不绑定任何具体 API：请求头怎么构建由你实现 HeaderProvider 决定，业务错误怎么归类
-// 由你写一层拦截器决定。库只负责把这些横切关注点组织成一条可预测、可测试、可扩展的链。
-//
-// 最小可用示例：
-//
-//	client, err := httpx.NewClient(httpx.Options{
-//	    Headers: httpx.StaticHeaders{
-//	        Base:    "https://api.example.com",
-//	        Headers: map[string]string{"accept": "application/json"},
-//	    },
-//	})
-//	body, err := client.Get(ctx, "/v1/ping", nil)
-//
-// NewClient 的默认链由 httpx/interceptor 包注册：程序里至少 import 一次该包（`import _ ".../httpx/interceptor"` 即可），
-// 否则未传 Interceptors 时返回 *NoDefaultChainError。
-//
-// 更多用法见 examples/ 下三个可直接 go run 的例子。
 package httpx
 
 import (
