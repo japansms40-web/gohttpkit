@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,101 +8,6 @@ import (
 	"strings"
 	"testing"
 )
-
-const baseGolangci = `version: "2"
-run:
-  tests: true
-linters:
-  default: standard
-  enable:
-    - errorlint
-    - nolintlint
-  settings:
-    gocyclo:
-      min-complexity: 20
-    goconst:
-      min-occurrences: 2
-      ignore-calls: false
-    nolintlint:
-      require-specific: true
-      require-explanation: true
-      allow-unused: false
-    forbidigo:
-      forbid:
-        - pattern: '^fmt\.Print'
-          msg: "用 logger"
-    gosec:
-      excludes:
-        - G404
-  exclusions:
-    rules:
-      - path: _test\.go
-        linters: [gocyclo]
-`
-
-func TestCompareGolangci_各类放宽都报(t *testing.T) {
-	cases := []struct {
-		name, old, new, want string
-	}{
-		{"关闭 linter", "- errorlint\n", "", "关闭了 linter：errorlint"},
-		{"改 default", "default: standard", "default: none", "linters.default"},
-		{"新增豁免规则", "        linters: [gocyclo]\n", "        linters: [gocyclo]\n      - path: httpx/\n        linters: [errorlint]\n", "新增豁免"},
-		{"已有豁免追加 linter", "linters: [gocyclo]", "linters: [gocyclo, gosec]", "新增豁免"},
-		{"调高复杂度阈值", "min-complexity: 20", "min-complexity: 30", "gocyclo.min-complexity"},
-		{"删掉复杂度阈值", "      min-complexity: 20\n", "", "gocyclo.min-complexity"},
-		{"goconst ignore-calls 放开", "ignore-calls: false", "ignore-calls: true", "ignore-calls"},
-		{"nolintlint 不要求理由", "require-explanation: true", "require-explanation: false", "require-explanation"},
-		{"nolintlint 允许失效豁免", "allow-unused: false", "allow-unused: true", "allow-unused"},
-		{"不再检查测试文件", "tests: true", "tests: false", "run.tests"},
-		{"删 forbidigo 规则", "        - pattern: '^fmt\\.Print'\n          msg: \"用 logger\"\n", "", "forbidigo"},
-		{"gosec 新增排除", "        - G404\n", "        - G404\n        - G101\n", "G101"},
-		{"issues 只看新增", "  exclusions:", "issues:\n  new: true\nlinters2:\n  exclusions:", "issues"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			cur := strings.Replace(baseGolangci, c.old, c.new, 1)
-			if cur == baseGolangci {
-				t.Fatalf("用例替换未生效：%q", c.old)
-			}
-			vs := compareGolangci(baseGolangci, cur)
-			t.Logf("%s → %v", c.name, vs)
-			if !anyContains(vs, c.want) {
-				t.Fatalf("期望含 %q 的违规，得到 %v", c.want, vs)
-			}
-			for _, v := range vs {
-				if v.Rule != ruleGolangci || v.Override != overrideGovernance {
-					t.Fatalf("违规标识错误：%+v", v)
-				}
-			}
-		})
-	}
-}
-
-func TestCompareGolangci_收紧与不变不报(t *testing.T) {
-	tighter := strings.NewReplacer(
-		"    - nolintlint\n", "    - nolintlint\n    - gosec\n",
-		"min-complexity: 20", "min-complexity: 15",
-		"        - G404\n", "",
-	).Replace(baseGolangci)
-	for name, cur := range map[string]string{"不变": baseGolangci, "收紧": tighter} {
-		if vs := compareGolangci(baseGolangci, cur); len(vs) != 0 {
-			t.Fatalf("%s 不应报违规，得到 %v", name, vs)
-		}
-	}
-}
-
-func TestCompareGolangci_解析失败(t *testing.T) {
-	if vs := compareGolangci("linters: [\n", baseGolangci); vs != nil {
-		t.Fatalf("基线无法解析应跳过，得到 %v", vs)
-	}
-	if vs := compareGolangci("just a string", baseGolangci); vs != nil {
-		t.Fatalf("基线无法解析应跳过，得到 %v", vs)
-	}
-	vs := compareGolangci(baseGolangci, "linters: [\n")
-	if !anyContains(vs, "无法解析") {
-		t.Fatalf("当前无法解析应报违规，得到 %v", vs)
-	}
-}
 
 func TestCompareCoverage(t *testing.T) {
 	mk := func(v string) string { return "X ?= 1\nMIN_COVERAGE ?= " + v + "\n" }
@@ -167,49 +71,6 @@ func TestCharFuncRanges(t *testing.T) {
 	}
 	if got := charFuncRanges(src, charRule{path: testCharPath}); len(got) != 1 || !inRanges(8, got) {
 		t.Fatalf("未配置函数正则应按整文件处理，得到 %v", got)
-	}
-}
-
-func TestParseCharRule(t *testing.T) {
-	cases := []struct {
-		name, src   string
-		wantPath    string
-		wantFuncRe  string // 空表示 funcRe 为 nil
-		wantErrText string // 非空表示期望报错且文案含此片段
-	}{
-		{name: "空配置不检查", src: ""},
-		{name: "只配文件按整文件", src: "characterization:\n  file: a_test.go\n", wantPath: "a_test.go"},
-		{name: "文件加函数正则", src: "characterization:\n  file: a_test.go\n  func_pattern: ^TestA_\n", wantPath: "a_test.go", wantFuncRe: "^TestA_"},
-		{name: "YAML 非法", src: "characterization: [", wantErrText: "无法解析"},
-		{name: "正则非法", src: "characterization:\n  file: a_test.go\n  func_pattern: \"(\"\n", wantErrText: "func_pattern 非法"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			rule, err := parseCharRule(c.src)
-			if c.wantErrText != "" {
-				if err == nil || !strings.Contains(err.Error(), c.wantErrText) {
-					t.Fatalf("期望含 %q 的错误，得到 %v", c.wantErrText, err)
-				}
-				var typed *configParseError
-				if !errors.As(err, &typed) || typed.Unwrap() == nil {
-					t.Fatalf("配置解析错误应保留类型和底层原因，得到 %T %v", err, err)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("不应报错：%v", err)
-			}
-			if rule.path != c.wantPath {
-				t.Fatalf("path 期望 %q，得到 %q", c.wantPath, rule.path)
-			}
-			gotRe := ""
-			if rule.funcRe != nil {
-				gotRe = rule.funcRe.String()
-			}
-			if gotRe != c.wantFuncRe {
-				t.Fatalf("funcRe 期望 %q，得到 %q", c.wantFuncRe, gotRe)
-			}
-		})
 	}
 }
 
@@ -364,80 +225,10 @@ func TestCharViolations_基线配置(t *testing.T) {
 	}
 }
 
-// initRepo 在 dir 建 git 仓库，写入 files 并提交为基线。
-func initRepo(t *testing.T, dir string, files map[string]string) {
-	t.Helper()
-	for p, s := range files {
-		full := filepath.Join(dir, p)
-		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(s), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "main"},
-		{"config", "commit.gpgsign", "false"},
-		{"add", "."},
-		{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-}
-
 // charSrc 生成一个含 char 用例（TestDoRequest_A 断言 charVal）与普通用例（TestReqA_B 断言 otherVal）的测试文件。
 func charSrc(charVal, otherVal string) string {
 	return "package internal\n\nfunc TestDoRequest_A(t *testing.T) {\n\tassert(" + charVal + ")\n}\n\n" +
 		"func TestReqA_B(t *testing.T) {\n\tassert(" + otherVal + ")\n}\n"
-}
-
-func mustGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	s, err := gitOut(dir, args...)
-	if err != nil {
-		t.Fatalf("git %v: %v", args, err)
-	}
-	return s
-}
-
-func anyContains(vs []violation, sub string) bool {
-	for _, v := range vs {
-		if strings.Contains(v.Detail, sub) {
-			return true
-		}
-	}
-	return false
-}
-
-func anyRule(vs []violation, rule string) bool {
-	for _, v := range vs {
-		if v.Rule == rule {
-			return true
-		}
-	}
-	return false
-}
-
-func TestParseMainBranch(t *testing.T) {
-	cases := []struct{ name, src, want string }{
-		{"未配置默认 main", "", "main"},
-		{"只配 char 默认 main", "characterization:\n  file: a_test.go\n", "main"},
-		{"显式主干", "main_branch: insgo190\n", "insgo190"},
-		{"首尾空白裁剪", "main_branch: \"  release \"\n", "release"},
-		{"YAML 非法回落 main", "main_branch: [", "main"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := parseMainBranch(c.src); got != c.want {
-				t.Fatalf("parseMainBranch(%q)=%q，期望 %q", c.src, got, c.want)
-			}
-		})
-	}
 }
 
 // TestResolveBase_主干分支 基线按 GOVERNANCE_BASE → origin/HEAD → HEAD 提交里声明的 main_branch → origin/main → HEAD 取。
