@@ -5,7 +5,9 @@
 
 ## [Unreleased]
 
-> 含新增导出 API，下次发版升 minor。
+## [v0.15.0] - 2026-09-28
+
+> 含新增导出 API，升 minor。agentguard 的 `check-pkg-doc` 修复随 `tools/agentguard/v0.1.6` 发布。
 
 ### 新增
 
