@@ -5,7 +5,9 @@
 
 ## [Unreleased]
 
-> 含一项导出 API 删除（`geo.MobileLocaleForCountry`），下次发版升 minor。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
+## [v0.14.0] - 2026-09-28
+
+> 含一项导出 API 删除（`geo.MobileLocaleForCountry`），升 minor。agentguard 的 `check-pkg-doc` 随 `tools/agentguard/v0.1.5` 发布。
 
 ### 破坏
 
