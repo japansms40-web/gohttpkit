@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -482,8 +483,7 @@ func TestRetry_不可重试错误立即返回(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error")
 	}
-	var re *kiterrors.RetryableError
-	if errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); ok {
 		t.Fatalf("不可重试错误不该被包成 RetryableError: %v", err)
 	}
 	if got := hits.Load(); got != 1 {
@@ -804,8 +804,7 @@ func TestStatusSemantics_限流文案规则包成RetryableError(t *testing.T) {
 	})
 	_, err := c.Get(context.Background(), "/x", nil)
 	t.Logf("rate-limit err=%v (%T)", err, err)
-	var re *kiterrors.RetryableError
-	if !errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); !ok {
 		t.Fatalf("err = %v, want RetryableError", err)
 	}
 	var se *kiterrors.HTTPStatusError
@@ -1002,12 +1001,7 @@ func TestTruncateBodyForLog(t *testing.T) {
 }
 
 func contains(ss []string, want string) bool {
-	for _, s := range ss {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ss, want)
 }
 
 // ─────────────────────── 标准库特殊头的处理（HTTP/1.1 实测） ───────────────────────
@@ -1304,7 +1298,7 @@ func TestLogging_交易日志保留请求头原文(t *testing.T) {
 func decodeLogRecords(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	t.Helper()
 	var records []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line == "" {
 			continue
 		}
