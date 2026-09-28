@@ -13,6 +13,7 @@ const (
 // reasonAttrKey 说明失败原因的 Attr key；原因是诊断信息，不塞进 Op。
 const (
 	reasonAttrKey             = "reason"
+	reasonParse               = "parse" // url.Parse 失败；不附底层错误，避免回显账密
 	reasonMissingSchemeOrHost = "missing_scheme_or_host"
 )
 

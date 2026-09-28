@@ -41,9 +41,12 @@ func run(out io.Writer, args []string) error {
 		return err
 	}
 
+	// 解析失败不保留 url.Parse 的错误：外层 *url.Error 带原始 URL，内层也可能回显 userinfo
+	// （漏写 @ 时密码被当端口，报 invalid port ":secret"），账密会随错误进日志。
 	u, err := url.Parse(*target)
 	if err != nil {
-		return &kiterrors.Error{Op: opParseURL, Kind: kindInvalidURL, Err: err}
+		return &kiterrors.Error{Op: opParseURL, Kind: kindInvalidURL,
+			Attrs: []slog.Attr{slog.String(reasonAttrKey, reasonParse)}}
 	}
 	if u.Scheme == "" || u.Host == "" {
 		return &kiterrors.Error{Op: opParseURL, Kind: kindInvalidURL,

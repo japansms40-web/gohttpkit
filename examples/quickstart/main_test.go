@@ -97,3 +97,33 @@ func TestRun_不完整URL的Op与原因(t *testing.T) {
 		t.Fatalf("应以 reason Attr 说明原因，got %v", attrs)
 	}
 }
+
+// TestRun_URL解析失败不回显凭据 url.Parse 的外层 *url.Error 带原始 URL，内层也可能把密码当端口回显
+// （漏写 @ 时报 invalid port ":secret"），所以解析失败只留 reason，不保留底层错误。
+func TestRun_URL解析失败不回显凭据(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"缺 scheme 外层回显原 URL", "://user:secret@example.com/x"},
+		{"漏写 @ 密码被当端口", "http://user:secret/x"},
+		{"userinfo 非法", "http://user:sec ret@h/x"},
+		{"query 里的 token", "http://h/%zz?token=secret"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := run(&out, []string{"-url", tc.url})
+			if !kiterrors.IsKind(err, kindInvalidURL) {
+				t.Fatalf("解析失败应带 invalid_url 分类，got %T %v", err, err)
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Fatalf("错误文案不应回显 URL 中的凭据：%v", err)
+			}
+			attrs := kiterrors.AttrsOf(err)
+			if len(attrs) != 1 || attrs[0].Key != "reason" || attrs[0].Value.String() != "parse" {
+				t.Fatalf("应以 reason=parse 说明原因，got %v", attrs)
+			}
+		})
+	}
+}

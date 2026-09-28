@@ -19,6 +19,11 @@
   改为 `"httpx.build_transport"`；重试拦截器发送失败由 `"failed to send request"` 改为 `"interceptor.send_request"`。
   `Error()` 前缀随之变化；错误类型、内层原因与 `errors.As` / `errors.Is` 判定不变。按文案前缀匹配的调用方需改为按错误链判定。
 
+### 安全
+
+- 示例 `examples/quickstart` 的 `-url` 解析失败时不再保留 `url.Parse` 的错误：原错误会带出原始 URL，
+  漏写 `@` 时还会把密码当端口回显（`invalid port ":secret"`）。现只返回 `quickstart.invalid_url` 分类与 `reason=parse`。
+
 ## [v0.11.0] - 2026-09-28
 
 ### 破坏
