@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `versionreg` 导出 `KindRegisterInvalid`、`KindRegisterEmptyID`、`KindRegisterDuplicate`，
+  recover `MustRegister` 的 panic 后可直接 `errors.IsKind(err, versionreg.KindRegisterDuplicate)`，不必手写分类名；名称与 v0.11.0 一致。
+
 ## [v0.11.0] - 2026-09-28
 
 ### 破坏

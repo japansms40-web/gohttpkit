@@ -1,6 +1,29 @@
 package versionreg
 
-import "fmt"
+import (
+	"fmt"
+
+	kiterrors "github.com/japansms40-web/gohttpkit/errors"
+)
+
+// opMustRegister 是 MustRegister 三种 panic 共用的 Op；原因靠 Kind 区分。
+const opMustRegister = "versionreg.must_register"
+
+// 错误 Attrs 的 key。
+const (
+	registryAttrKey = "registry"
+	versionAttrKey  = "version"
+)
+
+// MustRegister panic 的分类。给 recover 后用 errors.IsKind 判定的接入方；名称是契约。
+var (
+	// KindRegisterInvalid 配置 Validate 失败；内层原因经 Err 保留，可 errors.As。
+	KindRegisterInvalid = kiterrors.NewKind("versionreg.register.invalid")
+	// KindRegisterEmptyID 配置 VersionID 为空。
+	KindRegisterEmptyID = kiterrors.NewKind("versionreg.register.empty_id")
+	// KindRegisterDuplicate 同一版本重复注册（已有项不被覆盖）。
+	KindRegisterDuplicate = kiterrors.NewKind("versionreg.register.duplicate")
+)
 
 // EmptyVersionError Get 收到空版本 ID。
 // Registered 是判定当下的已注册版本快照（字典序新切片），便于调用方提示可选值。

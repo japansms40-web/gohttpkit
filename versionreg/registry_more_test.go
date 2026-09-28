@@ -374,3 +374,37 @@ func TestLen_随成功注册递增(t *testing.T) {
 		t.Fatalf("Len=%d, want 2", r.Len())
 	}
 }
+
+// TestKindRegister_导出变量锁定名称 导出 Kind 是契约：名称与 v0.11.0 起的字面量一致，
+// 且 MustRegister 三种 panic 可直接用导出变量判定，调用方不必再手写魔法串。
+func TestKindRegister_导出变量锁定名称(t *testing.T) {
+	cases := []struct {
+		name string
+		kind kiterrors.Kind
+		want string
+		fire func()
+	}{
+		{"校验失败", versionreg.KindRegisterInvalid, "versionreg.register.invalid", func() {
+			versionreg.New[boomCfg]("test").MustRegister(boomCfg{})
+		}},
+		{"空版本", versionreg.KindRegisterEmptyID, "versionreg.register.empty_id", func() {
+			versionreg.New[emptyIDConfig]("test").MustRegister(emptyIDConfig{})
+		}},
+		{"重复注册", versionreg.KindRegisterDuplicate, "versionreg.register.duplicate", func() {
+			r := versionreg.New[*versionreg.Config]("test")
+			r.MustRegister(versionreg.NewConfig("v1", moreBaseURL))
+			r.MustRegister(versionreg.NewConfig("v1", moreBaseURL))
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.kind != kiterrors.NewKind(c.want) || c.kind.Name() != c.want {
+				t.Fatalf("Kind 名称漂移：%v, want %q", c.kind, c.want)
+			}
+			err := mustPanicError(t, c.fire)
+			if !kiterrors.IsKind(err, c.kind) {
+				t.Fatalf("panic 应带 %q 分类，得到 %v", c.want, err)
+			}
+		})
+	}
+}

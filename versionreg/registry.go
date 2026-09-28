@@ -26,12 +26,6 @@ import (
 	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 )
 
-const (
-	mustRegisterOp  = "versionreg.must_register"
-	registryAttrKey = "registry"
-	versionAttrKey  = "version"
-)
-
 // registry.go —— 泛型版本注册表。独立成文件：和 endpoint 白名单、示例配置分开，
 // 接入方先认 Register/Get，再决定要不要用 HeaderWhitelists。
 
@@ -81,19 +75,20 @@ func New[T Versioned](name string) *Registry[T] {
 // MustRegister 注册一个版本配置。
 // 给各版本包 init()：校验失败或版本重复直接 panic —— 启动期 fail-fast，不是运行期错误。
 // 输入：cfg 必须通过 Validate 且 VersionID 非空；T 为指针时表内保存同一实例，注册后勿改字段。
-// 返回：无；失败 panic *errors.Error。Validate 错误经 Err 解包，recover 后可 errors.As。
+// 返回：无；失败 panic *errors.Error，分类为 KindRegisterInvalid / KindRegisterEmptyID / KindRegisterDuplicate。
+// Validate 错误经 Err 解包，recover 后可 errors.As。
 // 例：MustRegister(NewConfig("v1", "https://a.example"))；重复 "v1" panic。
 func (r *Registry[T]) MustRegister(cfg T) {
 	if err := cfg.Validate(); err != nil {
 		panic(&kiterrors.Error{
-			Op: mustRegisterOp, Kind: kiterrors.NewKind("versionreg.register.invalid"),
+			Op: opMustRegister, Kind: KindRegisterInvalid,
 			Attrs: []slog.Attr{slog.String(registryAttrKey, r.name), slog.String(versionAttrKey, string(cfg.VersionID()))}, Err: err,
 		})
 	}
 	id := cfg.VersionID()
 	if id == "" {
 		panic(&kiterrors.Error{
-			Op: mustRegisterOp, Kind: kiterrors.NewKind("versionreg.register.empty_id"),
+			Op: opMustRegister, Kind: KindRegisterEmptyID,
 			Attrs: []slog.Attr{slog.String(registryAttrKey, r.name)},
 		})
 	}
@@ -105,7 +100,7 @@ func (r *Registry[T]) MustRegister(cfg T) {
 	r.mu.Unlock()
 	if dup {
 		panic(&kiterrors.Error{
-			Op: mustRegisterOp, Kind: kiterrors.NewKind("versionreg.register.duplicate"),
+			Op: opMustRegister, Kind: KindRegisterDuplicate,
 			Attrs: []slog.Attr{slog.String(registryAttrKey, r.name), slog.String(versionAttrKey, string(id))},
 		})
 	}
