@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,4 +82,18 @@ func TestMain_入口可直接跑(t *testing.T) {
 	os.Args = []string{"quickstart", "-url", srv.URL + "/x"}
 	t.Cleanup(func() { os.Args = oldArgs })
 	main() // 成功路径不会 os.Exit
+}
+
+// TestRun_不完整URL的Op与原因 Op 是 <包>.<步骤> 具名常量，缺 scheme/host 的原因放 Attrs，不写进 Op。
+func TestRun_不完整URL的Op与原因(t *testing.T) {
+	var out bytes.Buffer
+	err := run(&out, []string{"-url", "example.com/x"})
+	var e *kiterrors.Error
+	if !errors.As(err, &e) || e.Op != "quickstart.parse_url" {
+		t.Fatalf("Op 应为 quickstart.parse_url，got %T %v", err, err)
+	}
+	attrs := kiterrors.AttrsOf(err)
+	if len(attrs) != 1 || attrs[0].Key != "reason" || attrs[0].Value.String() != "missing_scheme_or_host" {
+		t.Fatalf("应以 reason Attr 说明原因，got %v", attrs)
+	}
 }

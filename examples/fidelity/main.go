@@ -213,7 +213,7 @@ func run(out io.Writer, args []string) error {
 		OnResponseHeaders: func(_ context.Context, h http.Header) { hp.applySetCookie(h) },
 	})
 	if err != nil {
-		return &kiterrors.Error{Op: "创建客户端失败", Err: err}
+		return &kiterrors.Error{Op: opNewClient, Err: err}
 	}
 	ctx := context.Background()
 
@@ -225,7 +225,7 @@ func run(out io.Writer, args []string) error {
 		Path:            "/",
 		HeaderWhitelist: endpointFetchPage,
 	}); err != nil {
-		return &kiterrors.Error{Op: "step 1 失败", Err: err}
+		return &kiterrors.Error{Op: opFetchPage, Err: err}
 	}
 	fmt.Fprintf(out, "  status=%d location=%q\n\n",
 		noRedirect.SnapshotResponseStatusCode(), noRedirect.SnapshotResponseHeaders().Get("location"))
@@ -240,7 +240,7 @@ func run(out io.Writer, args []string) error {
 		HeaderWhitelist: endpointSubmit,
 	})
 	if err != nil {
-		return &kiterrors.Error{Op: "step 2 失败", Err: err}
+		return &kiterrors.Error{Op: opSubmit, Err: err}
 	}
 	fmt.Fprintf(out, "  响应: %s\n", strings.TrimSpace(string(respBody)))
 	return nil

@@ -23,8 +23,6 @@ import (
 	"github.com/japansms40-web/gohttpkit/logger"
 )
 
-var kindInvalidURL = kiterrors.NewKind("quickstart.invalid_url")
-
 func main() {
 	if err := run(os.Stdout, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -45,10 +43,11 @@ func run(out io.Writer, args []string) error {
 
 	u, err := url.Parse(*target)
 	if err != nil {
-		return &kiterrors.Error{Op: "解析 -url 失败", Kind: kindInvalidURL, Err: err}
+		return &kiterrors.Error{Op: opParseURL, Kind: kindInvalidURL, Err: err}
 	}
 	if u.Scheme == "" || u.Host == "" {
-		return &kiterrors.Error{Op: "-url 必须是完整 URL（含 scheme 与域名）", Kind: kindInvalidURL}
+		return &kiterrors.Error{Op: opParseURL, Kind: kindInvalidURL,
+			Attrs: []slog.Attr{slog.String(reasonAttrKey, reasonMissingSchemeOrHost)}}
 	}
 	base := u.Scheme + "://" + u.Host
 	path := u.RequestURI()
@@ -67,14 +66,14 @@ func run(out io.Writer, args []string) error {
 		ProxyURL: *proxyURL,
 	})
 	if err != nil {
-		return &kiterrors.Error{Op: "创建客户端失败", Err: err}
+		return &kiterrors.Error{Op: opNewClient, Err: err}
 	}
 
 	// ② 发请求。ctx 里没有 trace_id 时库会自动生成一个，本次请求的所有日志都带上它。
 	ctx := logger.WithTraceID(context.Background(), "quickstart-001")
 	body, err := client.Get(ctx, path, nil)
 	if err != nil {
-		return &kiterrors.Error{Op: "请求失败", Err: err}
+		return &kiterrors.Error{Op: opGet, Err: err}
 	}
 
 	// ③ 状态码走快照读（并发安全）。注意默认链【不会】因为非 2xx 而报错。

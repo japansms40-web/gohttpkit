@@ -30,8 +30,6 @@ import (
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
 
-var kindAccountBanned = kiterrors.NewKind("customchain.account_banned")
-
 // classifyResponse 把示例响应中的封禁业务码转成可按 Kind 判断的结构化错误。
 // 输入 body 是响应体；状态码只由拦截器决定何时调用本函数。
 // 返回未命中时为 nil；命中时保留业务 code。
@@ -44,8 +42,8 @@ func classifyResponse(_ int, body []byte) error {
 		return nil
 	}
 	if payload.Status == "fail" && payload.Code == "banned" {
-		return &kiterrors.Error{Op: "customchain.classify", Kind: kindAccountBanned,
-			Attrs: []slog.Attr{slog.String("code", payload.Code)}}
+		return &kiterrors.Error{Op: opClassify, Kind: kindAccountBanned,
+			Attrs: []slog.Attr{slog.String(codeAttrKey, payload.Code)}}
 	}
 	return nil
 }
