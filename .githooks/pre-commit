@@ -47,6 +47,13 @@ if [ -n "$staged_go" ]; then
     fail "测试文件与源文件未一一对应（见上方清单，用例并入被测源文件对应的 _test.go）"
   fi
 
+  # 3c) 包文档：每个 Go 包有 doc.go，文件结构树与实际文件一致
+  if make check-pkg-doc; then
+    green "✓ check-pkg-doc"
+  else
+    fail "包文档不合规（见上方清单：补 doc.go 或更新其「文件结构：」树）"
+  fi
+
   # 4) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
   if command -v golangci-lint >/dev/null 2>&1; then
     if git rev-parse --verify -q HEAD >/dev/null; then
@@ -74,6 +81,11 @@ if [ -z "$staged_go" ] && [ -n "$staged_go_deleted" ]; then
     green "✓ check-test-layout"
   else
     fail "删除 Go 文件后测试文件与源文件未一一对应（见上方清单）"
+  fi
+  if make check-pkg-doc; then
+    green "✓ check-pkg-doc"
+  else
+    fail "删除 Go 文件后 doc.go 的文件结构树未同步（见上方清单）"
   fi
 fi
 

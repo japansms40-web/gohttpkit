@@ -89,6 +89,7 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | 禁止裸 `fmt.Print` / `log.*` / `slog.*`（CS §6） | `forbidigo` | ✅ |
 | 生产代码禁止直接 `errors.New`、`fmt.Errorf` 与非类型错误 panic（CS §5） | `make check-errors`：pre-commit、`make check`、CI test；扫描主模块与 agentguard 子模块，测试夹具豁免；对 `panic(err)` 的实际类型仍需代码审查 | ✅ |
 | 测试文件与源文件一一对应：`foo.go` ↔ `foo_test.go`，豁免 characterization / helpers / export（CS §8） | `make check-test-layout`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/`，无函数的源文件不要求测试 | ✅ |
+| 每个 Go 包有 `doc.go`，包注释只写在这里，「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应（CS §13） | `make check-pkg-doc`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/` | ✅ |
 | 覆盖率 ≥ `MIN_COVERAGE`=98（TESTING §1） | pre-push、CI `make cover` | ✅ |
 | `MIN_COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
 | 并发无竞态（CS §4） | pre-push、CI `go test -race` | ✅ |
@@ -167,6 +168,7 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 10. **代码差距**：`bodyDecodeInterceptor` 解压大小上限（CS §10）。`versionreg.Registry.MustRegister` 的裸字符串 panic 已改为类型错误。
 11. ~~**错误构造门禁**：检查生产代码直接 `errors.New` / `fmt.Errorf` 与字符串 panic~~ ✅ 已落地：`make check-errors`。
 12. ~~**测试布局门禁**：一个源文件只配一个同名测试文件~~ ✅ 已落地：`make check-test-layout`。
+13. ~~**包文档门禁**：每个 Go 包有 doc.go 与文件结构树~~ ✅ 已落地：`make check-pkg-doc`。
 
 ## 8. 分支保护（独立开发：可选）
 

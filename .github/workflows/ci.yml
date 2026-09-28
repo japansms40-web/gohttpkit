@@ -23,6 +23,8 @@ jobs:
         run: make check-errors
       - name: 测试文件与源文件一一对应
         run: make check-test-layout
+      - name: 每个 Go 包有 doc.go 与文件结构树
+        run: make check-pkg-doc
       - name: build
         run: go build ./...
       - name: vet

@@ -5,7 +5,7 @@
 
 BASE_REV ?= HEAD~1
 
-.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check check-errors check-test-layout
+.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check check-errors check-test-layout check-pkg-doc
 
 # 覆盖率门禁（核心库，排除 examples）：低于 MIN_COVERAGE 直接失败。
 # 已达标 98%（补齐 interceptor 角度测试后）；100% 为追求，只许上调、不许下调——
@@ -83,13 +83,17 @@ check-errors:
 check-test-layout:
 	@go run -C tools/agentguard . check-test-layout
 
+# 每个 Go 包目录必须有 doc.go：包注释只写在这里，并带一层「文件结构：」树，条目与本目录非测试 .go 文件及子包目录一一对应。
+check-pkg-doc:
+	@go run -C tools/agentguard . check-pkg-doc
+
 # 两个离线示例（fidelity/customchain 自带假服务器，不需要外网）。
 # quickstart 默认请求真实 URL（httpbin.org），需要外网，故不在这里跑：go run ./examples/quickstart
 examples:
 	go run ./examples/customchain
 	go run ./examples/fidelity
 
-check: check-errors check-test-layout build vet cover tidy-check
+check: check-errors check-test-layout check-pkg-doc build vet cover tidy-check
 
 # 本地「我要完整跑」与 CI 对齐的聚合目标。race 需要 C 编译器。
 ci: check lint-new race char agents-sync-check governance tools-check

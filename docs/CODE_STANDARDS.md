@@ -268,8 +268,24 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 
 - **MUST** 删除或改变导出符号前先弃用至少一个 minor 版本：doc comment 末段加标准格式
   `// Deprecated: 用 Xxx 替代。将在 vX.Y.0 移除。`（`staticcheck` SA1019 会提示调用方）。
-- **MUST** 每个包有包级文档（`doc.go` 或主文件顶部 `// Package xxx ...`），写明包的职责边界与入口。
-  范例：`geo/doc.go`、`logger/doc.go`。
+- **MUST** 每个 Go 包目录（含 `examples/*`、`tools/agentguard`，不含 `testdata/`）有 `doc.go`，包注释写明包的职责边界与入口，
+  且**只写在 `doc.go`**，其它源文件不得在 `package` 子句上方写包注释。
+- **MUST** 包注释末尾带一层「文件结构：」树，逐项列出本目录全部非测试 `.go` 文件（含 `doc.go` 自身）与含 Go 包的直接子目录（带 `/`），
+  每项一句用途；`_test.go` 不列，下层由子包自己的 `doc.go` 登记。增删文件时同步改树：
+
+  ```go
+  // 文件结构：
+  //
+  //	geo/
+  //	├── doc.go            包文档（本文件）
+  //	├── errors.go         本包类型错误：UnknownCountryError 等
+  //	├── ...
+  //	└── locale_mobile/    子包 localemobile：Android 端五个 locale header
+  package geo
+  ```
+
+  执行 `make check-pkg-doc` 检查（`make check`、pre-commit、CI 均含）：缺 doc.go、包注释位置不对、缺树、漏登记、登记了不存在的条目、
+  重复登记、条目无说明都判失败。范例：`geo/doc.go`、`logger/doc.go`、`httpx/doc.go`。
 - **MUST** 导出 struct 新增字段时零值必须保持旧行为（否则是破坏性变更）。
 - **SHOULD** 对外 API 变化用 `apidiff` 与上一个 tag 对比，结果写进 PR 与 `CHANGELOG.md`（待落地为 CI job）。
 - **MUST NOT** 导出接口类型后再往接口上加方法（下游实现会编译失败）；需要扩展时新增接口或可选接口断言。

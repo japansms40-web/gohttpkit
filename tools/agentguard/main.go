@@ -1,14 +1,3 @@
-// agentguard 是治理守卫与 AI agent 钩子入口，独立子模块，不进核心库覆盖率。
-// gohttpkit 自身与下游仓库（按版本 go install）共用；仓库差异写在各自根目录的 .agentguard.yml。
-//
-// 子命令：
-//
-//	agentguard governance [--base REV] [--worktree]   CI / pre-push / agent 收尾共用的治理检查
-//	agentguard check-errors   检查生产 Go 源码的直接错误构造与 panic 语法
-//	agentguard check-test-layout   检查测试文件与源文件一一对应（foo.go ↔ foo_test.go）
-//	agentguard hook --agent claude|cursor|codex --event <事件>   三家 agent 钩子的薄适配
-//
-// 规范出处：docs/ENGINEERING_GOVERNANCE.md §3（agent 钩子语义）、§4（规则 → 强制手段）。
 package main
 
 import (
@@ -32,43 +21,11 @@ func run(args []string) int {
 	case "governance":
 		return runGovernance(args[1:])
 	case "check-errors":
-		root, err := repoRoot("")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "check-errors：不在 Git 仓库内")
-			return 1
-		}
-		violations, err := scanErrorPolicy(root)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "check-errors：检查失败：", err)
-			return 1
-		}
-		for _, v := range violations {
-			fmt.Fprintln(os.Stderr, v)
-		}
-		if len(violations) > 0 {
-			return 1
-		}
-		fmt.Println("check-errors：生产代码错误构造符合规范")
-		return 0
+		return runCheck("check-errors", scanErrorPolicy, "生产代码错误构造符合规范")
 	case "check-test-layout":
-		root, err := repoRoot("")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "check-test-layout：不在 Git 仓库内")
-			return 1
-		}
-		violations, err := scanTestLayout(root)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "check-test-layout：检查失败：", err)
-			return 1
-		}
-		for _, v := range violations {
-			fmt.Fprintln(os.Stderr, v)
-		}
-		if len(violations) > 0 {
-			return 1
-		}
-		fmt.Println("check-test-layout：测试文件与源文件一一对应")
-		return 0
+		return runCheck("check-test-layout", scanTestLayout, "测试文件与源文件一一对应")
+	case "check-pkg-doc":
+		return runCheck("check-pkg-doc", scanPkgDoc, "每个 Go 包有 doc.go 且文件结构树与实际文件一致")
 	case "hook":
 		return runHook(args[1:])
 	default:
@@ -77,6 +34,30 @@ func run(args []string) int {
 	}
 }
 
+// runCheck 在当前仓库根上跑一个静态检查子命令 name。
+// 输入 scan：返回违规行的扫描函数；okMsg：无违规时打到 stdout 的结论。
+// 返回：0 无违规；1 不在仓库内、扫描出错或有违规（违规逐行打到 stderr）。
+func runCheck(name string, scan func(root string) ([]string, error), okMsg string) int {
+	root, err := repoRoot("")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, name+"：不在 Git 仓库内")
+		return 1
+	}
+	violations, err := scan(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, name+"：检查失败：", err)
+		return 1
+	}
+	for _, v := range violations {
+		fmt.Fprintln(os.Stderr, v)
+	}
+	if len(violations) > 0 {
+		return 1
+	}
+	fmt.Println(name + "：" + okMsg)
+	return 0
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard hook --agent claude|cursor|codex --event EVENT")
+	fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard check-pkg-doc | agentguard hook --agent claude|cursor|codex --event EVENT")
 }

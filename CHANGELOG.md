@@ -5,7 +5,13 @@
 
 ## [Unreleased]
 
-> 本版只涉及文档与仓库工具，不影响库的导出 API。
+> 本版只涉及文档与仓库工具，不影响库的导出 API。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
+
+### 新增
+
+- `make check-pkg-doc`（`tools/agentguard check-pkg-doc`）：每个 Go 包目录必须有 `doc.go`，包注释只写在 `doc.go`，
+  且末尾「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应。已接入 `make check`、pre-commit 与 CI。
+  下游升级 agentguard 后如在 Makefile 接入需先整改。
 
 ### 变更
 

@@ -33,22 +33,9 @@ var testFuncPrefixes = []string{"Test", "Fuzz", "Benchmark", "Example"}
 //
 // 返回排序后的全部违规；列文件、读文件或解析失败时返回错误，不能静默放行。
 func scanTestLayout(root string) ([]string, error) {
-	listed, err := gitRaw(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.go")
+	present, err := presentGoFiles(root)
 	if err != nil {
-		return nil, &os.PathError{Op: "git ls-files", Path: root, Err: err}
-	}
-	present := make(map[string]bool)
-	for _, rel := range strings.Split(listed, "\x00") {
-		if rel == "" || inTestdata(rel) {
-			continue
-		}
-		if _, statErr := os.Stat(filepath.Join(root, rel)); statErr != nil {
-			if os.IsNotExist(statErr) {
-				continue // 工作区中已删除的跟踪文件
-			}
-			return nil, statErr
-		}
-		present[rel] = true
+		return nil, err
 	}
 	var violations []string
 	for rel := range present {
@@ -75,6 +62,29 @@ func scanTestLayout(root string) ([]string, error) {
 	}
 	sort.Strings(violations)
 	return violations, nil
+}
+
+// presentGoFiles 列出工作区实际存在的 Go 文件（已跟踪与未跟踪、不含忽略），含独立子模块，跳过 testdata/。
+// 返回以仓库根为基准、/ 分隔的相对路径集合；列文件或 stat 失败时返回错误。
+func presentGoFiles(root string) (map[string]bool, error) {
+	listed, err := gitRaw(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.go")
+	if err != nil {
+		return nil, &os.PathError{Op: "git ls-files", Path: root, Err: err}
+	}
+	present := make(map[string]bool)
+	for _, rel := range strings.Split(listed, "\x00") {
+		if rel == "" || inTestdata(rel) {
+			continue
+		}
+		if _, statErr := os.Stat(filepath.Join(root, rel)); statErr != nil {
+			if os.IsNotExist(statErr) {
+				continue // 工作区中已删除的跟踪文件
+			}
+			return nil, statErr
+		}
+		present[rel] = true
+	}
+	return present, nil
 }
 
 // checkTestFile 检查一个测试文件：普通测试文件要有同名源文件，豁免文件不得声明测试函数。
@@ -117,12 +127,13 @@ func declaresFunc(root, rel string) (bool, error) {
 	return false, nil
 }
 
+// parseGoFile 解析仓库内一个 Go 文件，保留注释（scanPkgDoc 要读包注释）。
 func parseGoFile(root, rel string) (*ast.File, error) {
 	src, err := os.ReadFile(filepath.Join(root, rel))
 	if err != nil {
 		return nil, &os.PathError{Op: "read", Path: rel, Err: err}
 	}
-	return parser.ParseFile(token.NewFileSet(), rel, src, parser.SkipObjectResolution)
+	return parser.ParseFile(token.NewFileSet(), rel, src, parser.SkipObjectResolution|parser.ParseComments)
 }
 
 // isTestFuncName 按 go test 规则判断：前缀后为空或首字符不是小写字母（TestA、Test_x 算，Testing 不算）。

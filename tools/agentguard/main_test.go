@@ -39,7 +39,7 @@ func TestRun_无参数与未知子命令返回1并打印用法(t *testing.T) {
 		var code int
 		_, errOut := captureOutput(t, func() { code = run(args) })
 		t.Logf("args=%q → code=%d stderr=%q", args, code, errOut)
-		if code != 1 || !strings.Contains(errOut, "用法：agentguard") || !strings.Contains(errOut, "check-test-layout") {
+		if code != 1 || !strings.Contains(errOut, "用法：agentguard") || !strings.Contains(errOut, "check-test-layout") || !strings.Contains(errOut, "check-pkg-doc") {
 			t.Fatalf("args=%q 应退出 1 并打印含全部子命令的用法，得到 code=%d stderr=%q", args, code, errOut)
 		}
 	}
@@ -50,11 +50,13 @@ func TestRun_check子命令在合规仓库返回0(t *testing.T) {
 	initRepo(t, dir, map[string]string{
 		"pkg/a.go":      "package pkg\nfunc A() int { return 1 }\n",
 		"pkg/a_test.go": "package pkg\n",
+		"pkg/doc.go":    "// Package pkg 示例。\n//\n// 文件结构：\n//\n//\t├── a.go    入口\n//\t└── doc.go  包文档\npackage pkg\n",
 	})
 	t.Chdir(dir)
 	for sub, okMsg := range map[string]string{
 		"check-errors":      "生产代码错误构造符合规范",
 		"check-test-layout": "测试文件与源文件一一对应",
+		"check-pkg-doc":     "每个 Go 包有 doc.go",
 	} {
 		var code int
 		out, errOut := captureOutput(t, func() { code = run([]string{sub}) })
@@ -76,6 +78,7 @@ func TestRun_check子命令有违规返回1并逐条打到stderr(t *testing.T) {
 	for sub, want := range map[string]string{
 		"check-errors":      "pkg/a.go:3: 禁止 errors.New",
 		"check-test-layout": "pkg/a_more_test.go: 测试文件须与同目录源文件同名",
+		"check-pkg-doc":     "pkg/doc.go: 缺少 doc.go",
 	} {
 		var code int
 		out, errOut := captureOutput(t, func() { code = run([]string{sub}) })
@@ -88,7 +91,7 @@ func TestRun_check子命令有违规返回1并逐条打到stderr(t *testing.T) {
 
 func TestRun_check子命令不在仓库内返回1(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, sub := range []string{"check-errors", "check-test-layout"} {
+	for _, sub := range []string{"check-errors", "check-test-layout", "check-pkg-doc"} {
 		var code int
 		_, errOut := captureOutput(t, func() { code = run([]string{sub}) })
 		t.Logf("%s → code=%d stderr=%q", sub, code, errOut)
@@ -102,7 +105,7 @@ func TestRun_check子命令扫描失败返回1(t *testing.T) {
 	dir := t.TempDir()
 	initRepo(t, dir, map[string]string{"pkg/a.go": "package pkg\nfunc A( {\n"})
 	t.Chdir(dir)
-	for _, sub := range []string{"check-errors", "check-test-layout"} {
+	for _, sub := range []string{"check-errors", "check-test-layout", "check-pkg-doc"} {
 		var code int
 		_, errOut := captureOutput(t, func() { code = run([]string{sub}) })
 		t.Logf("%s → code=%d stderr=%q", sub, code, errOut)
