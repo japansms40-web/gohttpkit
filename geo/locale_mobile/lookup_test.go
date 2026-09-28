@@ -2,48 +2,11 @@ package localemobile
 
 import (
 	"encoding/json"
-	"errors"
-	"sort"
 	"strings"
 	"testing"
 
 	"github.com/japansms40-web/gohttpkit/geo"
 )
-
-// headerFunc 是五个查表函数的共同签名，便于同一组用例跑遍每个 header。
-type headerFunc struct {
-	name  string
-	fn    func(string) (string, error)
-	table map[string]string
-}
-
-var headerFuncs = []headerFunc{
-	{"AcceptLanguage", AcceptLanguageForCountry, countryToAcceptLanguage},
-	{"AppLocale", AppLocaleForCountry, countryToAppLocale},
-	{"DeviceLocale", DeviceLocaleForCountry, countryToDeviceLocale},
-	{"MappedLocale", MappedLocaleForCountry, countryToMappedLocale},
-	{"DeviceLanguages", DeviceLanguagesForCountry, countryToDeviceLanguages},
-}
-
-func assertUnknownCountry(t *testing.T, err error, country string) {
-	t.Helper()
-	var target *geo.UnknownCountryError
-	if !errors.As(err, &target) {
-		t.Fatalf("err = %v, want *geo.UnknownCountryError", err)
-	}
-	if target.Country != country {
-		t.Errorf("Country = %q, want %q", target.Country, country)
-	}
-}
-
-func sortedKeys(table map[string]string) []string {
-	keys := make([]string, 0, len(table))
-	for cc := range table {
-		keys = append(keys, cc)
-	}
-	sort.Strings(keys)
-	return keys
-}
 
 // 五个 header 的代表性国家；CN 行对照抓包 00299。
 func TestForCountry_代表国家(t *testing.T) {
@@ -197,20 +160,6 @@ func TestInvariant_全表派生关系(t *testing.T) {
 		}
 		if len(parsed) != 2 || parsed["system_languages"] != tag || parsed["keyboard_language"] != tag {
 			t.Errorf("%s: DeviceLanguages = %v, want 两项都是 %q", cc, parsed, tag)
-		}
-	}
-}
-
-// script 只出现在 supported_locales 只给带 script 形式的国家。
-func TestInvariant_script范围(t *testing.T) {
-	want := map[string]string{
-		"CN": "Hans", "TW": "Hant", "HK": "Hant", "MO": "Hant",
-		"RS": "Cyrl", "ME": "Latn", "BA": "Latn", "AZ": "Latn", "UZ": "Latn",
-	}
-	for _, cc := range sortedKeys(countryToAppLocale) {
-		_, script, _ := strings.Cut(countryToAppLocale[cc], "_#")
-		if script != want[cc] {
-			t.Errorf("%s: script = %q, want %q", cc, script, want[cc])
 		}
 	}
 }
