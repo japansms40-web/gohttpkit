@@ -54,6 +54,9 @@ func TestRun_参数与错误分支(t *testing.T) {
 func TestRun_不完整URL有分类且不回显原地址(t *testing.T) {
 	var out bytes.Buffer
 	err := run(&out, []string{"-url", "user:secret@example.com/path"})
+	if err == nil {
+		t.Fatal("不完整 URL 应返回错误")
+	}
 	if !kiterrors.IsKind(err, kiterrors.NewKind("quickstart.invalid_url")) {
 		t.Fatalf("不完整 URL 应返回结构化分类，got %T %v", err, err)
 	}
@@ -106,8 +109,8 @@ func TestRun_URL解析失败不回显凭据(t *testing.T) {
 		url  string
 	}{
 		{"缺 scheme 外层回显原 URL", "://user:secret@example.com/x"},
-		{"漏写 @ 密码被当端口", "http://user:secret/x"},
-		{"userinfo 非法", "http://user:sec ret@h/x"},
+		{"漏写 @ 密码被当端口", "https://user:secret/x"},
+		{"userinfo 非法", "https://user:sec ret@h/x"},
 		{"query 里的 token", "http://h/%zz?token=secret"},
 	}
 	for _, tc := range cases {

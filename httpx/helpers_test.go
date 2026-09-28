@@ -37,8 +37,10 @@ func newClient(t *testing.T, srv *httptest.Server, mutate func(*httpx.Options)) 
 }
 
 // recordingServer 记录收到的请求，供断言请求侧行为。
+// 并发模型：handler goroutine 追加 requests / bodies，测试 goroutine 读取；mu（容量 1 的令牌）保护这两个切片。
 type recordingServer struct {
 	*httptest.Server
+	t        *testing.T // 创建它的测试；last() 在无请求时对它 Fatal，只能在该测试的 goroutine 调用
 	mu       chan struct{}
 	requests []*http.Request
 	bodies   [][]byte
@@ -46,7 +48,7 @@ type recordingServer struct {
 
 func newRecordingServer(t *testing.T, handler func(w http.ResponseWriter, r *http.Request)) *recordingServer {
 	t.Helper()
-	rs := &recordingServer{mu: make(chan struct{}, 1)}
+	rs := &recordingServer{t: t, mu: make(chan struct{}, 1)}
 	rs.mu <- struct{}{}
 	rs.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -67,11 +69,13 @@ func (rs *recordingServer) count() int {
 	return n
 }
 
+// last 返回最后一个请求；一个都没收到时直接 Fatal（Goexit 前 defer 会归还令牌），故返回值恒非 nil。
 func (rs *recordingServer) last() *http.Request {
+	rs.t.Helper()
 	<-rs.mu
 	defer func() { rs.mu <- struct{}{} }()
 	if len(rs.requests) == 0 {
-		return nil
+		rs.t.Fatal("recordingServer 尚未收到任何请求")
 	}
 	return rs.requests[len(rs.requests)-1]
 }

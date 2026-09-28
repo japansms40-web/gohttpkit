@@ -750,7 +750,7 @@ func TestCopyIDsLocked_两次调用互不共享底层数组(t *testing.T) {
 
 func TestSortIDs_nil与空切片不panic(t *testing.T) {
 	sortIDs(nil)
-	empty := []ID{}
+	empty := make([]ID, 0) // 刻意用非 nil 空切片，与上一行的 nil 对照
 	sortIDs(empty)
 	t.Logf("nil / 空切片 sort 后 empty=%v", empty)
 	if len(empty) != 0 {

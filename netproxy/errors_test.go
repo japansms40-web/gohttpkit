@@ -177,6 +177,8 @@ func Test空代理URL不是错误(t *testing.T) {
 	if d != nil || err != nil {
 		t.Fatal(`ParseProxyURL("") 应是 (nil, nil)`)
 	}
+	// 契约：代理为空时不碰 transport，故 nil transport 合法。
+	//goland:noinspection GoMaybeNil
 	if err := ApplyProxyToTransport(nil, ""); err != nil {
 		t.Fatalf(`ApplyProxyToTransport(nil, "") = %v, want nil`, err)
 	}
@@ -186,6 +188,9 @@ func Test非法代理URL文案不泄漏凭据(t *testing.T) {
 	raw := "socks5://user:secret@%zz"
 	err := ApplyProxyToTransport(&http.Transport{}, raw)
 	t.Logf("leaky-url → err=%v (%T)", err, err)
+	if err == nil {
+		t.Fatal("非法代理 URL 应返回错误")
+	}
 	assertInvalidProxyURL(t, err, InvalidURLReasonParse)
 	msg := err.Error()
 	for _, secret := range []string{"user", "secret", raw, "user:secret"} {

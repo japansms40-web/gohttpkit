@@ -3,9 +3,9 @@ package interceptor_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -128,7 +128,7 @@ func TestRetry_调用方ctx到期引起的失败不重试(t *testing.T) {
 	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 	defer cancel()
 	// 文案含 "context deadline exceeded"，默认关键词表判为可重试；但它正是调用方 ctx 到期造成的。
-	term := &transportFailTerminal{err: fmt.Errorf("Get \"https://x.example/x\": %w", context.DeadlineExceeded)}
+	term := &transportFailTerminal{err: &url.Error{Op: "Get", URL: "https://x.example/x", Err: context.DeadlineExceeded}}
 	c := newClientWith(t, httpx.Options{
 		Headers:      httpx.StaticHeaders{Base: "https://x.example"},
 		Retry:        httpx.WithRetry(3, time.Hour, 0),
@@ -153,7 +153,7 @@ func TestRetry_调用方ctx到期引起的失败不重试(t *testing.T) {
 func TestRetry_ctx仍存活时超时类错误照常重试(t *testing.T) {
 	// 模拟 http.Client.Timeout：错误链含 DeadlineExceeded，但调用方 ctx 仍存活，属网络层超时，应重试。
 	buf := captureInterceptorLogs(t)
-	term := &errThenOKTerminal{err: fmt.Errorf("Get \"https://x.example/x\": %w", context.DeadlineExceeded), fails: 1}
+	term := &errThenOKTerminal{err: &url.Error{Op: "Get", URL: "https://x.example/x", Err: context.DeadlineExceeded}, fails: 1}
 	c := newClientWith(t, httpx.Options{
 		Headers:      httpx.StaticHeaders{Base: "https://x.example"},
 		Retry:        httpx.WithRetry(3, time.Millisecond, 0),

@@ -371,24 +371,21 @@ func TestHttpx错误类型互不误匹配(t *testing.T) {
 		&httpx.ReadResponseBodyError{Encoding: httpx.EncodingGzip, Err: errors.New("e")},
 		&httpx.TransportError{Err: errors.New("e")},
 	}
-	newTargets := func() []any {
-		return []any{
-			new(*httpx.MissingHeaderProviderError),
-			new(*httpx.ChainExhaustedError),
-			new(*httpx.NilBuildHeadersError),
-			new(*httpx.RequestBodyEncodeError),
-			new(*httpx.ResponseJSONDecodeError),
-			new(*httpx.CreateHTTPRequestError),
-			new(*httpx.ContentEncodingError),
-			new(*httpx.ReadResponseBodyError),
-			new(*httpx.TransportError),
-		}
+	matchers := []func(error) bool{
+		asMatcher[*httpx.MissingHeaderProviderError],
+		asMatcher[*httpx.ChainExhaustedError],
+		asMatcher[*httpx.NilBuildHeadersError],
+		asMatcher[*httpx.RequestBodyEncodeError],
+		asMatcher[*httpx.ResponseJSONDecodeError],
+		asMatcher[*httpx.CreateHTTPRequestError],
+		asMatcher[*httpx.ContentEncodingError],
+		asMatcher[*httpx.ReadResponseBodyError],
+		asMatcher[*httpx.TransportError],
 	}
 	t.Logf("types=%d", len(all))
 	for i, err := range all {
-		targets := newTargets()
-		for j, target := range targets {
-			hit := errors.As(err, target)
+		for j, match := range matchers {
+			hit := match(err)
 			if i == j {
 				if !hit {
 					t.Fatalf("%T 应匹配自身", err)
@@ -396,8 +393,14 @@ func TestHttpx错误类型互不误匹配(t *testing.T) {
 				continue
 			}
 			if hit {
-				t.Fatalf("%T 误匹配成 targets[%d]", err, j)
+				t.Fatalf("%T 误匹配成 matchers[%d]", err, j)
 			}
 		}
 	}
+}
+
+// asMatcher 报告 err 链上能否 errors.As 出 T，供类型互斥矩阵逐项判定。
+func asMatcher[T error](err error) bool {
+	_, ok := errors.AsType[T](err)
+	return ok
 }

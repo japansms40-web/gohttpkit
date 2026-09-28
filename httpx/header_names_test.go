@@ -1,6 +1,7 @@
 package httpx_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
@@ -36,10 +37,10 @@ func TestHeaderNames_全小写契约(t *testing.T) {
 
 func TestHeaderUserAgentCanonical_标准库形态(t *testing.T) {
 	t.Logf("canonical=%q lowercase=%q", httpx.HeaderUserAgentCanonical, httpx.HeaderUserAgent)
-	if httpx.HeaderUserAgentCanonical != "User-Agent" {
-		t.Fatalf("HeaderUserAgentCanonical = %q, want User-Agent", httpx.HeaderUserAgentCanonical)
+	if want := http.CanonicalHeaderKey(httpx.HeaderUserAgent); httpx.HeaderUserAgentCanonical != want {
+		t.Fatalf("HeaderUserAgentCanonical = %q, want %q", httpx.HeaderUserAgentCanonical, want)
 	}
-	if httpx.HeaderUserAgentCanonical == httpx.HeaderUserAgent {
+	if httpx.HeaderUserAgent == http.CanonicalHeaderKey(httpx.HeaderUserAgent) {
 		t.Fatal("规范化写法与全小写发头约定不能是同一个常量")
 	}
 }

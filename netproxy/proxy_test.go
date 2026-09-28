@@ -243,6 +243,8 @@ func TestApplyProxyToTransport_非空URL且transport为nil会panic(t *testing.T)
 			t.Fatal("非空代理 + nil transport 应 panic（调用方违约，不改成类型错误）")
 		}
 	}()
+	// 故意传 nil transport：验证调用方违约时 panic，而非改成类型错误。
+	//goland:noinspection GoMaybeNil
 	_ = ApplyProxyToTransport(nil, "socks5://127.0.0.1:1080")
 }
 
