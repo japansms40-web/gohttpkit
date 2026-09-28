@@ -10,6 +10,28 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.15.0（相对 v0.14.0）
+
+新增导出 API（0.x 阶段按 minor），下游直接升级：
+
+- 新增 `logger.DebugEvent` / `logger.ErrorEvent` 与 `(*logger.Logger).DebugEvent` / `ErrorEvent`，事件日志四级齐全；
+  语义与 `InfoEvent` / `WarnEvent` 一致（msg 与 event 同值）。已有调用不受影响。
+- 新增 `httpx.EventHTTPBodyClose`（`http.body_close_failed`）。解压层关闭响应体失败的日志由自由文案
+  `msg="failed to close response body"` 改为该事件：级别仍为 error，`error` 字段不变。下游若按旧 msg 文案过滤，改为按 `event` 过滤。
+- `tools/agentguard/v0.1.6`：`check-pkg-doc` 不再把紧贴 `package`、只含指令的注释（如文件级 `//nolint:goconst // 理由`）
+  当成包注释。下游接入 `check-pkg-doc` 时，这类抓包数据文件无需改动。
+
+## v0.14.0（相对 v0.13.0）
+
+破坏点（0.x 阶段按 minor）：
+
+- 删除 `geo.MobileLocaleForCountry`（及 Android 下划线 locale 表），未经弃用周期（维护者决定）。
+  迁移：Android locale 取值改用子包 `localemobile` 的五个 `XxxForCountry`；需要无 script 的 `zh_CN` 形态时，
+  由调用方从 `localemobile.DeviceLocaleForCountry` 的结果裁剪。
+- 新增 `geo.LookupCountry(table, country)`：按本包统一语义（trim + 大写、空或未命中返回 `*geo.UnknownCountryError`）查任意国家表。
+- 各包包注释迁入 `doc.go` 并补文件结构树，`go doc` 只多出文件树。`tools/agentguard/v0.1.5` 新增 `check-pkg-doc`；
+  下游升级 agentguard 不会自动启用，在自己的 Makefile / 钩子里接入前，先按 `CODE_STANDARDS.md` §13 整改。
+
 ## v0.13.0（相对 v0.12.0）
 
 无导出 API 变化，下游直接升级。
