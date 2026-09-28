@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [v0.10.1] - 2026-09-28
+
+### 新增
+
+- `(*errors.Error).As(any) bool`：只响应包内遍历探针，其余目标返回 false，不改变标准 `errors.As` 语义；
+  供 `KindOf` / `IsKind` / `AttrsOf` 借 `errors.As` 遍历整棵错误树。
+
+### 修复
+
+- `errors.KindOf` / `IsKind` / `AttrsOf` 遍历整棵错误树：原实现只沿 `*Error.Err` 单链向内走，
+  `fmt.Errorf` 多个 `%w` 或 `errors.Join` 的后续分支上的 `*Error` 会被漏判（例：`fmt.Errorf("%w: %w", a, b)` 判不到 `b` 的分类）。
+  现按前序深度优先遍历（同 `errors.Is` / `errors.As`），`KindOf` 取前序第一个非 nil 分类。v0.10.0 用户请直接升级。
+
 ## [v0.10.0] - 2026-09-27
 
 ### 新增

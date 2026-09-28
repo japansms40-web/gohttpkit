@@ -10,6 +10,13 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.10.1（相对 v0.10.0）
+
+修复（不破坏现有签名）：
+
+- `errors.KindOf` / `IsKind` / `AttrsOf` 改为遍历整棵错误树，修复多个 `%w` / `errors.Join` 分支漏判；新增 `(*errors.Error).As`。
+  下游无需迁移，直接升级。
+
 ## v0.10.0（相对 v0.9.0）
 
 新增（不破坏现有签名）：
