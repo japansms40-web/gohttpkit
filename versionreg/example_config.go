@@ -6,6 +6,8 @@ package versionreg
 // 必填字段在构造函数签名里强制。你的项目大概率需要自己的字段集，
 // 照着 Config + Option + New 这三样改就行。
 
+import "maps"
+
 // Config 一份版本配置：标识 + 基础信息 + 按 endpoint 组织的白名单与参数。
 // 给接入方在 init 注册；Get 返回的是表内同一指针，注册后勿改导出字段。
 type Config struct {
@@ -84,9 +86,7 @@ func WithParams(params map[string]string) Option {
 		if c.Params == nil {
 			c.Params = make(map[string]string, len(params))
 		}
-		for k, v := range params {
-			c.Params[k] = v
-		}
+		maps.Copy(c.Params, params)
 	}
 }
 
@@ -105,9 +105,7 @@ func WithDocIDs(src map[Endpoint]string) Option {
 		if c.docIDs == nil {
 			c.docIDs = make(map[Endpoint]string, len(src))
 		}
-		for k, v := range src {
-			c.docIDs[k] = v
-		}
+		maps.Copy(c.docIDs, src)
 	}
 }
 

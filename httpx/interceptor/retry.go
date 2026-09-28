@@ -26,7 +26,7 @@ func computeBackoff(base, limit time.Duration, attempt int) time.Duration {
 		return 0
 	}
 	backoff := base
-	for i := 0; i < attempt; i++ {
+	for range attempt {
 		if limit > 0 && backoff >= limit {
 			return limit
 		}

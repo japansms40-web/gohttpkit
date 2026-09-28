@@ -111,7 +111,7 @@ type pkgDocTreeItem struct {
 // parsePkgDocTree 取包注释中「文件结构：」之后的一层树条目；没有标题或标题后没有条目时 ok 为 false。
 func parsePkgDocTree(doc string) (items []pkgDocTreeItem, ok bool) {
 	inTree := false
-	for _, line := range strings.Split(doc, "\n") {
+	for line := range strings.SplitSeq(doc, "\n") {
 		line = strings.TrimSpace(line)
 		if line == pkgDocTreeHeading {
 			inTree = true

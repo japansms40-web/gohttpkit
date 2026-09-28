@@ -2,7 +2,7 @@ package versionreg
 
 import (
 	"log/slog"
-	"sort"
+	"slices"
 	"sync"
 
 	kiterrors "github.com/japansms40-web/gohttpkit/errors"
@@ -172,5 +172,5 @@ func (r *Registry[T]) copyIDsLocked() []ID {
 // 输入：ids 可被就地排序；nil / 空切片可接受。
 // 返回：无，就地改 ids。
 func sortIDs(ids []ID) {
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 }

@@ -1,6 +1,9 @@
 package versionreg
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 // endpoints.go —— 按 endpoint 组织的白名单 / 参数访问器。
 // 独立成文件：和注册表骨架分开，复用注册表但不想用白名单的接入方不必读这份契约。
@@ -34,9 +37,7 @@ func NewHeaderWhitelists(src map[Endpoint]map[string]string) *HeaderWhitelists {
 	w := &HeaderWhitelists{m: make(map[Endpoint]map[string]string, len(src))}
 	for ep, headers := range src {
 		cp := make(map[string]string, len(headers))
-		for k, v := range headers {
-			cp[k] = v
-		}
+		maps.Copy(cp, headers)
 		w.m[ep] = cp
 	}
 	return w
@@ -56,9 +57,7 @@ func (w *HeaderWhitelists) For(ep Endpoint) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(src))
-	for k, v := range src {
-		out[k] = v
-	}
+	maps.Copy(out, src)
 	return out
 }
 
@@ -84,6 +83,6 @@ func (w *HeaderWhitelists) Endpoints() []Endpoint {
 	for ep := range w.m {
 		out = append(out, ep)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }

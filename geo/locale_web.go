@@ -211,10 +211,7 @@ func formatChromeAcceptLanguageQ(tags []string) string {
 		if i == 0 {
 			continue
 		}
-		q := 10 - i
-		if q < 1 {
-			q = 1
-		}
+		q := max(10-i, 1)
 		b.WriteString(";q=0.")
 		b.WriteByte(byte('0' + q))
 	}
@@ -272,7 +269,7 @@ func sampleChromeLanguagePrefs(primary string, extra int, rng *rand.Rand) ([]str
 	} else {
 		perm = rng.Perm(len(pool))
 	}
-	for i := 0; i < extra; i++ {
+	for i := range extra {
 		prefs = append(prefs, pool[perm[i]])
 	}
 	return prefs, nil

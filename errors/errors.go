@@ -38,8 +38,7 @@ func IsRetryableNetworkError(err error) bool {
 	}
 
 	// 首先检查是否为 RetryableError 类型
-	var retryableErr *RetryableError
-	if errors.As(err, &retryableErr) {
+	if _, ok := errors.AsType[*RetryableError](err); ok {
 		return true
 	}
 

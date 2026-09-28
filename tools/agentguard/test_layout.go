@@ -72,7 +72,7 @@ func presentGoFiles(root string) (map[string]bool, error) {
 		return nil, &os.PathError{Op: "git ls-files", Path: root, Err: err}
 	}
 	present := make(map[string]bool)
-	for _, rel := range strings.Split(listed, "\x00") {
+	for rel := range strings.SplitSeq(listed, "\x00") {
 		if rel == "" || inTestdata(rel) {
 			continue
 		}

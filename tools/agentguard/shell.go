@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -380,12 +381,7 @@ func within(p, root string) bool {
 }
 
 func has(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, s)
 }
 
 // splitSegments 把命令文本按 && || ; | 换行 括号 切成若干段，每段再按 shell 引号规则切词。

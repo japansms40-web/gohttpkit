@@ -36,10 +36,10 @@ func evalRead(path string) verdict {
 // patchPaths 从 Codex apply_patch 文本里取出涉及的文件路径（Add / Update / Delete / Move to）。
 func patchPaths(patch string) []string {
 	var out []string
-	for _, l := range strings.Split(patch, "\n") {
+	for l := range strings.SplitSeq(patch, "\n") {
 		for _, pre := range []string{"*** Add File: ", "*** Update File: ", "*** Delete File: ", "*** Move to: "} {
-			if strings.HasPrefix(l, pre) {
-				out = append(out, strings.TrimSpace(strings.TrimPrefix(l, pre)))
+			if after, ok := strings.CutPrefix(l, pre); ok {
+				out = append(out, strings.TrimSpace(after))
 			}
 		}
 	}

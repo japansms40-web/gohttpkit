@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -69,9 +70,7 @@ func (h *browserHeaders) buildCookieLocked() string {
 		"csrftoken": h.csrfToken,
 		"sessionid": h.sessionID,
 	}
-	for k, v := range h.extraCk {
-		values[k] = v
-	}
+	maps.Copy(values, h.extraCk)
 	var sb strings.Builder
 	for _, name := range cookieOrder {
 		v, ok := values[name]

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -175,7 +176,7 @@ func untrackedSkipViolations(root string) []violation {
 		return nil
 	}
 	var lines []string
-	for _, f := range strings.Split(list, "\n") {
+	for f := range strings.SplitSeq(list, "\n") {
 		b, err := os.ReadFile(filepath.Join(root, f))
 		if err != nil {
 			continue
@@ -290,7 +291,7 @@ type diffLine struct {
 func removedLines(diff string) []diffLine {
 	var out []diffLine
 	next := 0
-	for _, l := range strings.Split(diff, "\n") {
+	for l := range strings.SplitSeq(diff, "\n") {
 		if m := hunkRe.FindStringSubmatch(l); m != nil {
 			next, _ = strconv.Atoi(m[1])
 			continue
@@ -309,7 +310,7 @@ func removedLines(diff string) []diffLine {
 // addedLines 从 -U0 unified diff 里取出新增行（不含 +++ 文件头）。
 func addedLines(diff string) []string {
 	var out []string
-	for _, l := range strings.Split(diff, "\n") {
+	for l := range strings.SplitSeq(diff, "\n") {
 		if strings.HasPrefix(l, "+") && !strings.HasPrefix(l, "+++") {
 			out = append(out, l[1:])
 		}
@@ -353,12 +354,7 @@ func filterOverridden(vs []violation, text string) []violation {
 }
 
 func contains(vs []violation, v violation) bool {
-	for _, x := range vs {
-		if x == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(vs, v)
 }
 
 func short(rev string) string {

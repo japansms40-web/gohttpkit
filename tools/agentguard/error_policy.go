@@ -245,7 +245,7 @@ func scanErrorPolicy(root string) ([]string, error) {
 	}
 	var violations []string
 	seen := make(map[string]struct{})
-	for _, rel := range strings.Split(listed, "\x00") {
+	for rel := range strings.SplitSeq(listed, "\x00") {
 		if rel == "" || strings.HasSuffix(rel, "_test.go") {
 			continue
 		}

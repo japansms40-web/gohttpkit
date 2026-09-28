@@ -327,7 +327,7 @@ func changedPaths(root string) []string {
 		return nil
 	}
 	var paths []string
-	for _, l := range strings.Split(out, "\n") {
+	for l := range strings.SplitSeq(out, "\n") {
 		if len(l) < 4 {
 			continue
 		}
