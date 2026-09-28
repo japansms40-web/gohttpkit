@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -219,5 +220,28 @@ import kiterrors "github.com/japansms40-web/gohttpkit/errors"
 func f() error { return &kiterrors.Error{Op: "x", Kind: kiterrors.NewKind("Bad")} }`))
 	if err != nil || len(got) != 0 {
 		t.Fatalf("测试文件应豁免：violations=%v err=%v", got, err)
+	}
+}
+
+func TestFindDirectErrorConstructors_未覆盖分支的现有行为(t *testing.T) {
+	cases := []struct {
+		name, src string
+		want      []string
+	}{
+		{"点导入 fmt", "package s\nimport . \"fmt\"\nvar _ = Sprint\n", []string{"s.go:2: 禁止点导入标准库 errors/fmt"}},
+		{"panic 取址非字面量", "package s\nfunc f(v int) { panic(&v) }\n", []string{"s.go:2: panic 值须为类型错误"}},
+		{"panic 取址非 Error 结尾的限定类型", "package s\nimport \"net/http\"\nfunc f() { panic(&http.Request{}) }\n", []string{"s.go:3: panic 值须为类型错误"}},
+		{"panic 取址切片字面量", "package s\nfunc f() { panic(&[]int{}) }\n", []string{"s.go:2: panic 值须为类型错误"}},
+		{"panic 取址限定 XxxError 放行", "package s\nimport \"net\"\nfunc f() { panic(&net.OpError{}) }\n", nil},
+		{"panic 非字符串字面量", "package s\nfunc f() { panic(42) }\n", []string{"s.go:2: panic 值须为类型错误"}},
+		{"panic 普通函数调用", "package s\nfunc g() error { return nil }\nfunc f() { panic(g()) }\n", []string{"s.go:3: panic 值须为类型错误"}},
+		{"Error 字面量无键元素不查 Op", "package s\nimport kit \"" + kitErrorsPath + "\"\nvar _ = kit.Error{\"x\"}\n", nil},
+	}
+	for _, c := range cases {
+		got, err := findDirectErrorConstructors("s.go", []byte(c.src))
+		t.Logf("%s → %v err=%v", c.name, got, err)
+		if err != nil || !slices.Equal(got, c.want) {
+			t.Errorf("%s: 得到 %v err=%v，期望 %v", c.name, got, err, c.want)
+		}
 	}
 }
