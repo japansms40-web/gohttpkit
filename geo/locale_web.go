@@ -108,7 +108,7 @@ var countryToWebAcceptTag = map[string]string{
 // 返回：表值（ja / zh-CN / en-US）；空输入或未命中返回 ("", *UnknownCountryError)。
 // 例："jp" → ("ja", nil)；"cn" → ("zh-CN", nil)；"" → ("", *UnknownCountryError{Country:""})。
 func WebAcceptLanguageForCountry(country string) (string, error) {
-	return lookupCountry(countryToWebAcceptTag, country)
+	return LookupCountry(countryToWebAcceptTag, country)
 }
 
 // BuildChromeAcceptLanguage 把按偏好排序、不带 q 值的 Chrome data-code 编成 Accept-Language。

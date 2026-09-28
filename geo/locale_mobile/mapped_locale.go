@@ -1,5 +1,7 @@
 package localemobile
 
+import "github.com/japansms40-web/gohttpkit/geo"
+
 // mapped_locale.go —— 国家码 → X-IG-Mapped-Locale。
 // 依据 IG Android 429 LX/03uv.A01：取 App Locale 的 toLanguageTag 首段语言，依次用
 // lang-script-country、lang-script、lang-country 查 LX/03uv.A00 的 19 条特殊标签，
@@ -103,5 +105,5 @@ var countryToMappedLocale = map[string]string{
 // 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
 // 例："cn" → ("zh_CN", nil)；"MX" → ("es_LA", nil)；"ID" → ("id_ID", nil)；"BT" → ("en_US", nil)。
 func MappedLocaleForCountry(country string) (string, error) {
-	return lookupCountry(countryToMappedLocale, country)
+	return geo.LookupCountry(countryToMappedLocale, country)
 }

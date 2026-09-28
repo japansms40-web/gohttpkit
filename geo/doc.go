@@ -14,7 +14,8 @@
 //     goroutine 共享，若共享须自行加锁；rng == nil 时用 math/rand/v2 顶层源，可并发。
 //   - Android 端（Meta 系 App）五个 locale header 按国家取值在子包 geo/locale_mobile（包名
 //     localemobile），一个 header 一个文件：一张字面量表 + 一个 XxxForCountry，keyset 与本包对齐。
-//   - 查表公用函数在 lookup.go。显式 locale / country 的优先级由调用方组合。
+//   - 查表公用函数在 lookup.go；LookupCountry 导出给子包与下游自建国家表复用，保证归一化与未命中错误一致。
+//     显式 locale / country 的优先级由调用方组合。
 //   - 查表未命中是 *UnknownCountryError；extra 负数是 *InvalidExtraLanguageCountError；
 //     extra 超出候选是 *ExtraLanguageCountExceedsPoolError。上层一律 errors.As，不要扫文案。
 //   - 纯函数 + 表驱动，不引入「为模式而模式」的接口/抽象。
@@ -28,7 +29,7 @@
 //	├── errors.go         本包类型错误：UnknownCountryError 等
 //	├── locale_mobile.go  国家 → Android 下划线 locale（MobileLocaleForCountry）
 //	├── locale_web.go     国家 → Chrome data-code，及 Chromium 规则的 Accept-Language 拼装
-//	├── lookup.go         查表公用函数：国家码归一化与未命中错误
+//	├── lookup.go         LookupCountry：国家码归一化查表与未命中错误（子包共用）
 //	├── timezone.go       国家 → 冬令时偏移秒数（TimezoneOffsetForCountry）
 //	├── timezone_iana.go  国家 → IANA 时区名称（子集表）
 //	└── locale_mobile/    子包 localemobile：Android 端五个 locale header

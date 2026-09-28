@@ -1,5 +1,7 @@
 package localemobile
 
+import "github.com/japansms40-web/gohttpkit/geo"
+
 // device_locale.go —— 国家码 → X-IG-Device-Locale。
 // 依据 IG Android 429 LX/01pH.A03：Resources.getSystem().getConfiguration().locale.toString()，
 // 即系统语言列表第一项。App 内切换语言不影响它。
@@ -102,5 +104,5 @@ var countryToDeviceLocale = map[string]string{
 // 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
 // 例："cn" → ("zh_CN_#Hans", nil)；"IL" → ("iw_IL", nil)；"RS" → ("sr_RS_#Cyrl", nil)。
 func DeviceLocaleForCountry(country string) (string, error) {
-	return lookupCountry(countryToDeviceLocale, country)
+	return geo.LookupCountry(countryToDeviceLocale, country)
 }

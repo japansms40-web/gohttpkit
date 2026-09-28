@@ -5,10 +5,12 @@
 
 ## [Unreleased]
 
-> 本版只涉及文档与仓库工具，不影响库的导出 API。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
+> 含新增导出 API（`geo.LookupCountry`），下次发版升 minor。agentguard 的 `check-pkg-doc` 随下一个 `tools/agentguard` 版本发布。
 
 ### 新增
 
+- `geo.LookupCountry(table, country)`：按本包统一语义（trim + 大写归一化、空或未命中返回 `*geo.UnknownCountryError`）查任意「国家码 → 值」表，
+  供子包与下游自建国家表复用。
 - `make check-pkg-doc`（`tools/agentguard check-pkg-doc`）：每个 Go 包目录必须有 `doc.go`，包注释只写在 `doc.go`，
   且末尾「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应。已接入 `make check`、pre-commit 与 CI。
   下游升级 agentguard 后如在 Makefile 接入需先整改。
@@ -17,6 +19,7 @@
 
 - 各包包注释迁入 `doc.go`（`errors`、`httpx`、`httpx/interceptor`、`netproxy`、`traffic`、`versionreg`、`examples/*`、`tools/agentguard`），
   全部 13 个包的 `doc.go` 补上文件结构树；`go doc` 输出只多出文件树，原有文字不变（`geo` 精简了一条与树重复的逐文件说明）。
+- `localemobile` 删除自带的 `lookupCountry` 副本，改走 `geo.LookupCountry`，行为不变；原 `lookup_test.go` 中的跨表用例移入 `characterization_test.go`。
 
 ## [v0.13.0] - 2026-09-28
 

@@ -39,7 +39,7 @@ func TestLookupCountry_空输入报空码错误(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := lookupCountry(table, c.in)
+			got, err := LookupCountry(table, c.in)
 			t.Logf("in=%q → %q err=%v", c.in, got, err)
 			if got != "" {
 				t.Errorf("value = %q, want empty", got)
@@ -50,7 +50,7 @@ func TestLookupCountry_空输入报空码错误(t *testing.T) {
 }
 
 func TestLookupCountry_未命中报归一化码(t *testing.T) {
-	got, err := lookupCountry(map[string]string{"ID": "id"}, "xx")
+	got, err := LookupCountry(map[string]string{"ID": "id"}, "xx")
 	t.Logf("in=%q → %q err=%v", "xx", got, err)
 	if got != "" {
 		t.Errorf("value = %q, want empty", got)
@@ -59,7 +59,7 @@ func TestLookupCountry_未命中报归一化码(t *testing.T) {
 }
 
 func TestLookupCountry_命中返回表值(t *testing.T) {
-	got, err := lookupCountry(map[string]string{"ID": "id"}, " id ")
+	got, err := LookupCountry(map[string]string{"ID": "id"}, " id ")
 	t.Logf("in=%q → %q err=%v", " id ", got, err)
 	if err != nil {
 		t.Fatalf("unexpected err %v", err)
@@ -70,7 +70,7 @@ func TestLookupCountry_命中返回表值(t *testing.T) {
 }
 
 func TestLookupCountry_nil表当未命中(t *testing.T) {
-	got, err := lookupCountry(nil, "ID")
+	got, err := LookupCountry(nil, "ID")
 	t.Logf("nil table → %q err=%v", got, err)
 	if got != "" {
 		t.Errorf("value = %q, want empty", got)
@@ -79,7 +79,7 @@ func TestLookupCountry_nil表当未命中(t *testing.T) {
 }
 
 func TestLookupCountry_空表当未命中(t *testing.T) {
-	got, err := lookupCountry(map[string]string{}, "ID")
+	got, err := LookupCountry(map[string]string{}, "ID")
 	t.Logf("empty table → %q err=%v", got, err)
 	if got != "" {
 		t.Errorf("value = %q, want empty", got)
@@ -88,7 +88,7 @@ func TestLookupCountry_空表当未命中(t *testing.T) {
 }
 
 func TestLookupCountry_表值为空串仍是命中(t *testing.T) {
-	got, err := lookupCountry(map[string]string{"ID": ""}, "id")
+	got, err := LookupCountry(map[string]string{"ID": ""}, "id")
 	t.Logf("empty value → %q err=%v", got, err)
 	if err != nil {
 		t.Fatalf("空串表值是命中不是错误: %v", err)
@@ -100,7 +100,7 @@ func TestLookupCountry_表值为空串仍是命中(t *testing.T) {
 
 func TestLookupCountry_不改调用方表(t *testing.T) {
 	table := map[string]string{"ID": "id"}
-	_, _ = lookupCountry(table, "xx")
+	_, _ = LookupCountry(table, "xx")
 	t.Logf("after miss table=%v", table)
 	if _, ok := table["XX"]; ok {
 		t.Fatal("未命中不应往调用方表里写 key")

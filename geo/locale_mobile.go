@@ -102,5 +102,5 @@ var countryToMobileLocale = map[string]string{
 // 例："jp" → ("ja_JP", nil)；"" → ("", *UnknownCountryError{Country:""})。
 // 查 countryToMobileLocale，与 Web 表无关（JP 是 ja_JP，不会因为 Web 收成 ja）。
 func MobileLocaleForCountry(country string) (string, error) {
-	return lookupCountry(countryToMobileLocale, country)
+	return LookupCountry(countryToMobileLocale, country)
 }

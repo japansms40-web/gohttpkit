@@ -143,7 +143,7 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
   - 返回：成功值长什么样；每一种失败或空结果对应哪个 error / bool / 零值。
   - 零值合法时必须写清怎么和失败区分，禁止让读者去读实现才知道。
   范例：`geo.TimezoneOffsetForCountry`（`0` 是合法 GMT+0，必须看 error）、
-  `geo.lookupCountry`、`geo.BuildChromeAcceptLanguageForCountry`。
+  `geo.LookupCountry`、`geo.BuildChromeAcceptLanguageForCountry`。
 - **SHOULD** 导出函数再写一行 `例：调用 → 结果`，至少覆盖最常见成功路径和一条失败路径。
   范例：`geo.WebAcceptLanguageForCountry`、`geo.MobileLocaleForCountry`。
 - **MUST** 导出符号还要写「给谁用、什么场景」（见第 2 节）。

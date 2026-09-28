@@ -11,10 +11,15 @@ func normalizeCountryKey(country string) string {
 	return strings.ToUpper(strings.TrimSpace(country))
 }
 
-// lookupCountry 在给定静态表里查国家码。
-// 输入 table：国家码 → 值的只读表（不会改）；country：原始国家码（内部先归一化）。
-// 返回：命中是表值；空输入或未命中是 ("", *UnknownCountryError)，Country 为归一化码（空输入为 ""）。
-func lookupCountry(table map[string]string, country string) (string, error) {
+// LookupCountry 在给定静态表里查国家码。
+// 给 geo 子包（localemobile）与下游自建「国家码 → 值」表的调用方：归一化规则与未命中错误和本包各 XxxForCountry 保持一致，
+// 上层对任何国家表都能用同一个 errors.As(*UnknownCountryError) 判定。
+// 输入 table：国家码 → 值的只读表（不会改），key 须是大写 ISO 3166-1 alpha-2；nil 表当全部未命中。
+// country：原始国家码，trim 后转大写再查。
+// 返回：命中是表值（表值为 "" 也算命中）；空输入或未命中是 ("", *UnknownCountryError)，Country 为归一化码（空输入为 ""）。
+// 例：LookupCountry(map[string]string{"ID": "id"}, " id ") → ("id", nil)；
+// LookupCountry(table, "xx") → ("", &UnknownCountryError{Country: "XX"})。
+func LookupCountry(table map[string]string, country string) (string, error) {
 	cc := normalizeCountryKey(country)
 	if cc == "" {
 		return "", &UnknownCountryError{Country: ""}

@@ -1,5 +1,7 @@
 package localemobile
 
+import "github.com/japansms40-web/gohttpkit/geo"
+
 // accept_language.go —— 国家码 → Accept-Language。
 // 依据 IG Android 429 LX/03ix.A00：Locale.getDefault() 经 LX/03fj.A00 格式化为
 // 「语言-国家」（in/iw/ji 换回 id/he/yi，不带 script），不等于 Locale.US 时追加 ", en-US"。
@@ -125,5 +127,5 @@ var countryToAcceptLanguage = map[string]string{ //nolint:gosec // G101 误报�
 // 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
 // 例："cn" → ("zh-CN, en-US", nil)；"US" → ("en-US", nil)；"ID" → ("id-ID, en-US", nil)。
 func AcceptLanguageForCountry(country string) (string, error) {
-	return lookupCountry(countryToAcceptLanguage, country)
+	return geo.LookupCountry(countryToAcceptLanguage, country)
 }

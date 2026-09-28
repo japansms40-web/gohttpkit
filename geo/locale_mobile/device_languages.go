@@ -1,5 +1,7 @@
 package localemobile
 
+import "github.com/japansms40-web/gohttpkit/geo"
+
 // device_languages.go —— 国家码 → X-IG-Device-Languages。
 // 依据 IG Android 429 LX/0BI7.A00（门控 0x810a02000039a8 打开时才发送）：
 // system_languages 是 LocaleList.getDefault() 逐项经 LX/03fj.A00 格式化后用 ", " 连接；
@@ -264,5 +266,5 @@ var countryToDeviceLanguages = map[string]string{ //nolint:gosec // G101 误报�
 // 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
 // 例："cn" → (`{"system_languages":"zh-CN","keyboard_language":"zh-CN"}`, nil)。
 func DeviceLanguagesForCountry(country string) (string, error) {
-	return lookupCountry(countryToDeviceLanguages, country)
+	return geo.LookupCountry(countryToDeviceLanguages, country)
 }

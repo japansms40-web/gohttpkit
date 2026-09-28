@@ -1,5 +1,7 @@
 package localemobile
 
+import "github.com/japansms40-web/gohttpkit/geo"
+
 // app_locale.go —— 国家码 → X-IG-App-Locale。
 // 依据 IG Android 429 LX/01pH.A02：应用 Resources 的 Locale.toString()。未设 App 语言偏好
 // （fb_language_locale）时，LX/01pH.A04 把系统 Locale 写进应用 Resources，所以与 device locale 相同。
@@ -102,5 +104,5 @@ var countryToAppLocale = map[string]string{
 // 返回：表值；空输入或未命中返回 ("", *geo.UnknownCountryError)，请用 errors.As 判定。
 // 例："cn" → ("zh_CN_#Hans", nil)；"ID" → ("in_ID", nil)；"MO" → ("zh_MO_#Hant", nil)。
 func AppLocaleForCountry(country string) (string, error) {
-	return lookupCountry(countryToAppLocale, country)
+	return geo.LookupCountry(countryToAppLocale, country)
 }

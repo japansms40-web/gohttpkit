@@ -21,6 +21,5 @@
 //	├── device_languages.go  国家 → X-IG-Device-Languages
 //	├── device_locale.go     国家 → X-IG-Device-Locale
 //	├── doc.go               包文档（本文件）
-//	├── lookup.go            查表公用函数，未命中返回 *geo.UnknownCountryError
 //	└── mapped_locale.go     国家 → X-IG-Mapped-Locale
 package localemobile

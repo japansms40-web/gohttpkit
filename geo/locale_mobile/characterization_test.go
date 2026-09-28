@@ -8,6 +8,9 @@ import (
 	"github.com/japansms40-web/gohttpkit/geo"
 )
 
+// characterization_test.go —— 五张表的跨表行为锁：代表国家取值、输入归一化、错误契约、keyset 与全表派生关系。
+// 单表规则写在各表同名的 _test.go。
+
 // 五个 header 的代表性国家；CN 行对照抓包 00299。
 func TestForCountry_代表国家(t *testing.T) {
 	cases := []struct {
