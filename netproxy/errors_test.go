@@ -205,3 +205,11 @@ func Test非法代理URL文案不泄漏凭据(t *testing.T) {
 		}
 	}
 }
+
+func TestInvalidProxyURLError_未知Reason文案(t *testing.T) {
+	err := &InvalidProxyURLError{Reason: "not-a-reason"}
+	t.Logf("Error() = %q", err.Error())
+	if err.Error() != "proxy: invalid url" {
+		t.Fatalf("未知 Reason 应回落 generic 文案，得到 %q", err.Error())
+	}
+}
