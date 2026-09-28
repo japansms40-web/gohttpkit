@@ -1,8 +1,5 @@
 package interceptor_test
 
-// status_semantics_ctx_test.go —— NewStatusSemanticsInterceptorContext 的单元契约：
-// 规则拿到本次请求的 ctx、2xx 不进规则、nil 规则回落 DefaultStatusRule、规则放行与内层错误穿透。
-
 import (
 	"context"
 	"errors"
@@ -13,6 +10,57 @@ import (
 	"github.com/japansms40-web/gohttpkit/httpx"
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
 )
+
+func TestStatusSemantics_2xx直接放行(t *testing.T) {
+	var ruleCalls int
+	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
+	c := newClient(t, srv.Server, func(o *httpx.Options) {
+		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(),
+			interceptor.NewStatusSemanticsInterceptor(func(int, []byte) error { ruleCalls++; return errors.New("x") }))
+	})
+	body, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("2xx body=%q err=%v ruleCalls=%d", body, err, ruleCalls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ruleCalls != 0 {
+		t.Fatal("2xx 不该进规则")
+	}
+}
+
+func TestStatusSemantics_内层出错时穿透(t *testing.T) {
+	sentinel := errors.New("inner")
+	c := newClientWith(t, httpx.Options{
+		Headers: httpx.StaticHeaders{Base: "https://x.example"},
+		Interceptors: httpx.Interceptors{
+			interceptor.NewStatusSemanticsInterceptor(nil),
+			httpx.InterceptorFunc(func(*httpx.Chain) (*httpx.Response, error) { return nil, sentinel }),
+		},
+	})
+	_, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("status inner err=%v is=%v", err, errors.Is(err, sentinel))
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestStatusSemantics_非2xx带体放行(t *testing.T) {
+	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"msg":"bad"}`)) // 400 带体：DefaultStatusRule 放行
+	})
+	c := newClient(t, srv.Server, func(o *httpx.Options) {
+		o.Interceptors = httpx.Prepend(interceptor.DefaultChain(), interceptor.NewStatusSemanticsInterceptor(nil))
+	})
+	body, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("400 带体 → body=%q err=%v", body, err)
+	if err != nil {
+		t.Fatalf("非 2xx 带体应放行（4xx 常承载业务体），却 err=%v", err)
+	}
+	if string(body) != `{"msg":"bad"}` {
+		t.Fatalf("body=%q", body)
+	}
+}
 
 type ctxKey struct{}
 

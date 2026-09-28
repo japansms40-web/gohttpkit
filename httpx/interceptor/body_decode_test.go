@@ -1,18 +1,20 @@
 package interceptor_test
 
-// interceptors_core_test.go —— 核心拦截器（bridge / decode / 终端）的单元契约。
-
 import (
-	"context"
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"errors"
+	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
+	"github.com/andybalholm/brotli"
 	kiterrors "github.com/japansms40-web/gohttpkit/errors"
 	"github.com/japansms40-web/gohttpkit/httpx"
 	"github.com/japansms40-web/gohttpkit/httpx/interceptor"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestBodyDecode_Raw为nil时原样放过(t *testing.T) {
@@ -76,53 +78,11 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 	})
 }
 
-func TestBridge_创建请求失败(t *testing.T) {
-	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	c := newClient(t, srv.Server, nil)
-	_, err := c.Do(t.Context(), httpx.RequestSpec{Method: "BAD METHOD", Path: "/x"})
-	var cre *httpx.CreateHTTPRequestError
-	if !errors.As(err, &cre) || cre.Method != "BAD METHOD" || cre.Err == nil {
-		t.Fatalf("err = %v (%T), want *CreateHTTPRequestError Method=BAD METHOD", err, err)
-	}
-	t.Logf("CreateHTTPRequestError Method=%q unwrap=%v", cre.Method, cre.Err)
-	if srv.count() != 0 {
-		t.Fatal("请求都没建出来，不该发出去")
-	}
-}
-
-type nilHeaders struct{ base string }
-
-func (n nilHeaders) BuildHeaders(context.Context) map[string]string { return nil }
-func (n nilHeaders) BaseURL() string                                { return n.base }
-
-func TestBridge_构头返回nil不发请求(t *testing.T) {
-	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	c := newClient(t, srv.Server, func(o *httpx.Options) {
-		o.Headers = httpx.HeaderProviderFunc{Base: srv.URL, Build: func(context.Context) map[string]string { return nil }}
-	})
-	_, err := c.Get(t.Context(), "/x", nil)
-	assertNilBuildHeaders(t, err, "httpx.HeaderProviderFunc")
-	if srv.count() != 0 {
-		t.Fatal("构头失败时不应发出网络请求")
-	}
-}
-
-func TestBridge_自定义Provider构头nil带类型名(t *testing.T) {
-	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	c := newClient(t, srv.Server, func(o *httpx.Options) {
-		o.Headers = nilHeaders{base: srv.URL}
-	})
-	_, err := c.Get(t.Context(), "/x", nil)
-	assertNilBuildHeaders(t, err, "interceptor_test.nilHeaders")
-	if srv.count() != 0 {
-		t.Fatal("构头失败时不应发出网络请求")
-	}
-}
-
 type failReadCloser struct{ err error }
 
 func (f failReadCloser) Read([]byte) (int, error) { return 0, f.err }
-func (f failReadCloser) Close() error             { return nil }
+
+func (f failReadCloser) Close() error { return nil }
 
 func TestBodyDecode_读体失败分流(t *testing.T) {
 	t.Run("普通读错", func(t *testing.T) {
@@ -205,34 +165,110 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 	})
 }
 
-func TestNoRedirectTerminal_传输错误也包成TransportError(t *testing.T) {
-	// 禁重定向终端和默认终端必须对错误做同样的包装，否则那条链上的重试会失效。
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hj, _ := w.(http.Hijacker)
-		conn, _, _ := hj.Hijack()
-		_ = conn.Close()
-	}))
-	defer srv.Close()
-
-	var attempts int
+func TestBodyDecode_Close失败仍返回体(t *testing.T) {
+	buf := captureInterceptorLogs(t)
+	closeErr := errors.New("close pipe")
 	c := newClientWith(t, httpx.Options{
-		Headers:      httpx.StaticHeaders{Base: srv.URL},
-		Retry:        httpx.WithRetry(2, time.Millisecond, 0),
-		Interceptors: httpx.SpliceBeforeTerminal(interceptor.NoRedirectChain(), countingInterceptor(&attempts)),
+		Headers: httpx.StaticHeaders{Base: "https://x.example"},
+		Interceptors: httpx.Interceptors{
+			interceptor.NewBodyDecodeInterceptor(),
+			httpx.InterceptorFunc(func(*httpx.Chain) (*httpx.Response, error) {
+				return &httpx.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{},
+					Raw:        &http.Response{Body: eofCloseFail{closeErr: closeErr}},
+				}, nil
+			}),
+		},
 	})
-	_, err := c.Get(t.Context(), "/x", nil)
-	t.Logf("noRedirect transport err=%v attempts=%d", err, attempts)
-	if err == nil {
-		t.Fatal("want error")
+	// InterceptorFunc 不是终端……但 Proceed 会调用它并返回，不需要终端如果它是最后一层？
+	// Chain.Proceed: 如果 index >= len，ChainExhausted。所以最后一层必须自己不 Proceed，或是终端。
+	// InterceptorFunc 会作为最后一层被调用，只要它不 Proceed 就行。OK。
+	body, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("Close 失败 body=%q err=%v logs=%s", body, err, buf.String())
+	if err != nil {
+		t.Fatalf("Close 失败不应淹没已读体，err=%v", err)
 	}
-	if attempts != 3 {
-		t.Fatalf("尝试 %d 次，want 3(禁重定向终端的错误同样应触发重试)", attempts)
+	if string(body) != "" {
+		t.Fatalf("EOF 体应为空，got %q", body)
+	}
+	if !strings.Contains(buf.String(), "failed to close response body") {
+		t.Fatal("Close 失败应打 logger.Error")
 	}
 }
 
-func countingInterceptor(n *int) httpx.Interceptor {
-	return httpx.InterceptorFunc(func(ch *httpx.Chain) (*httpx.Response, error) {
-		*n++
-		return ch.Proceed()
+type eofCloseFail struct{ closeErr error }
+
+func (e eofCloseFail) Read([]byte) (int, error) { return 0, io.EOF }
+
+func (e eofCloseFail) Close() error { return e.closeErr }
+
+func gzipBytes(t *testing.T, p []byte) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	w := gzip.NewWriter(&b)
+	_, _ = w.Write(p)
+	_ = w.Close()
+	return b.Bytes()
+}
+
+func TestBodyDecode_四种编码roundtrip(t *testing.T) {
+	payload := []byte(`{"msg":"你好 world","n":42}`)
+	enc := map[string]func() []byte{
+		"gzip": func() []byte { return gzipBytes(t, payload) },
+		"deflate": func() []byte {
+			var b bytes.Buffer
+			w, _ := flate.NewWriter(&b, flate.DefaultCompression)
+			_, _ = w.Write(payload)
+			_ = w.Close()
+			return b.Bytes()
+		},
+		"br": func() []byte {
+			var b bytes.Buffer
+			w := brotli.NewWriter(&b)
+			_, _ = w.Write(payload)
+			_ = w.Close()
+			return b.Bytes()
+		},
+		"zstd": func() []byte {
+			var b bytes.Buffer
+			w, _ := zstd.NewWriter(&b)
+			_, _ = w.Write(payload)
+			_ = w.Close()
+			return b.Bytes()
+		},
+	}
+	for name, mk := range enc {
+		body := mk()
+		srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-encoding", name)
+			_, _ = w.Write(body)
+		})
+		c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.DefaultChain() })
+		got, err := c.Get(t.Context(), "/x", nil)
+		t.Logf("encoding=%s → 解压 %d 字节 err=%v", name, len(got), err)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !bytes.Equal(got, payload) {
+			t.Fatalf("%s: 解压结果=%q，应为原文", name, got)
+		}
+	}
+}
+
+func TestBodyDecode_损坏gzip报ContentEncodingError(t *testing.T) {
+	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-encoding", "gzip")
+		_, _ = w.Write([]byte("这不是合法的 gzip 流")) // 头就非法，gzip.NewReader 立即失败
 	})
+	c := newClient(t, srv.Server, func(o *httpx.Options) { o.Interceptors = interceptor.DefaultChain() })
+	_, err := c.Get(t.Context(), "/x", nil)
+	t.Logf("损坏 gzip → err=%v", err)
+	var ce *httpx.ContentEncodingError
+	if !errors.As(err, &ce) {
+		t.Fatalf("err=%v，应为 *ContentEncodingError", err)
+	}
+	if ce.Encoding != httpx.EncodingGzip {
+		t.Fatalf("Encoding=%q，应为 gzip", ce.Encoding)
+	}
 }

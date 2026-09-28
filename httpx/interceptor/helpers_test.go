@@ -1,14 +1,17 @@
 package interceptor_test
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/japansms40-web/gohttpkit/httpx"
+	"github.com/japansms40-web/gohttpkit/logger"
 )
 
 func newClient(t *testing.T, srv *httptest.Server, mutate func(*httpx.Options)) *httpx.Client {
@@ -89,4 +92,12 @@ func newClientWith(t *testing.T, opts httpx.Options) *httpx.Client {
 		t.Fatalf("NewClient: %v", err)
 	}
 	return c
+}
+
+func captureInterceptorLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	logger.SetHandler(slog.NewJSONHandler(&buf, nil))
+	t.Cleanup(func() { logger.SetLogger(nil) })
+	return &buf
 }
