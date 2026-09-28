@@ -61,8 +61,7 @@ func TestRetry_不可重试包装底层错误(t *testing.T) {
 	if term.n != 1 {
 		t.Fatalf("不可重试应只试 1 次，got %d", term.n)
 	}
-	var re *kiterrors.RetryableError
-	if errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); ok {
 		t.Fatal("不可重试不得包成 *RetryableError")
 	}
 	if !errors.Is(err, cause) {
@@ -140,8 +139,7 @@ func TestRetry_调用方ctx到期引起的失败不重试(t *testing.T) {
 	if term.n != 1 {
 		t.Fatalf("调用方 ctx 已到期不应重试，attempts=%d", term.n)
 	}
-	var re *kiterrors.RetryableError
-	if errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); ok {
 		t.Fatalf("调用方 ctx 到期不得包成 *RetryableError，err=%v", err)
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {

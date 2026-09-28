@@ -72,7 +72,7 @@ func TestLogging_摘要2xx字段可被抓到(t *testing.T) {
 	}
 	t.Logf("logs=%s", buf.String())
 	var sawTxn bool
-	for _, line := range strings.Split(buf.String(), "\n") {
+	for line := range strings.SplitSeq(buf.String(), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}

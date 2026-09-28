@@ -276,10 +276,8 @@ func TestBuildChromeAcceptLanguageForCountry_nilRNG结构(t *testing.T) {
 func TestBuildChromeAcceptLanguageForCountry_nilRNG可并发(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, 8)
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			h, err := BuildChromeAcceptLanguageForCountry("CN", 2, nil)
 			if err != nil {
 				errCh <- err
@@ -288,7 +286,7 @@ func TestBuildChromeAcceptLanguageForCountry_nilRNG可并发(t *testing.T) {
 			if !strings.HasPrefix(h, "zh-CN") {
 				errCh <- errors.New("header 不以 zh-CN 开头: " + h)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(errCh)

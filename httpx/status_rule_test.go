@@ -12,8 +12,7 @@ func TestRetryableTextRule_命中时包装HTTPStatusError(t *testing.T) {
 	rule := httpx.RetryableTextRule([]string{"slow down"}, 572)
 	err := rule(429, []byte("please slow down now"))
 	t.Logf("429+keyword → %v (%T)", err, err)
-	var re *kiterrors.RetryableError
-	if !errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); !ok {
 		t.Fatalf("err = %v, want RetryableError", err)
 	}
 	var se *kiterrors.HTTPStatusError
@@ -86,8 +85,7 @@ func TestRetryableTextRule_空体命中状态码As字段(t *testing.T) {
 	rule := httpx.RetryableTextRule(nil, 503)
 	err := rule(503, nil)
 	t.Logf("503 空体 → %v", err)
-	var re *kiterrors.RetryableError
-	if !errors.As(err, &re) {
+	if _, ok := errors.AsType[*kiterrors.RetryableError](err); !ok {
 		t.Fatalf("要 *RetryableError，got %v", err)
 	}
 	var se *kiterrors.HTTPStatusError

@@ -114,13 +114,13 @@ func TestActive_并发惰性初始化同一实例(t *testing.T) {
 	external.Store(nil)
 
 	const rounds, n = 200, 8
-	for r := 0; r < rounds; r++ {
+	for r := range rounds {
 		fallback.Store(nil)
 
 		var wg sync.WaitGroup
 		start := make(chan struct{})
 		got := make([]*slog.Logger, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
@@ -301,24 +301,24 @@ func TestSourceLocation_指向本测试文件(t *testing.T) {
 func TestConcurrentSetAndLog_混跑不炸(t *testing.T) {
 	t.Cleanup(func() { SetLogger(nil) })
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(3)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				SetHandler(slog.NewJSONHandler(&bytes.Buffer{}, nil))
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				SetLogger(nil)
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			ctx := WithTraceID(t.Context(), "race")
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				Info(ctx, "concurrent", slog.Int("j", j))
 			}
 		}()

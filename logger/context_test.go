@@ -98,7 +98,7 @@ func TestEnsureTraceID_生成幂等且不覆盖调用方(t *testing.T) {
 func TestNewTraceID_不重复且格式正确(t *testing.T) {
 	seen := make(map[string]struct{})
 	re := regexp.MustCompile(`^[0-9a-f]{16}$`)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		id := NewTraceID()
 		if !re.MatchString(id) {
 			t.Fatalf("NewTraceID = %q 不是 16 位 hex", id)
@@ -209,11 +209,11 @@ func TestConcurrentContextDerive_无数据竞争(t *testing.T) {
 	base := WithAttrs(t.Context(), slog.String("base", "0"))
 
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				ctx := WithTraceID(WithAttrs(base, slog.Int("g", n)), "x")
 				Info(ctx, "c")
 			}

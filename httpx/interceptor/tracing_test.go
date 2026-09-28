@@ -21,7 +21,7 @@ import (
 func spanLogs(t *testing.T, raw string) map[string][]map[string]any {
 	t.Helper()
 	out := make(map[string][]map[string]any)
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		var rec map[string]any
 		if strings.TrimSpace(line) == "" || json.Unmarshal([]byte(line), &rec) != nil {
 			continue

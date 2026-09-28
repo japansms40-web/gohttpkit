@@ -214,12 +214,11 @@ func TestMustRegister_Validate失败panic可As到缺字段(t *testing.T) {
 
 func Test错误结构体不含内部map引用字段(t *testing.T) {
 	for _, typ := range []reflect.Type{
-		reflect.TypeOf(EmptyVersionError{}),
-		reflect.TypeOf(UnknownVersionError{}),
-		reflect.TypeOf(MissingConfigFieldError{}),
+		reflect.TypeFor[EmptyVersionError](),
+		reflect.TypeFor[UnknownVersionError](),
+		reflect.TypeFor[MissingConfigFieldError](),
 	} {
-		for i := 0; i < typ.NumField(); i++ {
-			f := typ.Field(i)
+		for f := range typ.Fields() {
 			if f.Type.Kind() == reflect.Map {
 				t.Errorf("%s.%s 不得引用内部 map", typ.Name(), f.Name)
 			}

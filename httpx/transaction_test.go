@@ -33,12 +33,11 @@ func TestTransactionJSONTag_与LogField常量同值(t *testing.T) {
 		"DurationMS":  httpx.LogFieldDurationMS,
 	}
 
-	typ := reflect.TypeOf(httpx.Transaction{})
+	typ := reflect.TypeFor[httpx.Transaction]()
 
 	// 正向：每个字段的 json tag（去掉 ,omitempty 等选项）必须等于登记的常量。
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		tag := strings.Split(field.Tag.Get("json"), ",")[0]
+	for field := range typ.Fields() {
+		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		t.Run(field.Name, func(t *testing.T) {
 			exp, ok := want[field.Name]
 			if !ok {

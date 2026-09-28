@@ -13,7 +13,7 @@ import (
 func allLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	t.Helper()
 	var out []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line == "" {
 			continue
 		}
@@ -207,7 +207,7 @@ func TestStartSpan_不改入参ctx(t *testing.T) {
 func TestNewSpanID_不重复(t *testing.T) {
 	seen := make(map[string]struct{})
 	re := regexp.MustCompile(`^[0-9a-f]{8}$`)
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		id := NewSpanID()
 		if !re.MatchString(id) {
 			t.Fatalf("NewSpanID = %q 不是 8 位 hex", id)

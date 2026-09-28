@@ -204,11 +204,11 @@ func TestHeaderWhitelists_并发For副本互不干扰(t *testing.T) {
 	const n = 8
 	var wg sync.WaitGroup
 	errCh := make(chan string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				got := w.For("user.profile")
 				_, hasAccept := got["accept"]
 				if got["x-k"] != "v" || !hasAccept {

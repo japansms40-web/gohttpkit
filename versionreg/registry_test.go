@@ -3,6 +3,7 @@ package versionreg
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -171,7 +172,7 @@ func TestRegistry_并发注册与Get快照一致(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan string, 64)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -179,11 +180,9 @@ func TestRegistry_并发注册与Get快照一致(t *testing.T) {
 			r.MustRegister(NewConfig(id, "https://a.example"))
 		}(i)
 	}
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < n; j++ {
+	for range 8 {
+		wg.Go(func() {
+			for j := range n {
 				id := ID(fmt.Sprintf("v%03d", j))
 				_, err := r.Get(id)
 				if err == nil {
@@ -196,16 +195,14 @@ func TestRegistry_并发注册与Get快照一致(t *testing.T) {
 					errCh <- fmt.Sprintf("Get(%q) = %v (%T)，只允许成功或 *UnknownVersionError", id, err, err)
 					return
 				}
-				for _, have := range unk.Registered {
-					if have == unk.Requested {
-						errCh <- fmt.Sprintf("未知错误 Registered 含 Requested %q: %v（#4 逻辑 TOCTOU）", unk.Requested, unk.Registered)
-						return
-					}
+				if slices.Contains(unk.Registered, unk.Requested) {
+					errCh <- fmt.Sprintf("未知错误 Registered 含 Requested %q: %v（#4 逻辑 TOCTOU）", unk.Requested, unk.Registered)
+					return
 				}
 				_ = r.Has(id)
 				_ = r.List()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(errCh)
@@ -217,7 +214,7 @@ func TestRegistry_并发注册与Get快照一致(t *testing.T) {
 	}
 	list := r.List()
 	t.Logf("最终 Len=%d List=%v", r.Len(), list)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := ID(fmt.Sprintf("v%03d", i))
 		if !r.Has(id) {
 			t.Fatalf("最终应有 %s", id)

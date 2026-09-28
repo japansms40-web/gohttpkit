@@ -208,17 +208,15 @@ func TestStatConn_并发读写累加(t *testing.T) {
 
 	const goroutines, iters = 8, 100
 	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			sc := &statConn{Conn: &fakeConn{readN: 3, writeN: 5}}
 			buf := make([]byte, 8)
-			for j := 0; j < iters; j++ {
+			for range iters {
 				_, _ = sc.Read(buf)
 				_, _ = sc.Write(buf)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -341,33 +339,29 @@ func TestReport_内层nil函数不panic(t *testing.T) {
 func TestSetHook_并发切换不竞态(t *testing.T) {
 	resetHook(t)
 
-	var total int64
+	var total atomic.Int64
 	var wg sync.WaitGroup
 
-	for i := 0; i < 4; i++ { // 读写方
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 4 { // 读写方
+		wg.Go(func() {
 			sc := &statConn{Conn: &fakeConn{readN: 1, writeN: 1}}
 			buf := make([]byte, 4)
-			for j := 0; j < 300; j++ {
+			for range 300 {
 				_, _ = sc.Read(buf)
 				_, _ = sc.Write(buf)
 			}
-		}()
+		})
 	}
-	for i := 0; i < 2; i++ { // 切换方
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 300; j++ {
+	for range 2 { // 切换方
+		wg.Go(func() {
+			for j := range 300 {
 				if j%2 == 0 {
-					SetHook(func(r, w int64) { atomic.AddInt64(&total, r+w) })
+					SetHook(func(r, w int64) { total.Add(r + w) })
 				} else {
 					SetHook(nil)
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

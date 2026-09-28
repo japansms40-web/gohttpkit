@@ -105,13 +105,13 @@ func TestInvalidProxyURLError_包装后仍可As(t *testing.T) {
 }
 
 func TestInvalidProxyURLError_只有Reason字段(t *testing.T) {
-	typ := reflect.TypeOf(InvalidProxyURLError{})
+	typ := reflect.TypeFor[InvalidProxyURLError]()
 	if typ.NumField() != 1 {
 		t.Fatalf("InvalidProxyURLError 字段数 = %d, want 1（不得存 Raw/Err）", typ.NumField())
 	}
 	f := typ.Field(0)
 	t.Logf("唯一字段 %s %s", f.Name, f.Type)
-	if f.Name != "Reason" || f.Type != reflect.TypeOf(InvalidURLReason("")) {
+	if f.Name != "Reason" || f.Type != reflect.TypeFor[InvalidURLReason]() {
 		t.Fatalf("唯一字段应为 Reason InvalidURLReason，得到 %s %s", f.Name, f.Type)
 	}
 }
@@ -120,12 +120,10 @@ func TestNetproxy错误类型互不误匹配(t *testing.T) {
 	scheme := &UnsupportedProxySchemeError{Scheme: "ftp"}
 	invalid := &InvalidProxyURLError{Reason: InvalidURLReasonParse}
 
-	var asScheme *UnsupportedProxySchemeError
-	var asInvalid *InvalidProxyURLError
-	if errors.As(invalid, &asScheme) {
+	if _, ok := errors.AsType[*UnsupportedProxySchemeError](invalid); ok {
 		t.Fatal("InvalidProxyURLError 不应被 As 成 *UnsupportedProxySchemeError")
 	}
-	if errors.As(scheme, &asInvalid) {
+	if _, ok := errors.AsType[*InvalidProxyURLError](scheme); ok {
 		t.Fatal("UnsupportedProxySchemeError 不应被 As 成 *InvalidProxyURLError")
 	}
 	t.Logf("两类错误互不误匹配")
@@ -147,8 +145,7 @@ func TestUnsupportedDialerError_文案与nil接收者(t *testing.T) {
 func TestUnsupportedDialerError_包装后仍可As(t *testing.T) {
 	wrapped := fmt.Errorf("build dial context: %w", &UnsupportedDialerError{})
 	t.Logf("wrapped = %v", wrapped)
-	var got *UnsupportedDialerError
-	if !errors.As(wrapped, &got) {
+	if _, ok := errors.AsType[*UnsupportedDialerError](wrapped); !ok {
 		t.Fatalf("err = %v (%T), want *UnsupportedDialerError", wrapped, wrapped)
 	}
 }

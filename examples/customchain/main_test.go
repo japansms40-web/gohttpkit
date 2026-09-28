@@ -38,11 +38,11 @@ func TestSessionHeaders_并发读写(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			h.setToken("t")
 		}
 	}()
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		if got := h.BuildHeaders(t.Context())["authorization"]; got == "" {
 			t.Fatal("并发读到了空 authorization——构头器的锁没护住")
 		}

@@ -92,8 +92,7 @@ func TestHTMLText_命中错误页标记报错(t *testing.T) {
 	})
 	_, err := c.Get(t.Context(), "/x", nil)
 	t.Logf("HTML 命中标记 → err=%v", err)
-	var se *liberrors.HTTPStatusError
-	if !errors.As(err, &se) {
+	if _, ok := errors.AsType[*liberrors.HTTPStatusError](err); !ok {
 		t.Fatalf("err=%v，应为命中标记的 *HTTPStatusError", err)
 	}
 }

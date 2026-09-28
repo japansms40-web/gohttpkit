@@ -62,9 +62,8 @@ func TestBodyDecode_压缩流损坏时报错(t *testing.T) {
 		if err == nil {
 			t.Fatal("zstd 流损坏应报错")
 		}
-		var ce *httpx.ContentEncodingError
 		var re *httpx.ReadResponseBodyError
-		if errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*httpx.ContentEncodingError](err); ok {
 			if ce.Encoding != httpx.EncodingZstd {
 				t.Fatalf("Encoding = %q, want zstd", ce.Encoding)
 			}
@@ -102,8 +101,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 		})
 		_, err := c.Get(t.Context(), "/x", nil)
 		assertReadResponseBody(t, err, httpx.EncodingIdentity, cause)
-		var re *kiterrors.RetryableError
-		if errors.As(err, &re) {
+		if _, ok := errors.AsType[*kiterrors.RetryableError](err); ok {
 			t.Fatal("普通读错不该变成 RetryableError")
 		}
 	})
@@ -157,8 +155,7 @@ func TestBodyDecode_读体失败分流(t *testing.T) {
 		if !errors.As(err, &re) {
 			t.Fatalf("err = %v (%T), want *errors.RetryableError", err, err)
 		}
-		var rd *httpx.ReadResponseBodyError
-		if errors.As(err, &rd) {
+		if _, ok := errors.AsType[*httpx.ReadResponseBodyError](err); ok {
 			t.Fatal("可重试网络读错不该变成 ReadResponseBodyError")
 		}
 		t.Logf("RetryableError Attempts=%d err=%v", re.Attempts, err)

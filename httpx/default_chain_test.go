@@ -42,7 +42,7 @@ func TestNewClient_Headers缺失优先报错(t *testing.T) {
 func TestNewClient_每个Client各调一次工厂(t *testing.T) {
 	calls := 0
 	swapDefaultChain(t, func() Interceptors { calls++; return Interceptors{noopInterceptor} })
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		c, err := NewClient(Options{Headers: StaticHeaders{Base: "https://x.example"}})
 		if err != nil {
 			t.Fatal(err)

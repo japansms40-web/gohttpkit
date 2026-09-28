@@ -112,8 +112,8 @@ func TestEvent_外部包可实现(t *testing.T) {
 	}
 	// 本文件是内部测试包：再用反射锁住「接口方法全部导出」，外部包才实现得了。
 	typ := reflect.TypeFor[Event]()
-	for i := range typ.NumMethod() {
-		if m := typ.Method(i); !m.IsExported() {
+	for m := range typ.Methods() {
+		if !m.IsExported() {
 			t.Fatalf("Event 方法 %s 未导出，外部包无法实现", m.Name)
 		}
 	}

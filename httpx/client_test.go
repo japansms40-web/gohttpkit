@@ -314,11 +314,11 @@ func TestConcurrent_共享Client并发请求(t *testing.T) {
 	const workers, perWorker = 32, 8
 	var wg sync.WaitGroup
 	errs := make(chan error, workers*perWorker)
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; i < perWorker; i++ {
+			for i := range perWorker {
 				if _, err := c.Get(t.Context(), fmt.Sprintf("/w%d/%d", w, i), nil); err != nil {
 					errs <- err
 					return
@@ -356,7 +356,7 @@ func TestConcurrent_派生子Client与父并发互不干扰(t *testing.T) {
 	const pairs = 16
 	t.Logf("parent+derived pairs=%d", pairs)
 	var wg sync.WaitGroup
-	for i := 0; i < pairs; i++ {
+	for range pairs {
 		wg.Add(2)
 		go func() { defer wg.Done(); _, _ = c.Get(t.Context(), "/p", nil) }()
 		go func() { defer wg.Done(); _, _ = derived.Get(t.Context(), "/d", nil) }()

@@ -155,7 +155,7 @@ func TestRegisterRetryableKeywords_并发读写不竞态(t *testing.T) {
 	const n = 8
 	var wg sync.WaitGroup
 	errCh := make(chan string, n*2)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()
@@ -163,7 +163,7 @@ func TestRegisterRetryableKeywords_并发读写不竞态(t *testing.T) {
 		}(i)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 32; j++ {
+			for range 32 {
 				_ = IsRetryableNetworkError(stderrors.New("timeout"))
 				_ = RetryableKeywords()
 			}

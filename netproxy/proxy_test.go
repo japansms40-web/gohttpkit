@@ -555,8 +555,7 @@ func TestDialContextWithProxy_非ContextDialer返回明确错误(t *testing.T) {
 	if conn != nil {
 		t.Fatal("未实现 ContextDialer 时不该返回连接")
 	}
-	var got *UnsupportedDialerError
-	if !errors.As(err, &got) {
+	if _, ok := errors.AsType[*UnsupportedDialerError](err); !ok {
 		t.Fatalf("err = %v (%T), want *UnsupportedDialerError", err, err)
 	}
 	if d.dialCalled {

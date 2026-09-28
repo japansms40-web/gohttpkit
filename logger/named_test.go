@@ -208,11 +208,11 @@ func TestLogger_并发With与Set混跑(t *testing.T) {
 	t.Cleanup(func() { SetLogger(nil) })
 	base := Named("race")
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				if j%2 == 0 {
 					SetHandler(slog.NewJSONHandler(&bytes.Buffer{}, nil))
 				} else {
@@ -222,7 +222,7 @@ func TestLogger_并发With与Set混跑(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				base.With(slog.Int("j", j)).Info("concurrent")
 			}
 		}()
