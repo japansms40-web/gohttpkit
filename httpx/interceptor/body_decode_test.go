@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -189,8 +190,19 @@ func TestBodyDecode_Close失败仍返回体(t *testing.T) {
 	if string(body) != "" {
 		t.Fatalf("EOF 体应为空，got %q", body)
 	}
-	if !strings.Contains(buf.String(), "failed to close response body") {
-		t.Fatal("Close 失败应打 logger.Error")
+	var line map[string]any
+	for raw := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(raw), &m) == nil && m["event"] == httpx.EventHTTPBodyClose.Name() {
+			line = m
+		}
+	}
+	t.Logf("close 事件行=%v", line)
+	if line == nil {
+		t.Fatalf("Close 失败应打 %s 事件，logs=%s", httpx.EventHTTPBodyClose.Name(), buf.String())
+	}
+	if line["level"] != "ERROR" || line["msg"] != httpx.EventHTTPBodyClose.Name() || line["error"] != closeErr.Error() {
+		t.Fatalf("close 事件应为 error 级、msg 与 event 同值、带 error 字段: %v", line)
 	}
 }
 

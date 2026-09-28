@@ -12,6 +12,12 @@
 - `logger.DebugEvent` / `logger.ErrorEvent` 与 `(*logger.Logger).DebugEvent` / `ErrorEvent`：补齐 debug、error 两级的事件日志，
   语义同 `InfoEvent` / `WarnEvent`（Name 只求值一次，msg 与 event 同值，attrs 不被修改）。此前只有 info / warn 两级，
   「只打事件」的规则下 error 级日志没有合规写法。
+- `httpx.EventHTTPBodyClose`（`http.body_close_failed`）：关闭响应体失败的机器事件。
+
+### 变更
+
+- 解压层关闭响应体失败的日志由自由文案 `msg="failed to close response body"` 改为 `ErrorEvent`：
+  级别仍为 error，`error` 字段不变，`msg` 与 `event` 均为 `http.body_close_failed`。按旧 msg 文案过滤的接入方改按 `event` 过滤。
 
 ## [v0.14.0] - 2026-09-28
 

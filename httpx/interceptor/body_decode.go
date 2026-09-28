@@ -38,7 +38,7 @@ func (i *bodyDecodeInterceptor) Intercept(ch *httpx.Chain) (*httpx.Response, err
 	raw := resp.Raw
 	defer func() {
 		if cerr := raw.Body.Close(); cerr != nil {
-			logger.Error(ch.Request().Ctx, "failed to close response body", logger.Err(cerr))
+			logger.ErrorEvent(ch.Request().Ctx, httpx.EventHTTPBodyClose, logger.Err(cerr))
 		}
 	}()
 

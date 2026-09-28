@@ -12,6 +12,9 @@ var (
 	EventHTTPRetry = logger.NewEvent("http.retry")
 	// EventHTTPRetrySucceeded 重试之后才成功。接入方按 event=http.retry.succeeded 确认重试生效。
 	EventHTTPRetrySucceeded = logger.NewEvent("http.retry.succeeded")
+	// EventHTTPBodyClose 关闭响应体失败（体已读完，只记 error 级日志，不改变返回值）。
+	// 接入方按 event=http.body_close_failed 过滤连接异常；error 字段为 Close 返回的错误。
+	EventHTTPBodyClose = logger.NewEvent("http.body_close_failed")
 )
 
 const (

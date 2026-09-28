@@ -15,6 +15,7 @@ func TestHTTPEvents_名称稳定(t *testing.T) {
 		{httpx.EventHTTPTransaction, "http.transaction"},
 		{httpx.EventHTTPRetry, "http.retry"},
 		{httpx.EventHTTPRetrySucceeded, "http.retry.succeeded"},
+		{httpx.EventHTTPBodyClose, "http.body_close_failed"},
 	}
 	for _, tc := range cases {
 		got := tc.event.Name()
