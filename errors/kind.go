@@ -19,5 +19,6 @@ func (k namedKind) Name() string { return string(k) }
 // NewKind 用 name 构造默认 Kind。
 // 输入：name 为分类名，不校验、不归一化，空串按字面保留。
 // 返回：动态值为 namedKind 的 Kind；同名值相等，可作 map 键。
+// 约定：只在包级导出 var 里调用，name 用 "<包>.<分类>" 小写点分（make check-errors 检查）。
 // 例：var KindLoginRequired = errors.NewKind("insgo.login_required")。
 func NewKind(name string) Kind { return namedKind(name) }

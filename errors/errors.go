@@ -5,8 +5,12 @@
 // 不用 fmt.Errorf 堆文本前缀；各系统用 NewKind（或自行实现 Kind 接口）维护自己的分类，
 // 判定用 KindOf / IsKind，读字段用 errors.AsType[*errors.Error]。
 //
+// 定义放在产生错误的包的 errors.go（本包只放跨包基建）：Op 为未导出 const，值 "<包>.<步骤>"；
+// Kind 为导出包级 var，值 "<包>.<分类>"，名称即契约。细则见 docs/CODE_STANDARDS.md §5.1。
+//
+//	const opGetUser = "svc.get_user"
 //	var KindLoginRequired = errors.NewKind("insgo.login_required")
-//	return nil, &errors.Error{Op: "svc.get_user", Kind: KindLoginRequired, Err: err}
+//	return nil, &errors.Error{Op: opGetUser, Kind: KindLoginRequired, Err: err}
 //	if errors.IsKind(err, KindLoginRequired) { ... }
 //
 // 网络错误判定用「错误文案关键词表」而非 net.Error.Temporary()——经过 SOCKS5 代理、

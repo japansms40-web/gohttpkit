@@ -78,6 +78,51 @@ return "", fmt.Errorf("%w: %s", ErrUnknownCountry, key) // 字段进了文案
 errors.Is(err, ErrUnknownCountry)                       // 对比不到 Country
 ```
 
+### 5.1 错误定义的放置与命名
+
+错误归属**产生它的包**，不集中搬进 `errors/`。`errors/` 只放跨包基建：`Error` / `Kind` / `NewKind` /
+`KindOf` / `IsKind` / `AttrsOf`，以及被多个包共享的 `RetryableError`、`HTTPStatusError`。不搬的理由：
+
+1. 专用错误常引用本包类型或常量（`httpx.ContentEncodingError` 用 `httpx.ContentEncoding`，`netproxy`
+   文案用 `SchemeSOCKS5`），搬进 `errors/` 会反向依赖业务包或复制类型；
+2. Go 惯例是包名即命名空间（`os.PathError`、`net.OpError`），`httpx.TransportError` 比集中命名更清楚；
+3. 导出即契约，搬迁等于所有 `errors.As` 目标类型破坏性变更。
+
+- **MUST** 每个包的错误定义集中在本包 `errors.go`：专用 `XxxError` 类型、导出的 `Kind*` 变量、
+  未导出的 `op*` 常量、错误 Attrs 的 key 常量。业务文件只引用，不就地定义。
+  范例：`versionreg/errors.go`。
+- **MUST** 按调用方需要选型：
+  1. 调用方要读强类型字段（状态码、已注册列表）→ 专用 `XxxError`；
+  2. 调用方只需分类判定 + 诊断上下文 → `&errors.Error{Op, Kind, Attrs, Err}`，配导出 `Kind`；
+  3. 只为补一层上下文 → `&errors.Error{Op, Err}`，`Kind` 留 nil，`KindOf` 继承内层分类。
+  新代码默认 2 / 3；已有专用类型保持不变，不为统一而迁移。
+- **MUST** `Op` 是未导出 const，命名 `opXxx`，值为 `<包名>.<步骤>`：全小写 snake_case、点分，
+  写「在哪一步」，不写句子、不写「失败」。同一函数多处失败共用一个 `Op`，用 `Kind` 区分原因。
+  `Op` 只用于诊断，不是契约，禁止拿来判定。范例：`opMustRegister = "versionreg.must_register"`。
+- **MUST** `Kind` 是导出包级 var，命名 `Kind<领域><原因>`，值为 `<包名>.<领域>.<原因>` 或
+  `<包名>.<原因>`（全小写 snake_case、点分）。**Kind 名称是契约**，改名按破坏性变更处理。
+  `NewKind` 只能出现在包级 `var` 声明里；调用方与测试用导出变量判定，不要再手写同名字符串。
+  下游系统用自己的前缀（如 `insgo.login_required`）。范例：`versionreg.KindRegisterDuplicate`。
+- **MUST** Attrs 的 key 用未导出 const `xxxAttrKey`，值为 snake_case；不放凭据与 URL userinfo（见 §11）。
+- **MUST** 专用错误类型的 `Error()` / `Unwrap()` 对 nil 接收者安全；有内层原因就实现 `Unwrap`；
+  doc comment 写明「判定请用 errors.As」。范例：`httpx.TransportError`。
+- `make check-errors` 除 §5 的直接构造外，还拦截：`errors.Error` 字面量的 `Op` 写字符串字面量、
+  `NewKind` 不在包级 `var` 声明里、`NewKind` 的参数不是小写点分的字符串字面量。测试文件豁免。
+
+```go
+// versionreg/errors.go
+const opMustRegister = "versionreg.must_register"
+
+// KindRegisterDuplicate MustRegister 遇到重复版本。
+var KindRegisterDuplicate = kiterrors.NewKind("versionreg.register.duplicate")
+
+// registry.go
+panic(&kiterrors.Error{Op: opMustRegister, Kind: KindRegisterDuplicate, Attrs: ...})
+
+// 调用方
+if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
+```
+
 ## 6. 日志
 
 - **MUST** 生产代码统一走 `logger` 门面（`logger.Info(ctx, msg, attrs...)`），ctx 必传首参。

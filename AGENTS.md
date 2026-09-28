@@ -63,7 +63,7 @@
 ## 实现约束（要点，全文见 CODE_STANDARDS）
 
 - **导出即契约**：新符号默认小写；确需导出的，doc comment 写明「给谁用、什么场景」。改导出符号的类型/字段/行为要按 `docs/VERSIONING.md` 升版本。
-- **错误是类型不是哨兵**：专用 `XxxError` 与 `errors.Error{Op, Kind, Attrs, Err}` 均可使用；生产 Go 代码（含示例与 agentguard）禁止直接用标准库 `errors.New`、`fmt.Errorf` 构造错误，也禁止字符串 panic；测试夹具可模拟外部错误。判定用 `errors.As` / `errors.IsKind`，保留内层 `Err`；网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见。执行 `make check-errors` 检查。
+- **错误是类型不是哨兵**：专用 `XxxError` 与 `errors.Error{Op, Kind, Attrs, Err}` 均可使用；生产 Go 代码（含示例与 agentguard）禁止直接用标准库 `errors.New`、`fmt.Errorf` 构造错误，也禁止字符串 panic；测试夹具可模拟外部错误。判定用 `errors.As` / `errors.IsKind`，保留内层 `Err`；网络发送失败必须包成 `*httpx.TransportError`，否则重试层看不见。错误定义留在产生它的包的 `errors.go`（不搬进 `errors/`）：`Op` 为未导出 const、值 `<包>.<步骤>`；`Kind` 为导出包级 var、值 `<包>.<分类>`（名称即契约），细则见 CODE_STANDARDS §5.1。执行 `make check-errors` 检查。
 - **默认链不做业务判断**：任何「替调用方对响应下结论」的逻辑都是可选拦截器，不进 `DefaultChain`。链顺序即语义，改序或插层前先 `make char`。
 - **IO 函数第一参是 `context.Context`** 并沿链透传；超时用 `context.WithTimeout(ctx, …)`，不新建根 ctx。
 - **日志走 `logger` 门面**（`logger.Info(ctx, …)`，ctx 必传），禁止裸 `fmt.Print` / `log.*` / `slog.*`（`logger/`、`examples/` 除外）；测试观察走 `t.Log` / `t.Logf`，不在 `*_test.go` 打 `logger`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度。
