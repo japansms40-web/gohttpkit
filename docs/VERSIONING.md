@@ -10,6 +10,18 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.11.0（相对 v0.10.1）
+
+破坏点与行为变更（0.x 阶段按 minor）：
+
+- `versionreg.Registry.MustRegister` 的失败 panic 值统一为 `*errors.Error`，带 `Kind` 与注册表、版本字段。
+  下游若对空标识或重复注册使用 `recover().(string)`，须改为恢复 `error` 后用 `errors.As` /
+  `errors.IsKind` 判定；校验错误仍通过 `Unwrap` 保留原始原因。
+- `httpx.NewClient` 构建 transport 失败及重试拦截器发送失败时，外层包装改为 `*errors.Error`；
+  内层错误链保留。下游应按 `errors.As` / `errors.Is` 判定原因，不依赖旧外层具体类型。
+- `examples/customchain.ErrAccountBanned` 被移除，示例改用
+  `errors.IsKind(err, errors.NewKind("customchain.account_banned"))`；`apidiff` 将该 `main` 包变量移除报告为不兼容变化。
+
 ## v0.10.1（相对 v0.10.0）
 
 修复（不破坏现有签名）：

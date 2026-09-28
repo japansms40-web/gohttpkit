@@ -5,10 +5,23 @@
 
 ## [Unreleased]
 
+## [v0.11.0] - 2026-09-28
+
+### 破坏
+
+- `versionreg.Registry.MustRegister` 的校验失败、空标识、重复注册现在均 panic `*errors.Error`，分别带
+  `versionreg.register.invalid`、`versionreg.register.empty_id`、`versionreg.register.duplicate` 分类。
+  原来对空标识或重复注册使用 `recover().(string)` 的调用方，改为将恢复值断言为 `error`，再用
+  `errors.As` / `errors.IsKind` 判定；校验失败仍可通过 `errors.Is` / `errors.As` 找到内层原因。
+- `httpx.NewClient` 构建 transport 失败及重试拦截器发送失败时，外层错误改为 `*errors.Error`。
+  内层原因仍可通过 `errors.Is` / `errors.As` 找到；依赖旧外层具体类型的调用方应改按错误链判定。
+- 示例 `examples/customchain` 删除 `ErrAccountBanned` 变量，改用
+  `errors.IsKind(err, errors.NewKind("customchain.account_banned"))` 判断封禁。该示例是 `main` 包；
+  API 对比工具仍会将变量移除报告为不兼容变化。
+
 ### 变更
 
 - 生产 Go 代码统一使用专用类型错误或 `errors.Error`，以 `Err` 保留内层原因；示例改用 `Kind` 判断业务错误。
-- `versionreg.Registry.MustRegister` 的空标识、重复注册从字符串 panic 改为 `*errors.Error`，恢复后可读分类与字段。这是可见行为变化，后续 0.x 发布按 minor 处理。
 
 ### 新增
 
