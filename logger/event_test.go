@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -94,5 +95,26 @@ func TestInfoEvent_AddSource指向调用点(t *testing.T) {
 	t.Logf("source.file=%q", file)
 	if !strings.HasSuffix(file, "event_test.go") {
 		t.Fatalf("source.file=%q, want *event_test.go", file)
+	}
+}
+
+type accountEvent string
+
+func (e accountEvent) Name() string { return string(e) }
+
+func TestEvent_外部包可实现(t *testing.T) {
+	var e Event = accountEvent("account.login.failed")
+	attr := Attr(e)
+	t.Logf("name=%q attr=%v", e.Name(), attr)
+	if e.Name() != "account.login.failed" || attr.Key != "event" ||
+		attr.Value.String() != e.Name() {
+		t.Fatalf("name=%q attr=%v", e.Name(), attr)
+	}
+	// 本文件是内部测试包：再用反射锁住「接口方法全部导出」，外部包才实现得了。
+	typ := reflect.TypeFor[Event]()
+	for i := range typ.NumMethod() {
+		if m := typ.Method(i); !m.IsExported() {
+			t.Fatalf("Event 方法 %s 未导出，外部包无法实现", m.Name)
+		}
 	}
 }
