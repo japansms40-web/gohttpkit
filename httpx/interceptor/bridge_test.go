@@ -31,6 +31,10 @@ func (n nilHeaders) BuildHeaders(context.Context) map[string]string { return nil
 
 func (n nilHeaders) BaseURL() string { return n.base }
 
+// 与 httpx/characterization_test.go 的 TestBuildHeaders返回nil时请求不发出 重复是有意的：
+// 本条是 bridge 拦截器的单元测试，那条是整个 Client 的行为锚点。
+//
+//goland:noinspection DuplicatedCode
 func TestBridge_构头返回nil不发请求(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, func(o *httpx.Options) {

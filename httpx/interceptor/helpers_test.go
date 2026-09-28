@@ -40,6 +40,10 @@ type recordingServer struct {
 	bodies   [][]byte
 }
 
+// 与 httpx/helpers_test.go 的同名夹具重复是有意的：两份分属 httpx_test / interceptor_test
+// 两个外部测试包，无法共享；为此另建非测试包不划算。
+//
+//goland:noinspection DuplicatedCode
 func newRecordingServer(t *testing.T, handler func(w http.ResponseWriter, r *http.Request)) *recordingServer {
 	t.Helper()
 	rs := &recordingServer{mu: make(chan struct{}, 1)}

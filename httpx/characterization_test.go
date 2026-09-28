@@ -970,6 +970,10 @@ func TestNew_非法代理URL报错(t *testing.T) {
 	}
 }
 
+// 与 httpx/interceptor/bridge_test.go 的 TestBridge_构头返回nil不发请求 重复是有意的：
+// 本条是整个 Client 的行为锚点，那条是 bridge 拦截器的单元测试。
+//
+//goland:noinspection DuplicatedCode
 func TestBuildHeaders返回nil时请求不发出(t *testing.T) {
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	c := newClient(t, srv.Server, func(o *httpx.Options) {
@@ -1330,6 +1334,42 @@ func captureClientLogs(t *testing.T) *bytes.Buffer {
 	return &buf
 }
 
+// assertMsgEqualsEvent 断言 records 里能找到 want 中的每个事件，且该记录的 msg 与 event 字段都等于事件名。
+func assertMsgEqualsEvent(t *testing.T, records []map[string]any, want ...logger.Event) {
+	t.Helper()
+	for _, event := range want {
+		name := event.Name()
+		record := findLogEvent(t, records, name)
+		t.Logf("event=%s msg=%v field=%v", name, record["msg"], record["event"])
+		if record["msg"] != name || record["event"] != name {
+			t.Fatalf("event=%q msg=%v field=%v", name, record["msg"], record["event"])
+		}
+	}
+}
+
+// getRetryOnceThenOK 起一个首个连接被断开、之后返回 ok 的服务器，用默认链 GET 一次（经重试后成功），
+// 返回这期间解析出的日志记录。
+func getRetryOnceThenOK(t *testing.T) []map[string]any {
+	t.Helper()
+	buf := captureClientLogs(t)
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			hijackClose(w)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(srv.Close)
+	c := newClient(t, srv, nil)
+	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
+		t.Fatal(err)
+	}
+	records := decodeLogRecords(t, buf)
+	t.Logf("records=%v", records)
+	return records
+}
+
 func hijackClose(w http.ResponseWriter) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -1350,15 +1390,7 @@ func TestLogging_msg与event同值(t *testing.T) {
 	}
 	records := decodeLogRecords(t, buf)
 	t.Logf("records=%v", records)
-	want := []logger.Event{httpx.EventHTTPTransaction}
-	for _, event := range want {
-		name := event.Name()
-		record := findLogEvent(t, records, name)
-		t.Logf("event=%s msg=%v field=%v", name, record["msg"], record["event"])
-		if record["msg"] != name || record["event"] != name {
-			t.Fatalf("event=%q msg=%v field=%v", name, record["msg"], record["event"])
-		}
-	}
+	assertMsgEqualsEvent(t, records, httpx.EventHTTPTransaction)
 }
 
 func TestLogging_重试日志保留请求头原文(t *testing.T) {
@@ -1392,35 +1424,12 @@ func TestLogging_重试日志保留请求头原文(t *testing.T) {
 }
 
 func TestLogging_重试成功msg与event同值(t *testing.T) {
-	buf := captureClientLogs(t)
-	var hits atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hits.Add(1) == 1 {
-			hijackClose(w)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	}))
-	t.Cleanup(srv.Close)
-	c := newClient(t, srv, nil)
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
-		t.Fatal(err)
-	}
-	records := decodeLogRecords(t, buf)
-	t.Logf("records=%v", records)
-	want := []logger.Event{
+	records := getRetryOnceThenOK(t)
+	assertMsgEqualsEvent(t, records,
 		httpx.EventHTTPRetry,
 		httpx.EventHTTPRetrySucceeded,
 		httpx.EventHTTPTransaction,
-	}
-	for _, event := range want {
-		name := event.Name()
-		record := findLogEvent(t, records, name)
-		t.Logf("event=%s msg=%v field=%v", name, record["msg"], record["event"])
-		if record["msg"] != name || record["event"] != name {
-			t.Fatalf("event=%q msg=%v field=%v", name, record["msg"], record["event"])
-		}
-	}
+	)
 }
 
 func logEvents(records []map[string]any) []string {
@@ -1508,22 +1517,7 @@ func TestLogging_成功事件树(t *testing.T) {
 }
 
 func TestLogging_重试成功事件树(t *testing.T) {
-	buf := captureClientLogs(t)
-	var hits atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hits.Add(1) == 1 {
-			hijackClose(w)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	}))
-	t.Cleanup(srv.Close)
-	c := newClient(t, srv, nil)
-	if _, err := c.Get(context.Background(), "/x", nil); err != nil {
-		t.Fatal(err)
-	}
-	records := decodeLogRecords(t, buf)
-	t.Logf("records=%v", records)
+	records := getRetryOnceThenOK(t)
 	wantEvents := []string{
 		logger.EventSpanStart.Name(),
 		httpx.EventHTTPRetry.Name(),
