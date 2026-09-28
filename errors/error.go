@@ -131,6 +131,8 @@ func (probe) Error() string { return "errors: traversal probe" }
 // 输入：target 为 errors.As 的目标；只处理 *probe，其余返回 false 不干扰标准 As 语义。
 // 返回：probe.visit 的结果（true 即停止遍历）；nil 接收者返回 false。
 func (e *Error) As(target any) bool {
+	// target 是 errors.As 传入的目标指针，不是被包装的 error，直接类型断言即可。
+	//goland:noinspection GoTypeAssertionOnErrors
 	p, ok := target.(*probe)
 	if !ok || e == nil {
 		return false
