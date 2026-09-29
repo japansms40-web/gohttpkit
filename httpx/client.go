@@ -273,8 +273,8 @@ func (c *Client) SnapshotResponseStatusCode() int {
 // 返回：无。不复制、不加校验。
 func (c *Client) CacheStatusCode(code int) {
 	c.lastMu.Lock()
+	defer c.lastMu.Unlock()
 	c.lastStatusCode = code
-	c.lastMu.Unlock()
 }
 
 // CacheResponseHeaders 写入最近一次响应头。
@@ -283,8 +283,8 @@ func (c *Client) CacheStatusCode(code int) {
 // 返回：无。
 func (c *Client) CacheResponseHeaders(h http.Header) {
 	c.lastMu.Lock()
+	defer c.lastMu.Unlock()
 	c.lastHeaders = h
-	c.lastMu.Unlock()
 }
 
 // WithChain 派生一个子客户端。

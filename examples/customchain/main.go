@@ -56,8 +56,8 @@ func (h *sessionHeaders) BuildHeaders(context.Context) map[string]string {
 func (h *sessionHeaders) BaseURL() string { return h.base }
 func (h *sessionHeaders) setToken(v string) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.token = v
-	h.mu.Unlock()
 }
 
 func main() {

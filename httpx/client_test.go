@@ -284,8 +284,8 @@ func (h *statefulHeaders) BuildHeaders(context.Context) map[string]string {
 func (h *statefulHeaders) BaseURL() string { return h.base }
 func (h *statefulHeaders) setToken(v string) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.token = v
-	h.mu.Unlock()
 }
 
 func TestConcurrent_共享Client并发请求(t *testing.T) {

@@ -74,13 +74,7 @@ func (r *Registry[T]) MustRegister(cfg T) {
 			Attrs: []slog.Attr{slog.String(registryAttrKey, r.name)},
 		})
 	}
-	r.mu.Lock()
-	_, dup := r.items[id]
-	if !dup {
-		r.items[id] = cfg
-	}
-	r.mu.Unlock()
-	if dup {
+	if dup := !r.insert(id, cfg); dup {
 		panic(&kiterrors.Error{
 			Op: opMustRegister, Kind: KindRegisterDuplicate,
 			Attrs: []slog.Attr{slog.String(registryAttrKey, r.name), slog.String(versionAttrKey, string(id))},
@@ -96,23 +90,15 @@ func (r *Registry[T]) MustRegister(cfg T) {
 // 失败时 Registered 与判定来自同一把读锁快照，按字典序，是新切片。
 // 例：Get("v1") → (cfg, nil)；Get("") → *EmptyVersionError；Get("v9") → *UnknownVersionError。
 func (r *Registry[T]) Get(id ID) (T, error) {
-	var zero T
-	r.mu.RLock()
+	cfg, ids, ok := r.lookup(id)
+	if ok {
+		return cfg, nil
+	}
+	sortIDs(ids)
 	if id == "" {
-		ids := r.copyIDsLocked()
-		r.mu.RUnlock()
-		sortIDs(ids)
-		return zero, &EmptyVersionError{Registry: r.name, Registered: ids}
+		return cfg, &EmptyVersionError{Registry: r.name, Registered: ids}
 	}
-	cfg, ok := r.items[id]
-	if !ok {
-		ids := r.copyIDsLocked()
-		r.mu.RUnlock()
-		sortIDs(ids)
-		return zero, &UnknownVersionError{Registry: r.name, Requested: id, Registered: ids}
-	}
-	r.mu.RUnlock()
-	return cfg, nil
+	return cfg, &UnknownVersionError{Registry: r.name, Requested: id, Registered: ids}
 }
 
 // MustGet 取版本配置，取不到就 panic。
@@ -131,11 +117,46 @@ func (r *Registry[T]) MustGet(id ID) T {
 // 输入：无。
 // 返回：新切片，与表内存储无关；空表返回长度为 0 的切片。
 func (r *Registry[T]) List() []ID {
-	r.mu.RLock()
-	ids := r.copyIDsLocked()
-	r.mu.RUnlock()
+	ids := r.copyIDs()
 	sortIDs(ids)
 	return ids
+}
+
+// insert 在写锁内登记一个版本。
+// 输入：id 非空，cfg 已校验。
+// 返回：新登记为 true；id 已存在为 false，表不变。
+func (r *Registry[T]) insert(id ID, cfg T) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, dup := r.items[id]; dup {
+		return false
+	}
+	r.items[id] = cfg
+	return true
+}
+
+// lookup 在同一把读锁内查 id，未命中时顺带拷出已注册 id。
+// 输入：id 可为空（空 id 恒未命中）。
+// 返回：命中为 (cfg, nil, true)；未命中为 (零值, 未排序的新切片, false)，判定与切片来自同一快照。
+func (r *Registry[T]) lookup(id ID) (T, []ID, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if id != "" {
+		if cfg, ok := r.items[id]; ok {
+			return cfg, nil, true
+		}
+	}
+	var zero T
+	return zero, r.copyIDsLocked(), false
+}
+
+// copyIDs 在读锁内拷出已注册 id。
+// 输入：无。
+// 返回：新切片，未排序。
+func (r *Registry[T]) copyIDs() []ID {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.copyIDsLocked()
 }
 
 // Has 判断版本是否已注册。

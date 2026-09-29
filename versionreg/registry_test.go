@@ -675,15 +675,13 @@ func FuzzRegistryGet(f *testing.F) {
 	})
 }
 
-// —— 内部实现：未导出 copyIDsLocked / sortIDs 的角度测试。
+// —— 内部实现：未导出 copyIDsLocked（经 copyIDs 加锁调用）/ sortIDs 的角度测试。
 // 这两层是 List / 错误 Registered 快照的单一实现，只靠导出 API 测不到
 // nil 切片、就地排序、空表容量这些分支。
 
 func TestCopyIDsLocked_空表是长度0的新切片(t *testing.T) {
 	r := New[*Config]("t")
-	r.mu.RLock()
-	ids := r.copyIDsLocked()
-	r.mu.RUnlock()
+	ids := r.copyIDs()
 	t.Logf("空表 copyIDsLocked = %v nil=%v cap=%d", ids, ids == nil, cap(ids))
 	if ids == nil || len(ids) != 0 {
 		t.Fatalf("空表应返回长度 0 的切片（非 nil），得到 %v", ids)
@@ -692,9 +690,7 @@ func TestCopyIDsLocked_空表是长度0的新切片(t *testing.T) {
 	if len(injected) != 1 || injected[0] != "injected" {
 		t.Fatalf("append 结果应为单元素，得到 %v", injected)
 	}
-	r.mu.RLock()
-	again := r.copyIDsLocked()
-	r.mu.RUnlock()
+	again := r.copyIDs()
 	if len(again) != 0 {
 		t.Fatal("append 返回切片不得写回 items")
 	}
@@ -703,9 +699,7 @@ func TestCopyIDsLocked_空表是长度0的新切片(t *testing.T) {
 func TestCopyIDsLocked_单元素与多元素成员完整(t *testing.T) {
 	r := New[*Config]("t")
 	r.MustRegister(NewConfig("only", "https://a.example"))
-	r.mu.RLock()
-	one := r.copyIDsLocked()
-	r.mu.RUnlock()
+	one := r.copyIDs()
 	t.Logf("单元素 = %v", one)
 	if len(one) != 1 || one[0] != "only" {
 		t.Fatalf("单元素 copy = %v", one)
@@ -713,9 +707,7 @@ func TestCopyIDsLocked_单元素与多元素成员完整(t *testing.T) {
 
 	r.MustRegister(NewConfig("a", "https://a.example"))
 	r.MustRegister(NewConfig("z", "https://a.example"))
-	r.mu.RLock()
-	many := r.copyIDsLocked()
-	r.mu.RUnlock()
+	many := r.copyIDs()
 	t.Logf("多元素（未排序）= %v", many)
 	if len(many) != 3 {
 		t.Fatalf("len=%d, want 3", len(many))
@@ -735,10 +727,8 @@ func TestCopyIDsLocked_两次调用互不共享底层数组(t *testing.T) {
 	r := New[*Config]("t")
 	r.MustRegister(NewConfig("v1", "https://a.example"))
 	r.MustRegister(NewConfig("v2", "https://a.example"))
-	r.mu.RLock()
-	a := r.copyIDsLocked()
-	b := r.copyIDsLocked()
-	r.mu.RUnlock()
+	a := r.copyIDs()
+	b := r.copyIDs()
 	a[0] = "mutated"
 	t.Logf("改 a 后 b=%v", b)
 	for _, id := range b {
