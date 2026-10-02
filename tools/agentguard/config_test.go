@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -92,7 +94,7 @@ func TestLoadStaticConfig_HEAD没有配置文件时为零值(t *testing.T) {
 	initRepo(t, dir, map[string]string{"a.txt": "x"})
 	cfg, err := loadStaticConfig(dir)
 	t.Logf("cfg=%+v err=%v", cfg, err)
-	if err != nil || cfg.Style.HelperPlacement || cfg.Commit.Scopes != nil || cfg.Style.RootCtxAllow != nil {
+	if err != nil || !reflect.DeepEqual(cfg, repoConfig{}) {
 		t.Fatalf("没有配置文件应为零值，得到 %+v err=%v", cfg, err)
 	}
 }
@@ -105,5 +107,17 @@ func TestLoadStaticConfig_YAML非法返回configParseError(t *testing.T) {
 	t.Logf("err=%v", err)
 	if !errors.As(err, &pe) || pe.Field != "" {
 		t.Fatalf("非法 YAML 应返回 Field 为空的 *configParseError，得到 %v", err)
+	}
+}
+
+func TestLoadStaticConfig_空仓库没有提交时为零值(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git init 失败：%v %s", err, out)
+	}
+	cfg, err := loadStaticConfig(dir)
+	t.Logf("cfg=%+v err=%v", cfg, err)
+	if err != nil || !reflect.DeepEqual(cfg, repoConfig{}) {
+		t.Fatalf("没有任何提交应为零值且无错误，得到 %+v err=%v", cfg, err)
 	}
 }

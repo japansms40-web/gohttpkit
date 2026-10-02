@@ -120,7 +120,7 @@ func parseMainBranch(src string) string {
 // loadStaticConfig 读 HEAD 提交里的 .agentguard.yml，供 check-style / check-commit-msg 使用。
 // 输入 root：仓库根。
 // 返回：解析后的配置；HEAD 不存在或其中没有该文件时为零值；YAML 非法时返回 *configParseError。
-// 读 HEAD 而不是工作区：同一次改动里关掉开关或删 scope 白名单，不能让本次检查放行。
+// 读 HEAD 而不是工作区：未提交的改动不能让本次检查放行（本地钩子场景）；CI 里 HEAD 即 PR 末端，配置放宽需由治理守卫另行拦截（待办）。
 // 例：HEAD 里是 `style: {helper_placement: true}` → cfg.Style.HelperPlacement == true。
 func loadStaticConfig(root string) (repoConfig, error) {
 	src, ok := showAt(root, "HEAD", configPath)

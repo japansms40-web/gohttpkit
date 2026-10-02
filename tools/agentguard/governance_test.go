@@ -59,6 +59,35 @@ func TestCompareCoverage_逐包门禁同样只许上调(t *testing.T) {
 	}
 }
 
+func TestCompareCoverage_首次定义生效且只认十进制数(t *testing.T) {
+	cases := []struct {
+		name, old, cur string
+		want           []string
+	}{
+		{"同名重复取第一处", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 50\nMIN_COVERAGE ?= 99\n", []string{"从 99 下调到 50"}},
+		{"下划线数字", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 9_9\n", []string{"被删除或改成非数字"}},
+		{"inf", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= inf\n", []string{"被删除或改成非数字"}},
+		{"十六进制浮点", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 0x1.8cp6\n", []string{"被删除或改成非数字"}},
+		{"行尾注释", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 98 # 注释\n", []string{"从 99 下调到 98"}},
+		{"行尾注释未下调", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 99 # 注释\n", nil},
+		{"值为空不跨行", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?=\nall:\n", []string{"被删除或改成非数字"}},
+		{"基线非数字不检查", "MIN_PKG_COVERAGE ?= $(X)\n", "MIN_PKG_COVERAGE ?= 1\n", nil},
+		{"基线没有的新增门禁不检查", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 99\nMIN_PKG_COVERAGE ?= 10\n", nil},
+	}
+	for _, c := range cases {
+		got := compareCoverage(c.old, c.cur)
+		t.Logf("%s → %v", c.name, got)
+		if len(got) != len(c.want) {
+			t.Fatalf("%s：期望 %d 条违规，得到 %v", c.name, len(c.want), got)
+		}
+		for i, w := range c.want {
+			if !strings.Contains(got[i].Detail, w) {
+				t.Fatalf("%s：第 %d 条应含 %q，得到 %+v", c.name, i, w, got[i])
+			}
+		}
+	}
+}
+
 func TestDiffLines(t *testing.T) {
 	diff := "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\told()\n-   \n+\tnew()\n+\tt.Skip(\"x\")\n"
 	if got := removedLines(diff); len(got) != 1 || got[0] != (diffLine{1, "\told()"}) {

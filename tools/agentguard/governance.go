@@ -55,10 +55,12 @@ func (v violation) String() string {
 }
 
 var (
-	coverageGateRe = regexp.MustCompile(`(?m)^(MIN_[A-Z_]*COVERAGE)\s*\?=\s*(\S+)\s*$`)
-	skipCallRe     = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)
-	govOverrideRe  = regexp.MustCompile(`治理豁免\s*[:：]\s*\S+`)
-	hunkRe         = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+`)
+	coverageGateRe = regexp.MustCompile(`(?m)^(MIN_[A-Z_]*COVERAGE)[ \t]*\?=[ \t]*([^\s#]+)[ \t]*(?:#.*)?$`)
+	// coverageNumberRe 只认严格十进制数，避免 9_9 / inf / 十六进制浮点被 ParseFloat 接受而与 Makefile awk 的 m+0 比较不一致。
+	coverageNumberRe = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
+	skipCallRe       = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)
+	govOverrideRe    = regexp.MustCompile(`治理豁免\s*[:：]\s*\S+`)
+	hunkRe           = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+`)
 )
 
 // runGovernance 执行治理检查并打印结果。
@@ -190,6 +192,7 @@ func untrackedSkipViolations(root string) []violation {
 // compareCoverage 检查 Makefile 里每个覆盖率门禁（MIN_COVERAGE、MIN_PKG_COVERAGE 等 MIN_*COVERAGE）是否被下调或删除。
 // 输入 old / cur：基线与工作区的 Makefile 全文。
 // 返回：按变量名排序的违规；基线里没有的门禁不检查（新增门禁随便设），基线里本就不是数字的也不检查。
+// 盲区：`:=` 和 `=` 赋值不在守卫范围内，与旧实现一致。
 // 例：MIN_PKG_COVERAGE 99 → 98 → 一条 coverage 违规「MIN_PKG_COVERAGE 从 99 下调到 98（只许上调）」。
 func compareCoverage(old, cur string) []violation {
 	o, c := parseCoverageGates(old), parseCoverageGates(cur)
@@ -212,13 +215,18 @@ func compareCoverage(old, cur string) []violation {
 
 // parseCoverageGates 取 Makefile 里全部 `MIN_*COVERAGE ?= <值>` 门禁。
 // 输入 makefile：Makefile 全文。
-// 返回：变量名 → 数值；值不是数字（如 $(X)）记为 NaN，由调用方按「改成非数字」处理。
+// 返回：变量名 → 数值；同名多次出现只取第一处（Make 的 ?= 语义）；值不是严格十进制数（如 $(X)、9_9、inf）记为 NaN，由调用方按「改成非数字」处理。
 func parseCoverageGates(makefile string) map[string]float64 {
 	gates := make(map[string]float64)
 	for _, m := range coverageGateRe.FindAllStringSubmatch(makefile, -1) {
-		f, err := strconv.ParseFloat(m[2], 64)
-		if err != nil {
-			f = math.NaN()
+		if _, seen := gates[m[1]]; seen {
+			continue
+		}
+		f := math.NaN()
+		if coverageNumberRe.MatchString(m[2]) {
+			if v, err := strconv.ParseFloat(m[2], 64); err == nil {
+				f = v
+			}
 		}
 		gates[m[1]] = f
 	}
