@@ -34,6 +34,31 @@ func TestCompareCoverage(t *testing.T) {
 	}
 }
 
+func TestCompareCoverage_逐包门禁同样只许上调(t *testing.T) {
+	base := "MIN_COVERAGE ?= 99\nMIN_PKG_COVERAGE ?= 99\n"
+	cases := []struct {
+		name, cur string
+		want      []string
+	}{
+		{"逐包下调", "MIN_COVERAGE ?= 99\nMIN_PKG_COVERAGE ?= 98\n", []string{"MIN_PKG_COVERAGE 从 99 下调到 98"}},
+		{"逐包删除", "MIN_COVERAGE ?= 99\n", []string{"Makefile 里的 MIN_PKG_COVERAGE 被删除或改成非数字"}},
+		{"两个都下调按名字排序", "MIN_COVERAGE ?= 90\nMIN_PKG_COVERAGE ?= 90\n", []string{"MIN_COVERAGE 从 99", "MIN_PKG_COVERAGE 从 99"}},
+		{"逐包上调", "MIN_COVERAGE ?= 99\nMIN_PKG_COVERAGE ?= 99.5\n", nil},
+	}
+	for _, c := range cases {
+		got := compareCoverage(base, c.cur)
+		t.Logf("%s → %v", c.name, got)
+		if len(got) != len(c.want) {
+			t.Fatalf("%s：期望 %d 条违规，得到 %v", c.name, len(c.want), got)
+		}
+		for i, w := range c.want {
+			if got[i].Rule != ruleCoverage || got[i].Override != overrideGovernance || !strings.Contains(got[i].Detail, w) {
+				t.Fatalf("%s：第 %d 条应含 %q，得到 %+v", c.name, i, w, got[i])
+			}
+		}
+	}
+}
+
 func TestDiffLines(t *testing.T) {
 	diff := "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\told()\n-   \n+\tnew()\n+\tt.Skip(\"x\")\n"
 	if got := removedLines(diff); len(got) != 1 || got[0] != (diffLine{1, "\told()"}) {

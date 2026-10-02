@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -54,10 +55,10 @@ func (v violation) String() string {
 }
 
 var (
-	minCoverageRe = regexp.MustCompile(`(?m)^MIN_COVERAGE\s*\?=\s*([0-9]+(?:\.[0-9]+)?)\s*$`)
-	skipCallRe    = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)
-	govOverrideRe = regexp.MustCompile(`治理豁免\s*[:：]\s*\S+`)
-	hunkRe        = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+`)
+	coverageGateRe = regexp.MustCompile(`(?m)^(MIN_[A-Z_]*COVERAGE)\s*\?=\s*(\S+)\s*$`)
+	skipCallRe     = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)
+	govOverrideRe  = regexp.MustCompile(`治理豁免\s*[:：]\s*\S+`)
+	hunkRe         = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+`)
 )
 
 // runGovernance 执行治理检查并打印结果。
@@ -186,31 +187,42 @@ func untrackedSkipViolations(root string) []violation {
 	return skipViolations(lines)
 }
 
-// compareCoverage 检查 MIN_COVERAGE 是否被下调或删除。
-// 输入 old / cur：基线与当前的 Makefile 全文。
-// 返回：违规列表；基线里没有 MIN_COVERAGE 时不检查。
+// compareCoverage 检查 Makefile 里每个覆盖率门禁（MIN_COVERAGE、MIN_PKG_COVERAGE 等 MIN_*COVERAGE）是否被下调或删除。
+// 输入 old / cur：基线与工作区的 Makefile 全文。
+// 返回：按变量名排序的违规；基线里没有的门禁不检查（新增门禁随便设），基线里本就不是数字的也不检查。
+// 例：MIN_PKG_COVERAGE 99 → 98 → 一条 coverage 违规「MIN_PKG_COVERAGE 从 99 下调到 98（只许上调）」。
 func compareCoverage(old, cur string) []violation {
-	o, ok := parseMinCoverage(old)
-	if !ok {
-		return nil
+	o, c := parseCoverageGates(old), parseCoverageGates(cur)
+	var vs []violation
+	for _, name := range slices.Sorted(maps.Keys(o)) {
+		ov := o[name]
+		if math.IsNaN(ov) {
+			continue
+		}
+		cv, ok := c[name]
+		switch {
+		case !ok || math.IsNaN(cv):
+			vs = append(vs, violation{ruleCoverage, "Makefile 里的 " + name + " 被删除或改成非数字", overrideGovernance})
+		case cv < ov:
+			vs = append(vs, violation{ruleCoverage, fmt.Sprintf("%s 从 %g 下调到 %g（只许上调）", name, ov, cv), overrideGovernance})
+		}
 	}
-	c, ok := parseMinCoverage(cur)
-	if !ok {
-		return []violation{{ruleCoverage, "Makefile 里的 MIN_COVERAGE 被删除或改成非数字", overrideGovernance}}
-	}
-	if c < o {
-		return []violation{{ruleCoverage, fmt.Sprintf("MIN_COVERAGE 从 %g 下调到 %g（只许上调）", o, c), overrideGovernance}}
-	}
-	return nil
+	return vs
 }
 
-func parseMinCoverage(makefile string) (float64, bool) {
-	m := minCoverageRe.FindStringSubmatch(makefile)
-	if m == nil {
-		return 0, false
+// parseCoverageGates 取 Makefile 里全部 `MIN_*COVERAGE ?= <值>` 门禁。
+// 输入 makefile：Makefile 全文。
+// 返回：变量名 → 数值；值不是数字（如 $(X)）记为 NaN，由调用方按「改成非数字」处理。
+func parseCoverageGates(makefile string) map[string]float64 {
+	gates := make(map[string]float64)
+	for _, m := range coverageGateRe.FindAllStringSubmatch(makefile, -1) {
+		f, err := strconv.ParseFloat(m[2], 64)
+		if err != nil {
+			f = math.NaN()
+		}
+		gates[m[1]] = f
 	}
-	f, err := strconv.ParseFloat(m[1], 64)
-	return f, err == nil
+	return gates
 }
 
 // charViolations 检查 characterization 用例里既有行的删改。
