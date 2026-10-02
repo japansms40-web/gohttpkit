@@ -1,6 +1,6 @@
 # gohttpkit 质量门禁入口。
 #   make hooks  —— clone 后先跑一次：安装本地 git 门禁（.githooks + core.hooksPath）
-#   make check  —— 本地轻量：build + vet + cover + tidy（不含 lint / race，避免每次要 cgo）
+#   make check  —— 本地轻量：check-errors + check-test-layout + check-pkg-doc + check-style + check-agents-docs + build + vet + cover + tidy-check（不含 lint / race，避免每次要 cgo）
 #   合入口径    —— check + lint-new + race（CI 跑的是全量 lint 与 race；本地完整请 make ci）
 
 BASE_REV ?= HEAD~1

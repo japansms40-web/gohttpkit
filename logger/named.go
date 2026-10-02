@@ -8,7 +8,7 @@ import (
 
 // named.go —— 不需要 ctx 的具名 Logger。
 // 独立成文件：给拿不到 ctx 的调用点（main、init、启动配置、纯本地工具函数）用，
-// 免得到处硬造 context.Background()；需要与 HTTP 日志同链时仍走包级 Info(ctx, ...)。
+// 免得到处硬造 context.Background()；需要与 HTTP 日志同链时仍走包级 XxxEvent(ctx, ev, ...)。
 //
 // Logger 只是进程级全局 logger 之上的一层字段视图：每次调用才读 active()，不缓存 handler，
 // 所以包级 var 先于 SetHandler / SetConfig 创建也照样生效，多个模块共用同一份输出。

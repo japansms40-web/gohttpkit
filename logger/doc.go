@@ -8,7 +8,6 @@
 //	ctx = logger.EnsureTraceID(ctx) // 业务入口保留派生 ctx
 //	accountSyncStarted := logger.NewEvent("account.sync.started")
 //	logger.InfoEvent(ctx, accountSyncStarted, slog.String("account_id", "123"))
-//	logger.Info(ctx, "业务开始", logger.EventAttr(accountSyncStarted.Name()))
 //	body, err := client.Get(ctx, "/v1/account", nil)
 //
 // ctx 值不可变：EnsureTraceID / WithAttrs / StartSpan / WithTraceID 都返回派生 ctx，
@@ -16,8 +15,7 @@
 // HTTP 日志补 trace；要让 Do 前后的业务日志同链，必须在业务入口先保留派生 ctx。
 // SetHandler 是可选的进程级注入点，不用每个请求重复设置。
 //
-// DebugEvent / InfoEvent / WarnEvent / ErrorEvent 的 msg 与 event 同值。需要人类文案与机器事件分离时，
-// 才用 Info(ctx, msg, EventAttr(name))。
+// DebugEvent / InfoEvent / WarnEvent / ErrorEvent 的 msg 与 event 同值；业务代码只打事件，不写自由文案日志。
 // 保留字段（trace_id / span_id / parent_span_id / span_name / event / duration_ms / error / module）
 // 不得由业务 attrs 重用；slog 允许重名 key，不同 JSON 消费器的取值可能不一致。
 //
@@ -28,7 +26,7 @@
 //	log.With(slog.String("account_id", "u1")).Warn("限流")
 //	log.InfoEvent(logger.NewEvent("app.started")) // 事件版：msg 与 event 同值
 //
-// Logger 不带 trace_id / span_id；要与 HTTP 日志同链仍用 Info(ctx, ...)。
+// Logger 不带 trace_id / span_id；要与 HTTP 日志同链仍用 InfoEvent(ctx, ev, ...)。
 //
 // 设计要点：
 //   - 门面在 logger.go：Debug/Info/Warn/Error(ctx, msg, attrs...)，ctx 必传首参。

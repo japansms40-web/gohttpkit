@@ -16,7 +16,7 @@ staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
 staged_go_deleted=$(git diff --cached --name-only --diff-filter=D -- '*.go')
 
 # 0) IDE 工程文件不入库（insgo c1926eb 曾误提交 worktree 生成的 .idea/*.iml）
-ide_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.idea/|\.iml$' || true)
+ide_files=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.idea/|\.iml$' || true)
 if [ -n "$ide_files" ]; then
   fail "IDE 工程文件不得提交（git restore --staged <文件> 撤出）："
   echo "$ide_files" | sed 's/^/    /'
