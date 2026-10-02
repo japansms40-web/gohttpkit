@@ -26,6 +26,8 @@ func run(args []string) int {
 		return runCheck("check-test-layout", scanTestLayout, "测试文件与源文件一一对应")
 	case "check-pkg-doc":
 		return runCheck("check-pkg-doc", scanPkgDoc, "每个 Go 包有 doc.go 且文件结构树与实际文件一致")
+	case "check-commit-msg":
+		return runCheckCommitMsg(args[1:])
 	case "hook":
 		return runHook(args[1:])
 	default:
@@ -59,5 +61,5 @@ func runCheck(name string, scan func(root string) ([]string, error), okMsg strin
 }
 
 func usage() {
-	_, _ = fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard check-pkg-doc | agentguard hook --agent claude|cursor|codex --event EVENT")
+	_, _ = fmt.Fprintln(os.Stderr, "用法：agentguard governance [--base REV] [--worktree] | agentguard check-errors | agentguard check-test-layout | agentguard check-pkg-doc | agentguard check-style | agentguard check-agents-docs | agentguard check-commit-msg <文件>|--range A..B | agentguard hook --agent claude|cursor|codex --event EVENT")
 }
