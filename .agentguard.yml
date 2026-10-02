@@ -2,3 +2,12 @@
 characterization:
   # characterization 用例所在文件；未配 func_pattern 时整个文件都算 char 用例。
   file: httpx/characterization_test.go
+commit:
+  # 仓库级 scope；含 Go 文件的目录名（httpx、interceptor、geo、locale_mobile、agentguard…）自动允许，不用列。
+  # localemobile 是 geo/locale_mobile 的包名，与目录名不同，单列。
+  scopes: [localemobile, docs, ci, build, hooks, governance, release, deps, rules]
+style:
+  # 辅助函数归位：gohttpkit 存量 18 个文件不符合（大部分在 agentguard 自身），暂不开启，规范里是 SHOULD。
+  helper_placement: false
+  # logger 门面自身要在 ctx 为 nil 时回落 context.Background()，属于门面实现，不是业务硬造根 ctx。
+  root_ctx_allow: [logger/]
