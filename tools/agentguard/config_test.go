@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,5 +66,44 @@ func TestParseMainBranch(t *testing.T) {
 				t.Fatalf("parseMainBranch(%q)=%q，期望 %q", c.src, got, c.want)
 			}
 		})
+	}
+}
+
+func TestLoadStaticConfig_读HEAD而不是工作区(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{
+		configPath: "commit:\n  scopes: [docs, ci]\nstyle:\n  helper_placement: true\n  helper_placement_exempt: [pkg/a.go]\n  root_ctx_allow: [logger/]\n",
+	})
+	if err := os.WriteFile(filepath.Join(dir, configPath), []byte("style:\n  helper_placement: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadStaticConfig(dir)
+	t.Logf("cfg=%+v err=%v", cfg, err)
+	if err != nil || !cfg.Style.HelperPlacement ||
+		!slices.Equal(cfg.Commit.Scopes, []string{"docs", "ci"}) ||
+		!slices.Equal(cfg.Style.RootCtxAllow, []string{"logger/"}) ||
+		!slices.Equal(cfg.Style.HelperPlacementExempt, []string{"pkg/a.go"}) {
+		t.Fatalf("应读 HEAD 里的配置，工作区未提交的改动不生效，得到 %+v err=%v", cfg, err)
+	}
+}
+
+func TestLoadStaticConfig_HEAD没有配置文件时为零值(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{"a.txt": "x"})
+	cfg, err := loadStaticConfig(dir)
+	t.Logf("cfg=%+v err=%v", cfg, err)
+	if err != nil || cfg.Style.HelperPlacement || cfg.Commit.Scopes != nil || cfg.Style.RootCtxAllow != nil {
+		t.Fatalf("没有配置文件应为零值，得到 %+v err=%v", cfg, err)
+	}
+}
+
+func TestLoadStaticConfig_YAML非法返回configParseError(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{configPath: "style: [\n"})
+	_, err := loadStaticConfig(dir)
+	var pe *configParseError
+	t.Logf("err=%v", err)
+	if !errors.As(err, &pe) || pe.Field != "" {
+		t.Fatalf("非法 YAML 应返回 Field 为空的 *configParseError，得到 %v", err)
 	}
 }
