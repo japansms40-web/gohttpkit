@@ -22,9 +22,9 @@
 // 拿不到 ctx 的地方（main、init、启动配置）用具名 Logger，不必硬造 context.Background()：
 //
 //	var log = logger.Named("mymod") // 包级声明一次，每条带 module=mymod
-//	log.Info("启动完成", slog.String("addr", addr))
-//	log.With(slog.String("account_id", "u1")).Warn("限流")
-//	log.InfoEvent(logger.NewEvent("app.started")) // 事件版：msg 与 event 同值
+//	started := logger.NewEvent("app.started") // 业务代码只打事件，不写自由文案
+//	log.InfoEvent(started, slog.String("addr", addr)) // msg 与 event 同值
+//	log.With(slog.String("account_id", "u1")).WarnEvent(logger.NewEvent("app.rate_limited"))
 //
 // Logger 不带 trace_id / span_id；要与 HTTP 日志同链仍用 InfoEvent(ctx, ev, ...)。
 //

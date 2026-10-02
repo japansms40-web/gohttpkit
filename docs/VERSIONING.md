@@ -10,6 +10,20 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## agentguard v0.2.0（`tools/agentguard/v0.2.0`，相对 v0.1.6）
+
+仅工具升级，不含 gohttpkit 根模块导出 API 变化。下游升级 agentguard 不会自动启用新检查，按下列要点接入：
+
+- 新增三个子命令 `check-style`、`check-agents-docs`、`check-commit-msg`，须在自己的 Makefile / 钩子 / CI 里显式接入。
+  接入前先清 `check-style` 的存量违规：panic 加放行指令（`//agentguard:allow-panic <理由>`）或改名 `Must*`、
+  加锁后改为紧跟 `defer` 解锁、辅助函数归位到 `common.go` 或加 `style.helper_placement_exempt`。
+- `.agentguard.yml` 新增的 `commit.scopes`、`style.helper_placement`、`style.helper_placement_exempt`、`style.root_ctx_allow`
+  都是可选字段，v0.1.6 能容忍这些字段，下游可先写配置再升级。
+- `check-agents-docs` 要求 `AGENTS.md` 恰好有一组 `shared-rules:start` / `shared-rules:end` 标记，且其间内容与 agentguard 内嵌正本逐字一致。
+- 治理守卫开始覆盖 `MIN_PKG_COVERAGE` 等全部 `MIN_*COVERAGE`（按首次 `?=` 定义取十进制数），比 v0.1.6 更严：下调任一门槛都会被拦。
+- `check-commit-msg` 的 scope 白名单读 HEAD 上的配置，同一次提交里新增的 scope 要到下一次提交才生效。
+- `repoRoot` 不再受钩子导出的 `GIT_DIR` 影响，在 git 钩子里运行行为一致。
+
 ## v0.15.0（相对 v0.14.0）
 
 新增导出 API（0.x 阶段按 minor），下游直接升级：

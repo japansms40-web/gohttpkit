@@ -24,7 +24,7 @@ type Logger struct {
 // Named 返回带 module 字段的 Logger，通常在包级声明一次。
 // 输入 name：非空时每条日志带 module=name；空串不带 module 键。
 // 返回：非 nil *Logger。
-// 例：var log = logger.Named("insexecutor"); log.Info("任务开始")。
+// 例：var log = logger.Named("insexecutor"); log.InfoEvent(ev)（业务代码只打事件，不写自由文案）。
 func Named(name string) *Logger {
 	if name == "" {
 		return &Logger{}

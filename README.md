@@ -202,7 +202,7 @@ client, err := httpx.NewClient(httpx.Options{
 - 跨会话不要共享 `Client`：它与 `HeaderProvider` 绑定，而后者通常携带某个账号的身份，复用会串号
 - `logger` 是**进程级全局单例**（`SetHandler` 会影响整个进程）。多个库共用时注意互相覆盖
 - 拿不到 ctx 的地方（main、init、启动配置）用具名实例，不必硬造 `context.Background()`：
-  `var log = logger.Named("mymod")` 后直接 `log.Info(msg)`，每条带 `module=mymod`，`log.With(...)` 追加固定字段。
+  `var log = logger.Named("mymod")` 后直接 `log.InfoEvent(ev)`（业务代码只打事件，不写自由文案），每条带 `module=mymod`，`log.With(...)` 追加固定字段。
   它每次调用才读当前全局 handler，包级 var 先于 `SetHandler` 创建也生效；但不带 trace_id，要与 HTTP 日志同链仍用 `logger.InfoEvent(ctx, ev, ...)`
 
 ---

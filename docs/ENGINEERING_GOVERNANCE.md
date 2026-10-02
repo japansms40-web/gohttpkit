@@ -86,15 +86,15 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 |---|---|---|
 | gofmt / go vet | pre-commit、CI test | ✅ |
 | lint 全量规则（errorlint、bodyclose、noctx、gosec、gocyclo、goconst、revive…） | pre-commit 增量、CI lint 全量 | ✅ |
-| 禁止裸 `fmt.Print` / `log.*` / `slog.*`（CS §6） | `forbidigo` | ✅ |
-| 禁自由文案日志（CS §6） | forbidigo | ✅ |
-| 事件只在 events.go 声明（CS §6） | check-style event-decl，同上 | ✅ |
+| 禁止裸 `fmt.Print` / `log.*` / `slog.*`（CS §6） | `forbidigo`：pre-commit 增量、CI 全量 | ✅ |
+| 禁自由文案日志（CS §6，含 `logger.Xxx` 与具名 Logger 的 `log.Xxx`） | forbidigo：pre-commit 增量、CI 全量 | ✅ |
+| 事件只在 events.go 声明（CS §6） | `make check-style` event-decl：pre-commit（有暂存 Go 文件时）、`make check`、CI test | ✅ |
 | 生产代码禁止直接 `errors.New`、`fmt.Errorf` 与非类型错误 panic（CS §5） | `make check-errors`：pre-commit、`make check`、CI test；扫描主模块与 agentguard 子模块，测试夹具豁免；对 `panic(err)` 的实际类型仍需代码审查 | ✅ |
 | 测试文件与源文件一一对应：`foo.go` ↔ `foo_test.go`，豁免 characterization / helpers / export（CS §8） | `make check-test-layout`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/`，无函数的源文件不要求测试 | ✅ |
 | 每个 Go 包有 `doc.go`，包注释只写在这里，「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应（CS §17） | `make check-pkg-doc`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/` | ✅ |
 | 覆盖率 ≥ `MIN_COVERAGE`=98（TESTING §1） | pre-push、CI `make cover` | ✅ |
 | `MIN_*COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
-| 加锁紧跟 defer 解锁（CS §4） | `make check-style` lock-defer：pre-commit、`make check`、CI test | ✅ |
+| 加锁紧跟 defer 解锁（CS §4） | `make check-style` lock-defer：pre-commit（有暂存 Go 文件时）、`make check`、CI test | ✅ |
 | 并发无竞态（CS §4） | pre-push、CI `go test -race` | ✅ |
 | characterization 行为锁定（CS §8） | pre-push、CI `make char` | ✅ |
 | characterization 用例不得删 / 改断言迁就实现（TESTING §11） | 治理守卫：删改 `.agentguard.yml` 指定的 char 用例（本仓库为 `httpx/characterization_test.go` 整文件）既有行须标注「行为变更」 | ✅ |
@@ -110,16 +110,16 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | 解压有大小上限（CS §10） | 代码实现 + characterization | ⬜ |
 | 破坏性变更升版本（VERSIONING） | CI `apidiff` 对比上一个 tag | ⬜ |
 | 其它类型错误契约（CS §5） | `errorlint` 部分；`errors.As` / `errors.IsKind` 断言与评审 | 🟡 |
-| panic 仅限 `Must*` / 初始化（CS §11） | check-style panic-placement | ✅ |
+| panic 仅限 `Must*` / 初始化（CS §11） | `make check-style` panic-placement：pre-commit（有暂存 Go 文件时）、`make check`、CI test | ✅ |
 | 注释「输入：/返回：」、导出符号「给谁用」（CS §7） | `revive exported` 管存在性；格式靠评审 | 🟡 |
 | IO 函数首参 `ctx`（CS §3） | `noctx` 管 HTTP；其余评审 | 🟡 |
-| 生产代码不硬造根 ctx（CS §3） | check-style root-ctx | ✅ |
+| 生产代码不硬造根 ctx（CS §3） | `make check-style` root-ctx：pre-commit（有暂存 Go 文件时）、`make check`、CI test | ✅ |
 | 状态码 / header / 日志 key 无裸字面量（CS §9） | `goconst`(min=2) | 🟡 |
 | 不新增 `t.Skip` 屏蔽用例（TESTING §10） | 治理守卫 | ✅ |
 | AI 不绕过门禁、不推送 / 删除 / 移动 tag、不碰凭据（AGENTS） | agent 钩子（Claude / Cursor / Codex） | ✅ |
 | examples 可运行 | CI test | ✅ |
 | 跨 agent 规则同源 | `make agents-sync-check`（CI） | ✅ |
-| AGENTS 共享段与正本一致、Cursor glob 有效 | `make check-agents-docs` | ✅ |
+| AGENTS 共享段与正本一致、Cursor glob 有效 | `make check-agents-docs`：pre-commit（每次提交）、`make check`（agent 收尾）、CI test | ✅ |
 
 ## 5. 本地钩子（零第三方依赖）
 
