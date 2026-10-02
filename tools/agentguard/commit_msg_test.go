@@ -201,3 +201,62 @@ func TestRun_checkCommitMsg区间为空串报格式错误(t *testing.T) {
 		t.Fatalf("--range 空串应报区间格式错误且无尾随空格，得到 code=%d stderr=%q", code, errOut)
 	}
 }
+
+func TestRun_checkCommitMsg删除包的scope并入前后树目录(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{
+		configPath:      "commit:\n  scopes: [docs]\n",
+		"pkg/old/a.go":  "package old\n",
+		"pkg/keep/b.go": "package keep\n",
+	})
+	base := mustGit(t, dir, "rev-parse", "HEAD")
+	mustGit(t, dir, "rm", "-q", "-r", "pkg/old")
+	t.Chdir(dir)
+	msgFile := func(msg string) string {
+		p := filepath.Join(t.TempDir(), "COMMIT_EDITMSG")
+		if err := os.WriteFile(p, []byte(msg), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	var code int
+	out, errOut := captureOutput(t, func() {
+		code = run([]string{"check-commit-msg", msgFile("refactor(old): 删除旧包\n\n测试：通过\n")})
+	})
+	t.Logf("文件模式 → code=%d stdout=%q stderr=%q", code, out, errOut)
+	if code != 0 {
+		t.Fatalf("本次提交删除的包的 scope 应放行，得到 code=%d stderr=%q", code, errOut)
+	}
+	_, errOut = captureOutput(t, func() {
+		code = run([]string{"check-commit-msg", msgFile("refactor(nope): x\n\n测试：通过\n")})
+	})
+	if code != 1 || !strings.Contains(errOut, "scope 不在白名单：nope") {
+		t.Fatalf("不存在的 scope 仍应报，得到 code=%d stderr=%q", code, errOut)
+	}
+
+	cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "refactor(old): 删除旧包\n\n测试：通过")
+	cmd.Dir = dir
+	if o, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, o)
+	}
+	head := mustGit(t, dir, "rev-parse", "HEAD")
+	out, errOut = captureOutput(t, func() { code = run([]string{"check-commit-msg", "--range", base + ".." + head}) })
+	t.Logf("区间模式 → code=%d stdout=%q stderr=%q", code, out, errOut)
+	if code != 0 {
+		t.Fatalf("区间内删除包的提交应合规，得到 code=%d stderr=%q", code, errOut)
+	}
+}
+
+func TestScopeDirsAt_rev不存在返回空集合(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{"pkg/sub/a.go": "package sub\n", "pkg/testdata/x.go": "package x\n"})
+	got, err := scopeDirsAt(dir, "HEAD^")
+	t.Logf("HEAD^ → %v err=%v", got, err)
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("根提交的 HEAD^ 应返回空集合且无错误，得到 %v err=%v", got, err)
+	}
+	got, err = scopeDirsAt(dir, "HEAD")
+	if err != nil || !got["pkg/sub"] || !got["sub"] || got["testdata"] || got["pkg/testdata"] {
+		t.Fatalf("HEAD 树应含 pkg/sub 且跳过 testdata，得到 %v err=%v", got, err)
+	}
+}

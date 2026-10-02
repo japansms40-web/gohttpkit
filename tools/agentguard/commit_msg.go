@@ -94,7 +94,7 @@ func commitLines(msg string) []string {
 }
 
 // allowedScopes 汇总提交 scope 白名单。
-// 输入 root：仓库根；cfg：HEAD 里的配置。
+// 输入 root：仓库根；cfg：HEAD 里的配置（因此同一次提交里往 commit.scopes 新增的 scope，要到下一次提交才生效）。
 // 返回：cfg.Commit.Scopes 为空时返回 nil（不校验 scope）；否则为配置的 scope，
 // 加上仓库内每个含 Go 文件的目录（相对路径与目录名，跳过 testdata/）。列文件失败时返回错误。
 func allowedScopes(root string, cfg repoConfig) (map[string]bool, error) {
@@ -110,12 +110,61 @@ func allowedScopes(root string, cfg repoConfig) (map[string]bool, error) {
 		return nil, err
 	}
 	for rel := range files {
-		if dir := path.Dir(rel); dir != "." {
-			scopes[dir] = true
-			scopes[path.Base(dir)] = true
+		addScopeDir(scopes, rel)
+	}
+	return scopes, nil
+}
+
+// addScopeDir 把 Go 文件所在目录（相对路径与目录名）记入 scopes；根目录文件不产生 scope。
+// 输入 scopes：待写入的集合；rel：以仓库根为基准、/ 分隔的文件路径。
+func addScopeDir(scopes map[string]bool, rel string) {
+	if dir := path.Dir(rel); dir != "." {
+		scopes[dir] = true
+		scopes[path.Base(dir)] = true
+	}
+}
+
+// scopeDirsAt 列出 rev 树里含 Go 文件的目录，规则同 allowedScopes（跳过 testdata/）。
+// 输入 root：仓库根；rev：任意提交引用，如 HEAD、<sha>^。
+// 返回：目录相对路径与目录名的集合；rev 不存在（如根提交没有 sha^）时返回空集合且不报错；列树失败时返回错误。
+func scopeDirsAt(root, rev string) (map[string]bool, error) {
+	scopes := make(map[string]bool)
+	if _, err := gitOut(root, "rev-parse", "--verify", "-q", rev+"^{commit}"); err != nil {
+		return scopes, nil
+	}
+	listed, err := gitRaw(root, "ls-tree", "-r", "--name-only", "-z", rev)
+	if err != nil {
+		return nil, &os.PathError{Op: "git ls-tree", Path: rev, Err: err}
+	}
+	for rel := range strings.SplitSeq(listed, "\x00") {
+		if strings.HasSuffix(rel, ".go") && !inTestdata(rel) {
+			addScopeDir(scopes, rel)
 		}
 	}
 	return scopes, nil
+}
+
+// withScopeDirs 返回 scopes 并入各 rev 树目录后的新副本，不修改原集合。
+// 输入 scopes：基础白名单，nil 表示不校验 scope（原样返回 nil）；revs：要并入的提交引用。
+// 返回：新集合；列树失败时返回错误。
+func withScopeDirs(root string, scopes map[string]bool, revs ...string) (map[string]bool, error) {
+	if scopes == nil {
+		return nil, nil
+	}
+	out := make(map[string]bool, len(scopes))
+	for k := range scopes {
+		out[k] = true
+	}
+	for _, rev := range revs {
+		dirs, err := scopeDirsAt(root, rev)
+		if err != nil {
+			return nil, err
+		}
+		for k := range dirs {
+			out[k] = true
+		}
+	}
+	return out, nil
 }
 
 // runCheckCommitMsg 是 check-commit-msg 子命令。
@@ -160,6 +209,13 @@ func runCheckCommitMsg(args []string) int {
 		return 1
 	}
 	var violations []string
+	if !isRange {
+		// 文件模式：本次提交可能删除了包，并入 HEAD 树的目录。
+		if scopes, err = withScopeDirs(root, scopes, "HEAD"); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg：列文件失败：", err)
+			return 1
+		}
+	}
 	if isRange {
 		var skipped string
 		violations, skipped, err = checkCommitRange(root, spec, scopes)
@@ -219,7 +275,11 @@ func checkCommitRange(root, spec string, scopes map[string]bool) (violations []s
 		if logErr != nil {
 			return nil, "", &os.PathError{Op: "git log", Path: sha, Err: logErr}
 		}
-		for _, v := range checkCommitMessage(msg, scopes) {
+		perCommit, scopeErr := withScopeDirs(root, scopes, sha+"^", sha)
+		if scopeErr != nil {
+			return nil, "", scopeErr
+		}
+		for _, v := range checkCommitMessage(msg, perCommit) {
 			violations = append(violations, short(sha)+": "+v)
 		}
 	}
