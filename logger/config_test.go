@@ -109,14 +109,7 @@ func TestSetConfig_both同时写stdout与文件(t *testing.T) {
 
 func TestMustFileWriter_空路径回落默认文件(t *testing.T) {
 	dir := t.TempDir()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
+	t.Chdir(dir)
 
 	w := mustFileWriter("")
 	t.Logf("writer=%T", w)
@@ -308,14 +301,7 @@ func TestSetConfig_LevelDebug放行Debug(t *testing.T) {
 func TestSetConfig_空FilePath回落默认路径(t *testing.T) {
 	restoreFallback(t)
 	dir := t.TempDir()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
+	t.Chdir(dir)
 
 	SetLogger(nil)
 	SetConfig(Config{Level: LevelInfo, Format: FormatJSON, Output: OutputFile})
