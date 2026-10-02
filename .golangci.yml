@@ -37,7 +37,7 @@ linters:
     forbidigo:
       forbid:
         - pattern: '^(fmt\.Print(|f|ln)|log\.(Print|Fatal|Panic)|slog\.(Debug|Info|Warn|Error))'
-          msg: "请使用 logger 门面: logger.Info(ctx, msg, attrs...)，ctx 必传"
+          msg: "请使用 logger 门面且只打事件：在 events.go 用 logger.NewEvent 声明事件，调用 logger.XxxEvent(ctx, ev, attrs...)，ctx 必传；拿不到 ctx 用 logger.Named(...).XxxEvent"
         - pattern: '^(logger|log)\.(Debug|Info|Warn|Error)$'
           msg: "禁止自由文案日志：在 events.go 用 logger.NewEvent 声明事件，调用 logger.XxxEvent(ctx, ev, attrs...)"
     nolintlint:
