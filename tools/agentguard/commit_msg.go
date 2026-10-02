@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -20,8 +21,8 @@ var (
 // testLineTypes 是正文必须带「测试：」行的提交类型。
 var testLineTypes = map[string]bool{"feat": true, "fix": true, "refactor": true, "perf": true}
 
-// toolGeneratedPrefixes 是工具生成的提交标题前缀，不受约束。
-var toolGeneratedPrefixes = []string{"Merge ", "Revert ", "fixup! ", "squash! ", "amend! "}
+// toolGeneratedTitleRe 只认 git 实际生成的标题格式；这类提交豁免标题、scope、测试行检查，会话尾注仍检查。
+var toolGeneratedTitleRe = regexp.MustCompile(`^(Merge (branch|branches|remote-tracking branch|tag|commit|pull request) |Revert "|(fixup|squash|amend)! )`)
 
 // scissorsLine 是 git commit -v 的剪刀线，其后是 diff，不属于提交说明。
 const scissorsLine = "# ------------------------ >8 ------------------------"
@@ -36,10 +37,9 @@ func checkCommitMessage(msg string, scopes map[string]bool) []string {
 		return []string{"提交说明为空"}
 	}
 	title := lines[0]
-	for _, p := range toolGeneratedPrefixes {
-		if strings.HasPrefix(title, p) {
-			return nil
-		}
+	body := strings.Join(lines[1:], "\n")
+	if toolGeneratedTitleRe.MatchString(title) {
+		return trailerViolations(body)
 	}
 	m := commitTitleRe.FindStringSubmatch(title)
 	if m == nil {
@@ -53,14 +53,20 @@ func checkCommitMessage(msg string, scopes map[string]bool) []string {
 			}
 		}
 	}
-	body := strings.Join(lines[1:], "\n")
 	if testLineTypes[m[1]] && !testLineRe.MatchString(body) {
 		out = append(out, m[1]+" 提交正文缺「测试：<命令及结果>」行（未运行写「测试：未运行（原因）」）")
 	}
+	return append(out, trailerViolations(body)...)
+}
+
+// trailerViolations 检查正文里的会话尾注。
+// 输入 body：标题之后的正文。
+// 返回：含会话尾注时返回一条违规，否则返回 nil。
+func trailerViolations(body string) []string {
 	if t := sessionTrailerRe.FindStringSubmatch(body); t != nil {
-		out = append(out, "禁止会话尾注："+t[1])
+		return []string{"禁止会话尾注：" + t[1]}
 	}
-	return out
+	return nil
 }
 
 // commitLines 按 git 默认 cleanup 规则整理提交说明。
@@ -69,13 +75,13 @@ func checkCommitMessage(msg string, scopes map[string]bool) []string {
 func commitLines(msg string) []string {
 	var out []string
 	for line := range strings.SplitSeq(msg, "\n") {
+		line = strings.TrimRight(line, " \t\r")
 		if line == scissorsLine {
 			break
 		}
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-		line = strings.TrimRight(line, " \t\r")
 		if len(out) == 0 && line == "" {
 			continue
 		}
@@ -111,10 +117,15 @@ func allowedScopes(root string, cfg repoConfig) (map[string]bool, error) {
 
 // runCheckCommitMsg 是 check-commit-msg 子命令。
 // 输入 args：一个提交说明文件路径（commit-msg 钩子），或 --range A..B（CI 校验整段提交，跳过合并提交）。
-// 返回：0 全部合规，或区间起点为全零（新分支首推）；1 用法错误、不在仓库内、读取失败或有违规（逐条打到 stderr）。
+// 返回：0 全部合规，或区间被跳过（起点全零 / 不在本地历史，stdout 提示「跳过检查」）；1 用法错误、不在仓库内、读取失败或有违规（逐条打到 stderr）。
 func runCheckCommitMsg(args []string) int {
-	isRange := len(args) == 2 && args[0] == "--range"
-	if !isRange && (len(args) != 1 || strings.HasPrefix(args[0], "-")) {
+	var spec, file string
+	switch {
+	case len(args) == 2 && args[0] == "--range":
+		spec = args[1]
+	case len(args) == 1 && !strings.HasPrefix(args[0], "-"):
+		file = args[0]
+	default:
 		usage()
 		return 1
 	}
@@ -134,14 +145,23 @@ func runCheckCommitMsg(args []string) int {
 		return 1
 	}
 	var violations []string
-	if isRange {
-		violations, err = checkCommitRange(root, args[1], scopes)
+	if spec != "" {
+		var skipped string
+		violations, skipped, err = checkCommitRange(root, spec, scopes)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg：", err)
+			hint := ""
+			if errors.Is(err, os.ErrInvalid) {
+				hint = "（应为 A..B）"
+			}
+			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg：", err, hint)
 			return 1
 		}
+		if skipped != "" {
+			fmt.Println("check-commit-msg：跳过检查：" + skipped)
+			return 0
+		}
 	} else {
-		b, readErr := os.ReadFile(args[0])
+		b, readErr := os.ReadFile(file)
 		if readErr != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg：读取提交说明失败：", readErr)
 			return 1
@@ -159,29 +179,31 @@ func runCheckCommitMsg(args []string) int {
 }
 
 // checkCommitRange 校验 A..B 区间内每个非合并提交的说明。
-// 输入 spec：形如 A..B；A 为全零 SHA（新分支首推）时不检查。
-// 返回：带短 SHA 前缀的违规（按提交从旧到新）；spec 非法或 git 失败时返回错误。
-func checkCommitRange(root, spec string, scopes map[string]bool) ([]string, error) {
+// 输入 spec：形如 A..B；A 为全零 SHA（新分支首推）或不在本地历史（force push / 浅克隆）时跳过检查。
+// 返回：violations 为带短 SHA 前缀的违规（按提交从旧到新）；skipped 非空表示跳过及原因；spec 非法（errors.Is os.ErrInvalid）或 git 失败时返回错误。
+func checkCommitRange(root, spec string, scopes map[string]bool) (violations []string, skipped string, err error) {
 	from, _, ok := strings.Cut(spec, "..")
 	if !ok || from == "" {
-		return nil, &os.PathError{Op: "range", Path: spec, Err: os.ErrInvalid}
+		return nil, "", &os.PathError{Op: "range", Path: spec, Err: os.ErrInvalid}
 	}
 	if from == zeroSHA {
-		return nil, nil
+		return nil, "起点为全零（新分支首推）", nil
+	}
+	if _, verr := gitOut(root, "rev-parse", "--verify", "-q", from+"^{commit}"); verr != nil {
+		return nil, "起点 " + from + " 不在本地历史（force push 或浅克隆）", nil
 	}
 	list, err := gitOut(root, "rev-list", "--no-merges", "--reverse", spec)
 	if err != nil {
-		return nil, &os.PathError{Op: "git rev-list", Path: spec, Err: err}
+		return nil, "", &os.PathError{Op: "git rev-list", Path: spec, Err: err}
 	}
-	var out []string
 	for sha := range strings.FieldsSeq(list) {
 		msg, logErr := gitRaw(root, "log", "-1", "--format=%B", sha)
 		if logErr != nil {
-			return nil, &os.PathError{Op: "git log", Path: sha, Err: logErr}
+			return nil, "", &os.PathError{Op: "git log", Path: sha, Err: logErr}
 		}
 		for _, v := range checkCommitMessage(msg, scopes) {
-			out = append(out, short(sha)+": "+v)
+			violations = append(violations, short(sha)+": "+v)
 		}
 	}
-	return out, nil
+	return violations, "", nil
 }

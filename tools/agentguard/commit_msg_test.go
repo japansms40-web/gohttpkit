@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +28,17 @@ func TestCheckCommitMessage_标题与正文规则(t *testing.T) {
 		{"剪刀线后的diff不算正文", "fix(httpx): x\n\n测试：通过\n" + scissorsLine + "\nCo-Authored-By: x\n", nil},
 		{"注释行忽略", "# 注释\nfix(httpx): x\n# 注释\n\n测试：通过\n", nil},
 		{"工具生成提交放行", "Revert \"fix(x): y\"\n", nil},
+		{"Merge随便写不放行", "Merge 我随便写\n", []string{"标题不符合"}},
+		{"Merge branch放行", "Merge branch 'x' into y\n", nil},
+		{"Revert带尾注仍报", "Revert \"fix(x): y\"\n\nCo-Authored-By: a\n", []string{"禁止会话尾注"}},
+		{"fixup放行", "fixup! fix(x): y\n", nil},
+		{"CRLF剪刀线", "fix(httpx): x\r\n\r\n测试：ok\r\n" + scissorsLine + "\r\nCo-Authored-By: x\r\n", nil},
+		{"CRLF合规", "fix(httpx): x\r\n\r\n测试：ok\r\n", nil},
+		{"感叹号破坏性变更", "fix(httpx)!: x\n\n测试：ok\n", nil},
+		{"标题尾随空格", "docs(docs): x   \n", nil},
+		{"尾注在正文中间", "docs(docs): x\n\nCo-Authored-By: a\n\n更多说明\n", []string{"禁止会话尾注"}},
+		{"只有标题缺测试行", "fix(httpx): x\n", []string{"缺「测试："}},
+		{"测试行写在标题里", "fix(httpx): 测试：ok\n", []string{"缺「测试："}},
 	}
 	for _, c := range cases {
 		got := checkCommitMessage(c.msg, scopes)
@@ -140,11 +152,36 @@ func TestRun_checkCommitMsg区间模式(t *testing.T) {
 		t.Fatalf("区间模式应只报违规提交并带短 SHA，得到 code=%d stderr=%q", code, errOut)
 	}
 	out, _ := captureOutput(t, func() { code = run([]string{"check-commit-msg", "--range", zeroSHA + ".." + head}) })
-	if code != 0 || !strings.Contains(out, "提交说明符合规范") {
+	if code != 0 || !strings.Contains(out, "跳过检查") {
 		t.Fatalf("起点为全零（新分支首推）应跳过，得到 code=%d stdout=%q", code, out)
 	}
 	_, errOut = captureOutput(t, func() { code = run([]string{"check-commit-msg", "--range", "no-dots"}) })
 	if code != 1 || !strings.Contains(errOut, "check-commit-msg：") {
 		t.Fatalf("区间格式非法应退出 1，得到 code=%d stderr=%q", code, errOut)
+	}
+}
+
+func TestCheckCommitRange_跳过与错误身份(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{"a.txt": "x"})
+	head := mustGit(t, dir, "rev-parse", "HEAD")
+
+	v, skipped, err := checkCommitRange(dir, "deadbeef.."+head, nil)
+	t.Logf("起点缺失 → v=%v skipped=%q err=%v", v, skipped, err)
+	if err != nil || !strings.Contains(skipped, "不在本地历史") || v != nil {
+		t.Fatalf("起点不在本地历史应跳过且无错误，得到 v=%v skipped=%q err=%v", v, skipped, err)
+	}
+	_, skipped, err = checkCommitRange(dir, zeroSHA+".."+head, nil)
+	if err != nil || !strings.Contains(skipped, "全零") {
+		t.Fatalf("全零起点应跳过，得到 skipped=%q err=%v", skipped, err)
+	}
+	_, _, err = checkCommitRange(dir, "no-dots", nil)
+	if !errors.Is(err, os.ErrInvalid) {
+		t.Fatalf("格式非法应为 os.ErrInvalid，得到 %v", err)
+	}
+	_, _, err = checkCommitRange(dir, "HEAD..nosuchref", nil)
+	var pe *os.PathError
+	if !errors.As(err, &pe) || pe.Op != "git rev-list" {
+		t.Fatalf("终点不存在应为 git rev-list 的 PathError，得到 %v", err)
 	}
 }
