@@ -21,12 +21,15 @@
   范例：`httpx/interceptor` 下的 classify / status_semantics / html_text。
 - **SHOULD** 大数据映射表（国家→locale、国家→时区）独立成文件，表头写明数据源与维护规约。
   范例：`geo/locale_web.go`、`geo/timezone.go`、`geo/locale_mobile/*.go`；各组表 keyset 由测试守护。
+- **SHOULD**（辅助函数归位，与 insgo CODE_STANDARDS §2 同规则）源文件里声明了方法时，包级未导出的纯辅助函数不与方法混放，
+  统一放本包 `common.go`，用例写在 `common_test.go`。例外：类型构造器 `newXxx` 留在类型所在文件；首参为 `context.Context` 的主实现留在原文件。
+  `check-style` 的 helper-placement 规则可按仓库在 `.agentguard.yml` 开启；本仓存量较多，未开启，新增代码遵守。
 
 ## 3. API 设计
 
 - **MUST** 所有会发起 IO 的函数第一参是 `context.Context`。
 - **MUST** ctx 沿调用链透传，不得中途替换为 `context.Background()` / `context.TODO()`；派生超时用
-  `context.WithTimeout(ctx, …)`，不新建根 ctx。拿不到 ctx 的日志调用点用具名 Logger（见 §6），不为打日志硬造 ctx。
+  `context.WithTimeout(ctx, …)`，不新建根 ctx。拿不到 ctx 的日志调用点用具名 Logger（见 §6），不为打日志硬造 ctx。强制：check-style root-ctx（package main 与 logger/ 门面放行）。
 - **MUST** 后台 goroutine 不直接缓存请求 ctx（请求结束即 cancel）；需要保留 trace 等日志上下文时用
   `context.WithoutCancel(ctx)` 派生，退出路径另由 `Close` / channel 控制（见 §11）。
 - **MUST NOT** 为无 ctx 感知的外部调用做「goroutine + select 赛跑」式降级：取消后后台调用仍在跑，对端不响应就泄漏 goroutine。
@@ -44,6 +47,8 @@
 
 - **MUST** 含锁结构体的类型定义头部写并发模型注释：谁共享、哪把锁保护哪些字段。
   范例：`httpx.Client` 头注。
+- **MUST** 加锁后下一条语句就是 `defer x.Unlock()` / `defer x.RUnlock()`；需要提前解锁时把临界区抽成函数或闭包，
+  不手写成对的 Lock / Unlock（中途 return 或 panic 会漏解锁）。强制：`check-style` lock-defer。范例：`httpx.Client` 各访问器。
 - **MUST** 受锁字段跨包只能经访问器读写，禁止裸读写绕过锁。
   范例：`Client.SnapshotResponseStatusCode` / `SnapshotResponseHeaders`。
 - **MUST** `make race` 通过是合入门禁（需要 C 编译器）。并发回归必须配并发测试。
@@ -138,7 +143,7 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 ## 6. 日志
 
 - **MUST** 生产代码统一走 `logger` 门面且**只打事件**：`logger.DebugEvent` / `InfoEvent` / `WarnEvent` / `ErrorEvent(ctx, ev, attrs...)`，
-  ctx 必传首参，msg 与 event 同值；不写自由 msg（`logger.Info(ctx, "文案")` 视为回归）。
+  ctx 必传首参，msg 与 event 同值；不写自由 msg（`logger.Info(ctx, "文案")` 视为回归）。强制：forbidigo 禁 logger.Debug/Info/Warn/Error；check-style event-decl 管 NewEvent 位置。
   `forbidigo` 会拦截裸 `fmt.Print` / `log.*` / `slog.*`（`logger/` 包自身与 `examples/` 除外）。
   测试观察日志走 `t.Log` / `t.Logf`，见第 8 节，不要在 `*_test.go` 里打 `logger` 或 `fmt.Print`。
 - **MUST** 事件在包内 `events.go` 用 `logger.NewEvent("<域>.<动作>")` 声明为包级 var（全小写点分），
@@ -266,7 +271,7 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 - **MUST NOT** 在请求路径（`Do*`、拦截器、`Get`、查表函数）上 `panic`。panic 只允许出现在：
   1. `Must*` 前缀函数（名字即声明，panic 值必须是本库类型错误，`recover` 后可 `errors.As`）；
   2. 进程初始化期的注册 / 配置（如 `versionreg.Registry.MustRegister` 重复注册）。
-  范例：`versionreg.Registry.MustGet`。新代码的 panic 值一律用类型错误，不用裸字符串。
+  范例：`versionreg.Registry.MustGet`。新代码的 panic 值一律用类型错误，不用裸字符串。强制：check-style panic-placement；初始化期注册函数不叫 Must* 时，在函数注释末行写 //agentguard:allow-panic <理由>。
 - **MUST** 可阻塞的等待（退避、读、写）同时 `select` 在 `ctx.Done()` 上，ctx 取消后立即返回，且返回的错误链里含 `ctx.Err()`（调用方可 `errors.Is(err, context.Canceled)`）。
   范例：`httpx/interceptor/retry.go` 退避等待。
 
@@ -286,25 +291,6 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 
 - **MUST** 删除或改变导出符号前先弃用至少一个 minor 版本：doc comment 末段加标准格式
   `// Deprecated: 用 Xxx 替代。将在 vX.Y.0 移除。`（`staticcheck` SA1019 会提示调用方）。
-- **MUST** 每个 Go 包目录（含 `examples/*`、`tools/agentguard`，不含 `testdata/`）有 `doc.go`，包注释写明包的职责边界与入口，
-  且**只写在 `doc.go`**，其它源文件不得在 `package` 子句上方写包注释。只含指令的注释（如必须紧贴 `package` 才对整文件生效的
-  `//nolint:xxx // 理由`）不算包注释，`go doc` 也不显示它。
-- **MUST** 包注释末尾带一层「文件结构：」树，逐项列出本目录全部非测试 `.go` 文件（含 `doc.go` 自身）与含 Go 包的直接子目录（带 `/`），
-  每项一句用途；`_test.go` 不列，下层由子包自己的 `doc.go` 登记。增删文件时同步改树：
-
-  ```go
-  // 文件结构：
-  //
-  //	geo/
-  //	├── doc.go            包文档（本文件）
-  //	├── errors.go         本包类型错误：UnknownCountryError 等
-  //	├── ...
-  //	└── locale_mobile/    子包 localemobile：Android 端五个 locale header
-  package geo
-  ```
-
-  执行 `make check-pkg-doc` 检查（`make check`、pre-commit、CI 均含）：缺 doc.go、包注释位置不对、缺树、漏登记、登记了不存在的条目、
-  重复登记、条目无说明都判失败。范例：`geo/doc.go`、`logger/doc.go`、`httpx/doc.go`。
 - **MUST** 导出 struct 新增字段时零值必须保持旧行为（否则是破坏性变更）。
 - **SHOULD** 对外 API 变化用 `apidiff` 与上一个 tag 对比，结果写进 PR 与 `CHANGELOG.md`（待落地为 CI job）。
 - **MUST NOT** 导出接口类型后再往接口上加方法（下游实现会编译失败）；需要扩展时新增接口或可选接口断言。
@@ -330,3 +316,37 @@ if errors.IsKind(err, versionreg.KindRegisterDuplicate) { ... }
 - **MUST** 圈复杂度 ≤ 20（`gocyclo` 硬卡；`geo/` 数据表豁免）。
 - **SHOULD** 函数不超过 80 行、单文件不超过 600 行（数据表文件除外）；超过时按职责拆分，而不是按行数机械拆。
 - **SHOULD** 嵌套不超过 4 层；多用卫语句提前返回。
+
+## 17. 包文档
+
+- **MUST** 每个 Go 包目录（含 `examples/*`、`tools/agentguard`，不含 `testdata/`）有 `doc.go`，包注释写明包的职责边界与入口，
+  且**只写在 `doc.go`**，其它源文件不得在 `package` 子句上方写包注释。只含指令的注释（如必须紧贴 `package` 才对整文件生效的
+  `//nolint:xxx // 理由`）不算包注释，`go doc` 也不显示它。
+- **MUST** 包注释末尾带一层「文件结构：」树，逐项列出本目录全部非测试 `.go` 文件（含 `doc.go` 自身）与含 Go 包的直接子目录（带 `/`），
+  每项一句用途；`_test.go` 不列，下层由子包自己的 `doc.go` 登记。增删文件时同步改树：
+
+  ```go
+  // 文件结构：
+  //
+  //	geo/
+  //	├── doc.go            包文档（本文件）
+  //	├── errors.go         本包类型错误：UnknownCountryError 等
+  //	├── ...
+  //	└── locale_mobile/    子包 localemobile：Android 端五个 locale header
+  package geo
+  ```
+
+  执行 `make check-pkg-doc` 检查（`make check`、pre-commit、CI 均含）：缺 doc.go、包注释位置不对、缺树、漏登记、登记了不存在的条目、
+  重复登记、条目无说明都判失败。范例：`geo/doc.go`、`logger/doc.go`、`httpx/doc.go`。
+
+## 18. 评审要点
+
+合入前按条核对（能机器判定的已进 `make check`，这里只列仍靠评审的）：
+
+1. **导出即契约**：新导出符号写了「给谁用、什么场景」；改导出符号按 VERSIONING 升版本。
+2. **默认链**：没有把业务判断塞进 `DefaultChain`；改链序跑过 `make char`。
+3. **错误**：调用方要字段用专用类型，只要分类用 `errors.Error` + `Kind`；没有扫 `Error()` 文案判定身份。
+4. **注释**：每个函数有「输入：/返回：」，零值与失败可区分；「为什么」写了踩过的坑。
+5. **测试**：按 TESTING §2 角度补测；错误分支断言身份；对外行为改动有 characterization。
+6. **资源**：Body 所有权明确；goroutine 有退出路径；可阻塞等待 select 了 `ctx.Done()`。
+7. **依赖**：新增依赖有论证与许可证；升级单独成提交。

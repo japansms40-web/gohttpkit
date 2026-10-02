@@ -71,12 +71,12 @@
 - **日志走 `logger` 门面且只打事件**：包内 `events.go` 用 `logger.NewEvent("<域>.<动作>")` 声明事件（名称即下游过滤契约，由测试锁定），
   调用 `logger.DebugEvent` / `InfoEvent` / `WarnEvent` / `ErrorEvent`（ctx 必传，msg 与 event 同值），不写自由 msg；拿不到 ctx 的调用点用包级
   `var log = logger.Named("<模块>")` 后 `log.XxxEvent(ev)`，不硬造 `context.Background()`。禁止裸 `fmt.Print` / `log.*` / `slog.*`
-  （`logger/`、`examples/` 除外）；测试观察走 `t.Log` / `t.Logf`，不在 `*_test.go` 打 `logger`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度。
+  （`logger/`、`examples/` 除外）；测试观察走 `t.Log` / `t.Logf`，不在 `*_test.go` 打 `logger`。协议 body 经 `TruncateBodyForLog` 截断并带原始长度。check-style 管锁、事件声明、panic 位置与根 ctx。
 - **含锁结构体**头部写并发模型注释（谁共享、哪把锁保护哪些字段）；受锁字段跨包只经访问器读写；锁内不做分配/IO。
 - **常量与魔法值**：闭合集合且进 `switch` 的用 `type X string` 枚举；header 名/日志 key 用具名 const（不套 type）；状态码用 `StatusClass` / stdlib 常量。`geo/` 表内字面量与 `examples/` 豁免。
 - **大数据表**（geo）独立成文件、表头写数据源，禁止文件名以 `_<GOOS>.go` 结尾（会被构建约束丢弃）。
 - **每个 Go 包有 `doc.go`**：包注释只写在 `doc.go`，末尾带一层「文件结构：」树，逐项列出本目录非测试 `.go` 文件与子包目录并各写一句用途；
-  增删文件同步改树。执行 `make check-pkg-doc` 检查，细则见 CODE_STANDARDS §13。
+  增删文件同步改树。执行 `make check-pkg-doc` 检查，细则见 CODE_STANDARDS §17。
 
 ## 测试与质量门禁
 
@@ -104,8 +104,8 @@
    改文件后 gofmt + vet；回合结束前跑治理守卫，有未提交 Go 改动时跑 `make check`、改到 `tools/agentguard` 时跑 `make tools-check`，
    不过不许收尾（连续 3 次后放行并提示人）。仓库差异（char 用例、主干分支名）写在 `.agentguard.yml`。规则与人工放行方式见 `docs/ENGINEERING_GOVERNANCE.md` §3。
 1. **本地 git 钩子**（`make hooks` 一键装，走 `.githooks/` + `core.hooksPath`，零第三方依赖）：
-   - `pre-commit`：`gofmt`、`go vet`、`check-errors`、`check-test-layout`、`check-pkg-doc`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
-   - `commit-msg`：校验 `<type>(<scope>): 摘要` 约定。
+   - `pre-commit`：`gofmt`、`go vet`、`check-errors`、`check-test-layout`、`check-pkg-doc`、`check-style`、`check-agents-docs`、拒绝 `.idea/`、`golangci-lint --new-from-rev`、`go mod tidy -diff`、密钥扫描。
+   - `commit-msg`：agentguard `check-commit-msg`（标题、scope 白名单、feat/fix/refactor/perf 的「测试：」行、禁会话尾注）。
    - `pre-push`：`make governance race char cover`。
    - 应急可 `--no-verify` 绕过，但**禁止常规使用**；绕过后 CI 仍会拦。
 2. **CI**（服务端，`--no-verify` 绕不过）：`.github/workflows/ci.yml` 跑全量门禁 + 治理守卫 + 密钥扫描 + 提交规范 + 漏洞扫描。独立开发靠「本地钩子 + CI」即完整闭环；想再要「不绿不许合 main」可选配分支保护（approvals=0、不要 code-owner 审核），步骤见 `docs/ENGINEERING_GOVERNANCE.md`。

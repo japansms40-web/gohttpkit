@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+> agentguard 随 `tools/agentguard/v0.2.0` 发布（不含 gohttpkit 根模块导出 API 变化）。
+
+### 新增
+
+- agentguard v0.2.0：新增 `check-style`（lock-defer / event-decl / panic-placement / root-ctx / helper-placement）、
+  `check-agents-docs`（共享段正本、Cursor glob）、`check-commit-msg`（标题 / scope / 测试行 / 会话尾注，支持 `--range`）。
+- `.agentguard.yml` 新增 `commit.scopes`、`style.helper_placement`、`style.helper_placement_exempt`、`style.root_ctx_allow`（静态检查读 HEAD 上的配置）。
+
+### 变更
+
+- 治理守卫覆盖全部 `MIN_*COVERAGE`，逐包覆盖率门禁下调不再漏拦。
+- `.golangci.yml` 启用 modernize、usetesting，并新增 forbidigo 规则禁 `logger.Debug/Info/Warn/Error`。
+
+### 修复
+
+- agentguard：`repoRoot` 不再受钩子导出的 `GIT_DIR` 影响。
+
 ## [v0.15.0] - 2026-09-28
 
 > 含新增导出 API，升 minor。agentguard 的 `check-pkg-doc` 修复随 `tools/agentguard/v0.1.6` 发布。

@@ -87,11 +87,14 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | gofmt / go vet | pre-commit、CI test | ✅ |
 | lint 全量规则（errorlint、bodyclose、noctx、gosec、gocyclo、goconst、revive…） | pre-commit 增量、CI lint 全量 | ✅ |
 | 禁止裸 `fmt.Print` / `log.*` / `slog.*`（CS §6） | `forbidigo` | ✅ |
+| 禁自由文案日志（CS §6） | forbidigo | ✅ |
+| 事件只在 events.go 声明（CS §6） | check-style event-decl，同上 | ✅ |
 | 生产代码禁止直接 `errors.New`、`fmt.Errorf` 与非类型错误 panic（CS §5） | `make check-errors`：pre-commit、`make check`、CI test；扫描主模块与 agentguard 子模块，测试夹具豁免；对 `panic(err)` 的实际类型仍需代码审查 | ✅ |
 | 测试文件与源文件一一对应：`foo.go` ↔ `foo_test.go`，豁免 characterization / helpers / export（CS §8） | `make check-test-layout`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/`，无函数的源文件不要求测试 | ✅ |
-| 每个 Go 包有 `doc.go`，包注释只写在这里，「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应（CS §13） | `make check-pkg-doc`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/` | ✅ |
+| 每个 Go 包有 `doc.go`，包注释只写在这里，「文件结构：」树与本目录非测试 `.go` 文件及子包目录一一对应（CS §17） | `make check-pkg-doc`：pre-commit（含只删 Go 文件的提交）、`make check`（agent 收尾）、CI test；扫描主模块与 agentguard 子模块，跳过 `testdata/` | ✅ |
 | 覆盖率 ≥ `MIN_COVERAGE`=98（TESTING §1） | pre-push、CI `make cover` | ✅ |
-| `MIN_COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
+| `MIN_*COVERAGE` 只许上调 | 治理守卫：agent 收尾、pre-push、CI `governance` | ✅ |
+| 加锁紧跟 defer 解锁（CS §4） | `make check-style` lock-defer：pre-commit、`make check`、CI test | ✅ |
 | 并发无竞态（CS §4） | pre-push、CI `go test -race` | ✅ |
 | characterization 行为锁定（CS §8） | pre-push、CI `make char` | ✅ |
 | characterization 用例不得删 / 改断言迁就实现（TESTING §11） | 治理守卫：删改 `.agentguard.yml` 指定的 char 用例（本仓库为 `httpx/characterization_test.go` 整文件）既有行须标注「行为变更」 | ✅ |
@@ -99,21 +102,24 @@ worktree 里是 `.git/worktrees/<名>/agent-guard/`；之后单次约 40ms）；
 | 依赖许可证白名单（CS §12） | CI license 检查（`go-licenses check`） | ⬜ |
 | 密钥不入库（AGENTS 安全边界） | pre-commit、CI gitleaks | ✅ |
 | 提交标题规范 | commit-msg、CI commits | ✅ |
-| 提交正文 `测试：` 行 | commit-msg 对 `feat`/`fix`/`refactor`/`perf` 校验 | ⬜ |
+| 提交正文 `测试：` 行 | commit-msg 钩子 + CI commits（agentguard check-commit-msg，PR 与 push 都校验） | ✅ |
+| 提交 scope 白名单、禁会话尾注 | commit-msg 钩子 + CI commits（agentguard check-commit-msg，PR 与 push 都校验） | ✅ |
 | `//nolint` 必须指定 linter + 理由（CS §14） | `nolintlint`（pre-commit 增量、CI 全量） | ✅ |
 | 不放宽 `.golangci.yml`（CS §14） | 治理守卫（关 linter / 加豁免 / 调松阈值）：agent 改后与收尾、pre-push、CI | ✅ |
 | goroutine 不泄漏（CS §11、TESTING §8） | `goleak` in `TestMain` | ⬜ |
 | 解压有大小上限（CS §10） | 代码实现 + characterization | ⬜ |
 | 破坏性变更升版本（VERSIONING） | CI `apidiff` 对比上一个 tag | ⬜ |
 | 其它类型错误契约（CS §5） | `errorlint` 部分；`errors.As` / `errors.IsKind` 断言与评审 | 🟡 |
-| panic 仅限 `Must*` / 初始化（CS §11） | 👁 评审；可选 `forbidigo` 规则按路径放行 | 👁 |
+| panic 仅限 `Must*` / 初始化（CS §11） | check-style panic-placement | ✅ |
 | 注释「输入：/返回：」、导出符号「给谁用」（CS §7） | `revive exported` 管存在性；格式靠评审 | 🟡 |
 | IO 函数首参 `ctx`（CS §3） | `noctx` 管 HTTP；其余评审 | 🟡 |
+| 生产代码不硬造根 ctx（CS §3） | check-style root-ctx | ✅ |
 | 状态码 / header / 日志 key 无裸字面量（CS §9） | `goconst`(min=2) | 🟡 |
 | 不新增 `t.Skip` 屏蔽用例（TESTING §10） | 治理守卫 | ✅ |
 | AI 不绕过门禁、不推送 / 删除 / 移动 tag、不碰凭据（AGENTS） | agent 钩子（Claude / Cursor / Codex） | ✅ |
 | examples 可运行 | CI test | ✅ |
 | 跨 agent 规则同源 | `make agents-sync-check`（CI） | ✅ |
+| AGENTS 共享段与正本一致、Cursor glob 有效 | `make check-agents-docs` | ✅ |
 
 ## 5. 本地钩子（零第三方依赖）
 
@@ -125,8 +131,8 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 
 | 钩子 | 跑什么 |
 |---|---|
-| `pre-commit` | gofmt / go vet / 增量 lint / go mod tidy / 密钥扫描 |
-| `commit-msg` | `<type>(<scope>): 摘要` 规范 |
+| `pre-commit` | gofmt / go vet / check-style / check-agents-docs / 增量 lint / go mod tidy / 密钥扫描 / 拒绝 `.idea/`、`*.iml` |
+| `commit-msg` | agentguard `check-commit-msg`：标题、scope 白名单、`测试：` 行、禁会话尾注 |
 | `pre-push` | `make governance race char cover`（覆盖率门禁 = `MIN_COVERAGE`，当前 98%） |
 
 - 走 `.githooks/` + `core.hooksPath`，**不需要 lefthook / husky / pre-commit 框架**，只依赖 `go`、`gofmt`、（可选）`golangci-lint`、`gitleaks`。
@@ -143,7 +149,7 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 | `lint` | golangci-lint 全量 |
 | `vuln` | `govulncheck ./...` 依赖漏洞 |
 | `secrets` | gitleaks 密钥扫描 |
-| `commits` | PR 内每条提交标题符合 `<type>(<scope>): 摘要` |
+| `commits` | PR 与 push 的每条提交符合提交说明规范（agentguard check-commit-msg） |
 
 **CI 供应链规范**：
 
@@ -160,7 +166,7 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 2. ~~`nolintlint`~~ ✅ 已落地。
 3. ~~治理守卫~~ ✅ 已落地：`make governance`，接入 pre-push、CI `governance` job、agent 收尾。
 4. ~~agent 钩子~~ ✅ 已落地，见 §3。
-5. **commit-msg** 校验 `feat`/`fix`/`refactor`/`perf` 正文含 `测试：` 行。
+5. ~~**commit-msg** 校验 `feat`/`fix`/`refactor`/`perf` 正文含 `测试：` 行~~ ✅ 已落地：check-commit-msg。
 6. **goleak** 接入 `httpx`、`netproxy`、`traffic`、`logger` 的 `TestMain`（新增测试依赖，需确认）。
 7. **apidiff** CI job（PR 对比最近 tag，破坏性变化且未升 minor 时失败）+ **release workflow**（tag 触发：全量门禁 → GitHub Release）。
 8. **供应链**：actions 钉 SHA、`.github/dependabot.yml`（gomod + github-actions，每周）、`go-licenses check`。Go 与直接依赖、CI 的 Go / golangci-lint / govulncheck 跟最新稳定版，不钉死。
@@ -169,6 +175,7 @@ make hooks     # = git config core.hooksPath .githooks + chmod +x
 11. ~~**错误构造门禁**：检查生产代码直接 `errors.New` / `fmt.Errorf` 与字符串 panic~~ ✅ 已落地：`make check-errors`。
 12. ~~**测试布局门禁**：一个源文件只配一个同名测试文件~~ ✅ 已落地：`make check-test-layout`。
 13. ~~**包文档门禁**：每个 Go 包有 doc.go 与文件结构树~~ ✅ 已落地：`make check-pkg-doc`。
+14. ~~代码规则门禁~~ ✅ 已落地：`make check-style`、`make check-agents-docs`。
 
 ## 8. 分支保护（独立开发：可选）
 
