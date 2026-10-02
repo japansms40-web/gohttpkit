@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -35,8 +36,36 @@ func gitRaw(dir string, args ...string) (string, error) {
 }
 
 // repoRoot 返回 dir 所在仓库的根目录；不在仓库内返回错误。
+// git 在 worktree 里跑钩子会导出 GIT_DIR，此时 show-toplevel 返回当前目录而非仓库根
+// （go run -C tools/agentguard 下就是子模块目录，check-* 会静默只扫子目录），
+// 所以只对这一条命令剥离 GIT_DIR / GIT_WORK_TREE；其余 git 调用保留钩子环境（GIT_INDEX_FILE 等暂存区判断必需）。
 func repoRoot(dir string) (string, error) {
-	return gitOut(dir, "rev-parse", "--show-toplevel")
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	cmd.Env = envWithout(os.Environ(), "GIT_DIR", "GIT_WORK_TREE")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	return strings.TrimSpace(out.String()), err
+}
+
+// envWithout 返回去掉指定变量的环境副本，不修改入参与进程级环境。
+// 输入 env：KEY=VALUE 形式的环境；keys：要去掉的变量名。
+// 返回：过滤后的新切片。
+func envWithout(env []string, keys ...string) []string {
+	out := make([]string, 0, len(env))
+outer:
+	for _, kv := range env {
+		for _, k := range keys {
+			if strings.HasPrefix(kv, k+"=") {
+				continue outer
+			}
+		}
+		out = append(out, kv)
+	}
+	return out
 }
 
 // showAt 读取 rev 版本里的 path。
