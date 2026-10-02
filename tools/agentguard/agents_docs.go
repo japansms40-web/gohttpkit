@@ -29,6 +29,7 @@ const (
 
 // scanAgentsDocs 是 check-agents-docs 的扫描入口。
 // 输入 root：Git 仓库根。
+// 仓库文件只取已跟踪的（含已暂存），不含未跟踪文件，与 CI 检出的内容一致。
 // 返回：共享段违规在前、Cursor 规则违规（排序）在后；读 AGENTS.md、读规则目录或列仓库文件失败时返回错误。
 func scanAgentsDocs(root string) ([]string, error) {
 	doc, err := os.ReadFile(filepath.Join(root, agentsPath))
@@ -43,7 +44,7 @@ func scanAgentsDocs(root string) ([]string, error) {
 	if len(rules) == 0 {
 		return violations, nil
 	}
-	listed, err := gitRaw(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	listed, err := gitRaw(root, "ls-files", "--cached", "-z")
 	if err != nil {
 		return nil, &os.PathError{Op: "git ls-files", Path: root, Err: err}
 	}
@@ -51,31 +52,49 @@ func scanAgentsDocs(root string) ([]string, error) {
 	return append(violations, checkCursorGlobs(rules, files)...), nil
 }
 
+// isSharedMarker 判断一行是否以指定标记开头（容忍前导空格与制表符）。
+func isSharedMarker(line, marker string) bool {
+	return strings.HasPrefix(strings.TrimLeft(line, " \t"), marker)
+}
+
 // extractSharedBlock 取 AGENTS.md 里两条标记行之间的内容（不含标记行）。
-// 输入 doc：AGENTS.md 全文。
-// 返回：内容与是否找到成对标记；起止标记缺失或顺序颠倒时 ok=false。
-func extractSharedBlock(doc string) (string, bool) {
+// 输入 doc：AGENTS.md 全文（调用方负责统一换行符）。
+// 返回：内容、起始标记行的 0 起始下标、是否找到成对标记；起止标记缺失或顺序颠倒时 ok=false。
+func extractSharedBlock(doc string) (block string, startIdx int, ok bool) {
 	lines := strings.Split(doc, "\n")
 	start := -1
 	for i, l := range lines {
-		if start < 0 && strings.HasPrefix(l, sharedStartMarker) {
+		if start < 0 && isSharedMarker(l, sharedStartMarker) {
 			start = i
 			continue
 		}
-		if start >= 0 && strings.HasPrefix(l, sharedEndMarker) {
-			return strings.Join(lines[start+1:i], "\n"), true
+		if start >= 0 && isSharedMarker(l, sharedEndMarker) {
+			return strings.Join(lines[start+1:i], "\n"), start, true
 		}
 	}
-	return "", false
+	return "", 0, false
 }
 
-// checkSharedRules 比对 AGENTS.md 共享段与内嵌正本（忽略首尾空白）。
+// checkSharedRules 比对 AGENTS.md 共享段与内嵌正本（CRLF 视同 LF，忽略首尾空白）。
 // 输入 doc：AGENTS.md 全文。
-// 返回：至多一条违规，漂移时带第一处不同的行号。
+// 返回：至多一条违规；标记数量不对、顺序颠倒或漂移（带文件行号与段内行号）时各报一条。
 func checkSharedRules(doc string) []string {
-	block, ok := extractSharedBlock(doc)
+	doc = strings.ReplaceAll(doc, "\r\n", "\n")
+	starts, ends := 0, 0
+	for _, l := range strings.Split(doc, "\n") {
+		if isSharedMarker(l, sharedStartMarker) {
+			starts++
+		}
+		if isSharedMarker(l, sharedEndMarker) {
+			ends++
+		}
+	}
+	if starts != 1 || ends != 1 {
+		return []string{agentsPath + ": shared-rules 标记须恰好各一个（start " + strconv.Itoa(starts) + " 个，end " + strconv.Itoa(ends) + " 个）"}
+	}
+	block, startIdx, ok := extractSharedBlock(doc)
 	if !ok {
-		return []string{agentsPath + ": 缺少成对的 shared-rules:start / shared-rules:end 标记"}
+		return []string{agentsPath + ": 缺少成对的 shared-rules:start / shared-rules:end 标记（顺序颠倒）"}
 	}
 	got, want := strings.TrimSpace(block), strings.TrimSpace(sharedRules)
 	if got == want {
@@ -89,8 +108,11 @@ func checkSharedRules(doc string) []string {
 			break
 		}
 	}
-	return []string{agentsPath + ": shared-rules 段与 agentguard 内嵌正本不一致（段内第 " + strconv.Itoa(line) +
-		" 行起不同）；改共享段须同步 gohttpkit tools/agentguard/shared_rules.md 与两仓 AGENTS.md"}
+	// 文件行号 = 起始标记行号 + 被 TrimSpace 去掉的前导空行数 + 段内行号。
+	lead := strings.Count(block[:len(block)-len(strings.TrimLeft(block, " \t\r\n"))], "\n")
+	fileLine := startIdx + 1 + lead + line
+	return []string{agentsPath + ": shared-rules 段与 agentguard 内嵌正本不一致（" + agentsPath + " 第 " + strconv.Itoa(fileLine) +
+		" 行（段内第 " + strconv.Itoa(line) + " 行）起不同）；改共享段须同步 gohttpkit tools/agentguard/shared_rules.md 与两仓 AGENTS.md"}
 }
 
 // readCursorRules 读 .cursor/rules 下全部 .mdc。
@@ -118,22 +140,27 @@ func readCursorRules(root string) (map[string]string, error) {
 	return rules, nil
 }
 
-// checkCursorGlobs 检查每个非 alwaysApply 的 .mdc：globs 非空，且每个 glob 至少匹配一个文件。
-// 输入 rules：文件名 → 内容；files：仓库文件（已跟踪与未跟踪、不含忽略）的相对路径。
+// checkCursorGlobs 检查每个非 alwaysApply 的 .mdc：声明了 globs 的，每个 glob 须被支持且至少匹配一个文件。
+// 没有 globs 的规则（仅 description 或手动 @ 引用）合法，不检查；frontmatter 未闭合单独报错。
+// 输入 rules：文件名 → 内容；files：仓库已跟踪文件的相对路径。
 // 返回：排序后的违规。
 func checkCursorGlobs(rules map[string]string, files []string) []string {
 	var out []string
 	for name, src := range rules {
 		rel := cursorRulesDir + "/" + name
-		always, globs := parseMDCFrontmatter(src)
+		always, globs, ok := parseMDCFrontmatter(src)
+		if !ok {
+			out = append(out, rel+": frontmatter 未闭合（缺少结尾的 ---）")
+			continue
+		}
 		if always {
 			continue
 		}
-		if len(globs) == 0 {
-			out = append(out, rel+": 既不是 alwaysApply 也没有 globs，规则永远不会被加载")
-			continue
-		}
 		for _, g := range globs {
+			if !globSupported(g) {
+				out = append(out, rel+": agentguard 不支持该 glob 语法："+g+"（支持 ** * ? 与字面量）")
+				continue
+			}
 			if !slices.ContainsFunc(files, globRegexp(g).MatchString) {
 				out = append(out, rel+": glob "+g+" 匹配不到任何文件（目录改名或规则已失效：改 glob 或删除规则）")
 			}
@@ -143,39 +170,72 @@ func checkCursorGlobs(rules map[string]string, files []string) []string {
 	return out
 }
 
-// parseMDCFrontmatter 解析 .mdc 开头由 --- 包围的 frontmatter。
+// globSupported 判断 glob 是否在 globRegexp 的支持范围内。
+// 输入 glob：单个 glob。
+// 返回：不含花括号 / 字符类、且不以 / 开头或结尾时为 true。
+func globSupported(glob string) bool {
+	return !strings.ContainsAny(glob, "{}[]") && !strings.HasPrefix(glob, "/") && !strings.HasSuffix(glob, "/")
+}
+
+// unquote 去掉首尾空白与成对外的单双引号。
+func unquote(v string) string {
+	return strings.Trim(strings.TrimSpace(v), `"'`)
+}
+
+// parseMDCFrontmatter 解析 .mdc 开头由 --- 包围的 frontmatter（容忍开头 BOM）。
 // 输入 src：.mdc 全文。
-// 返回：alwaysApply 是否为 true；globs 按逗号拆分、去空白与引号后的列表。没有 frontmatter 时返回 false, nil。
-func parseMDCFrontmatter(src string) (always bool, globs []string) {
-	lines := strings.Split(src, "\n")
+// 返回：alwaysApply 是否为 true（忽略大小写、引号与行内 # 注释）；globs 支持单行逗号分隔、YAML 流列表与块列表，
+// 含 { 的整行不拆分、原样作为一项交给调用方报不支持；ok=false 表示 frontmatter 缺少结尾 ---。
+// 没有 frontmatter 时返回 false, nil, true。
+func parseMDCFrontmatter(src string) (always bool, globs []string, ok bool) {
+	lines := strings.Split(strings.TrimPrefix(src, "\ufeff"), "\n")
 	if strings.TrimSpace(lines[0]) != "---" {
-		return false, nil
+		return false, nil, true
 	}
+	inBlock := false
 	for _, l := range lines[1:] {
 		l = strings.TrimSpace(l)
 		if l == "---" {
-			break
+			return always, globs, true
 		}
-		key, val, ok := strings.Cut(l, ":")
-		if !ok {
+		if inBlock && strings.HasPrefix(l, "-") {
+			if g := unquote(strings.TrimPrefix(l, "-")); g != "" {
+				globs = append(globs, g)
+			}
+			continue
+		}
+		inBlock = false
+		key, val, found := strings.Cut(l, ":")
+		if !found {
 			continue
 		}
 		val = strings.TrimSpace(val)
 		switch strings.TrimSpace(key) {
 		case "alwaysApply":
-			always = val == "true"
+			v, _, _ := strings.Cut(val, " #")
+			always = strings.EqualFold(unquote(v), "true")
 		case "globs":
+			if val == "" {
+				inBlock = true
+				continue
+			}
+			val = strings.TrimSuffix(strings.TrimPrefix(val, "["), "]")
+			if strings.Contains(val, "{") {
+				globs = append(globs, unquote(val))
+				continue
+			}
 			for g := range strings.SplitSeq(val, ",") {
-				if g = strings.Trim(strings.TrimSpace(g), `"'`); g != "" {
+				if g = unquote(g); g != "" {
 					globs = append(globs, g)
 				}
 			}
 		}
 	}
-	return always, globs
+	return false, nil, false
 }
 
 // globRegexp 把 Cursor glob 转成锚定正则：** 跨目录，* 与 ? 不跨 /，其余字符按字面匹配。
+// 支持范围仅限 ** * ? 与字面量；花括号、字符类、首尾斜杠由 globSupported 在调用前拦下，不在此处理。
 // 输入 glob：Cursor 规则里的 glob 写法。
 // 返回：锚定的正则。例：android/** → ^android/.*$；**/*_test.go → ^(?:.*/)?[^/]*_test\.go$。
 func globRegexp(glob string) *regexp.Regexp {
