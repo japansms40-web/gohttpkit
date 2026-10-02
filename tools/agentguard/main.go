@@ -26,6 +26,8 @@ func run(args []string) int {
 		return runCheck("check-test-layout", scanTestLayout, "测试文件与源文件一一对应")
 	case "check-pkg-doc":
 		return runCheck("check-pkg-doc", scanPkgDoc, "每个 Go 包有 doc.go 且文件结构树与实际文件一致")
+	case "check-style":
+		return runCheck("check-style", scanStyle, "代码规则（锁 / 事件声明 / panic 位置 / 根 ctx / 辅助函数归位）符合规范")
 	case "check-commit-msg":
 		return runCheckCommitMsg(args[1:])
 	case "hook":

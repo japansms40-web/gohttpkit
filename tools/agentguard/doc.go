@@ -7,6 +7,7 @@
 //	agentguard check-errors   检查生产 Go 源码的直接错误构造与 panic 语法
 //	agentguard check-test-layout   检查测试文件与源文件一一对应（foo.go ↔ foo_test.go）
 //	agentguard check-pkg-doc   检查每个 Go 包有 doc.go，且文件结构树与实际文件一致
+//	agentguard check-style   代码规则：lock-defer / event-decl / panic-placement / root-ctx / helper-placement
 //	agentguard check-commit-msg <文件>|--range A..B   提交说明：标题 / scope 白名单 / feat·fix·refactor·perf 的「测试：」行 / 会话尾注
 //	agentguard hook --agent claude|cursor|codex --event <事件>   三家 agent 钩子的薄适配
 //
@@ -27,5 +28,6 @@
 //	├── paths.go         编辑 / 读取路径与补丁路径的放行判定
 //	├── pkg_doc.go       check-pkg-doc：每个 Go 包有 doc.go 且文件结构树与实际一致
 //	├── shell.go         shell 命令拦截规则（--no-verify、强推、tag、凭据等）
+//	├── style_policy.go  check-style：锁、事件声明、panic 位置、根 ctx、辅助函数归位
 //	└── test_layout.go   check-test-layout：foo.go ↔ foo_test.go 一一对应
 package main

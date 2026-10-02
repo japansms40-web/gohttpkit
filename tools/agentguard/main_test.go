@@ -125,3 +125,17 @@ func TestRun_governance与hook路由到各自的参数解析(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_checkStyle路由到scanStyle(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{
+		"pkg/a.go": "package pkg\nimport \"sync\"\nvar mu sync.Mutex\nfunc A() { mu.Lock(); mu.Unlock() }\n",
+	})
+	t.Chdir(dir)
+	var code int
+	out, errOut := captureOutput(t, func() { code = run([]string{"check-style"}) })
+	t.Logf("code=%d stdout=%q stderr=%q", code, out, errOut)
+	if code != 1 || !strings.Contains(errOut, "pkg/a.go:4: lock-defer") {
+		t.Fatalf("有违规应退出 1 并列出，得到 code=%d stderr=%q", code, errOut)
+	}
+}
