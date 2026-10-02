@@ -25,6 +25,10 @@ jobs:
         run: make check-test-layout
       - name: 每个 Go 包有 doc.go 与文件结构树
         run: make check-pkg-doc
+      - name: 代码规则（锁 / 事件声明 / panic 位置 / 根 ctx / 辅助函数归位）
+        run: make check-style
+      - name: AGENTS 共享段与 Cursor 规则 glob
+        run: make check-agents-docs
       - name: build
         run: go build ./...
       - name: vet
@@ -102,31 +106,18 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   commits:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: "提交标题规范 <type>(<scope>) 冒号 摘要"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          check-latest: true
+      - name: 提交说明规范（标题 / scope / 测试行 / 会话尾注）
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          base="$BASE_SHA"
-          head="$HEAD_SHA"
-          re='^(feat|fix|refactor|test|docs|perf|build|ci|chore)(\([a-z0-9,_/.-]+\))?!?: .+'
-          fail=0
-          for sha in $(git rev-list "$base".."$head"); do
-            title=$(git log -1 --format=%s "$sha")
-            case "$title" in Merge\ *|Revert\ *|"fixup! "*|"squash! "*) continue ;; esac
-            if ! printf '%s' "$title" | grep -qE "$re"; then
-              echo "::error::提交标题不规范 $sha: $title"
-              fail=1
-            fi
-          done
-          if [ "$fail" -ne 0 ]; then
-            echo "type 仅限 feat fix refactor test docs perf build ci chore"
-            exit 1
-          fi
-          echo "所有提交标题符合规范 ✓"
+          # PR 校验 origin/<base_ref>..head（PR 合入过更新的主干时不把主干历史算进来）；push 校验 before..after（全零或 force push 后不在本地的起点，agentguard 自动跳过）
+          RANGE_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+          RANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: go run -C tools/agentguard . check-commit-msg --range "$RANGE_BASE..$RANGE_HEAD"

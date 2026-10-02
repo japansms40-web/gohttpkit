@@ -5,7 +5,7 @@
 
 BASE_REV ?= HEAD~1
 
-.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check check-errors check-test-layout check-pkg-doc
+.PHONY: build vet test char race cover cover-pkg cover-html lint lint-new tidy-check examples check ci hooks agents-sync-check governance tools-check check-errors check-test-layout check-pkg-doc check-style check-agents-docs
 
 # 覆盖率门禁（核心库，排除 examples）：低于 MIN_COVERAGE 直接失败。
 # 已达标 98%（补齐 interceptor 角度测试后）；100% 为追求，只许上调、不许下调——
@@ -87,13 +87,21 @@ check-test-layout:
 check-pkg-doc:
 	@go run -C tools/agentguard . check-pkg-doc
 
+# 代码规则：lock-defer / event-decl / panic-placement / root-ctx / helper-placement（开关见 .agentguard.yml style，读 HEAD）。
+check-style:
+	@go run -C tools/agentguard . check-style
+
+# AGENTS 共享段与 agentguard 内嵌正本一致；.cursor/rules 的每个 glob 都能匹配到文件。
+check-agents-docs:
+	@go run -C tools/agentguard . check-agents-docs
+
 # 两个离线示例（fidelity/customchain 自带假服务器，不需要外网）。
 # quickstart 默认请求真实 URL（httpbin.org），需要外网，故不在这里跑：go run ./examples/quickstart
 examples:
 	go run ./examples/customchain
 	go run ./examples/fidelity
 
-check: check-errors check-test-layout check-pkg-doc build vet cover tidy-check
+check: check-errors check-test-layout check-pkg-doc check-style check-agents-docs build vet cover tidy-check
 
 # 本地「我要完整跑」与 CI 对齐的聚合目标。race 需要 C 编译器。
 ci: check lint-new race char agents-sync-check governance tools-check

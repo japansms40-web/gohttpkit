@@ -1,31 +1,22 @@
 #!/usr/bin/env bash
-# gohttpkit commit-msg 门禁：校验提交标题遵循 <type>(<scope>): <摘要> 约定。
-# 装载：make hooks。应急绕过：git commit --no-verify。
+# gohttpkit commit-msg 门禁：标题 <type>(<scope>): <摘要>、scope 白名单、feat/fix/refactor/perf 正文「测试：」行、禁止会话尾注。
+# 规则在 tools/agentguard/commit_msg.go（check-commit-msg），scope 白名单见 .agentguard.yml commit.scopes。
+# 装载：make hooks。应急绕过：git commit --no-verify（禁止常规使用）。
 set -uo pipefail
 
-red() { printf '\033[31m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
-
-title=$(grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$' | head -1)
-
-# merge / revert / fixup / squash 提交放行（由工具生成，不受约束）
-case "$title" in
-  Merge\ *|Revert\ *|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+case "$1" in
+  /*) msg_file="$1" ;;
+  *) msg_file="$PWD/$1" ;;
 esac
 
-types='feat|fix|refactor|test|docs|perf|build|ci|chore'
-if ! printf '%s' "$title" | grep -qE "^(${types})(\([a-z0-9,_/.-]+\))?!?: .{1,}$"; then
-  red "✗ 提交标题不符合规范：$title"
-  red "  要求：<type>(<scope>): <中文摘要>"
-  red "  type 仅限：feat fix refactor test docs perf build ci chore"
-  red "  例：feat(httpx): 拦截器链支持自定义退避策略"
-  red "  （应急绕过：git commit --no-verify）"
+if ! go run -C tools/agentguard . check-commit-msg "$msg_file"; then
+  printf '\033[31m%s\033[0m\n' "  （应急绕过：git commit --no-verify，CI 仍会拦）"
   exit 1
 fi
 
 # 标题过长只警告不拦（GitHub 列表约 72 列后截断）
-len=${#title}
-if [ "$len" -gt 72 ]; then
-  yellow "· 提示：标题 ${len} 字符，超过 72，GitHub 列表会截断。"
+title=$(grep -vE '^[[:space:]]*#' "$msg_file" | grep -vE '^[[:space:]]*$' | head -1)
+if [ "${#title}" -gt 72 ]; then
+  printf '\033[33m%s\033[0m\n' "· 提示：标题 ${#title} 字符，超过 72，GitHub 列表会截断。"
 fi
 exit 0

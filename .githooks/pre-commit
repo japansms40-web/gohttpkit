@@ -15,6 +15,13 @@ staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
 # 只删 Go 文件（如删掉某个 foo_test.go）也会破坏测试布局，单独检查。
 staged_go_deleted=$(git diff --cached --name-only --diff-filter=D -- '*.go')
 
+# 0) IDE 工程文件不入库（insgo c1926eb 曾误提交 worktree 生成的 .idea/*.iml）
+ide_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.idea/|\.iml$' || true)
+if [ -n "$ide_files" ]; then
+  fail "IDE 工程文件不得提交（git restore --staged <文件> 撤出）："
+  echo "$ide_files" | sed 's/^/    /'
+fi
+
 # 1) gofmt：暂存的 Go 文件必须已格式化
 if [ -n "$staged_go" ]; then
   unformatted=$(printf '%s\n' "$staged_go" | tr '\n' '\0' | xargs -0 gofmt -l 2>/dev/null)
@@ -54,6 +61,13 @@ if [ -n "$staged_go" ]; then
     fail "包文档不合规（见上方清单：补 doc.go 或更新其「文件结构：」树）"
   fi
 
+  # 3d) 代码规则：锁、事件声明、panic 位置、根 ctx、辅助函数归位
+  if make check-style; then
+    green "✓ check-style"
+  else
+    fail "代码规则不合规（见上方清单，规则说明见 tools/agentguard/style_policy.go 文件头）"
+  fi
+
   # 4) 增量 lint：只对相对 HEAD 的改动严格（存量告警不阻塞）
   if command -v golangci-lint >/dev/null 2>&1; then
     if git rev-parse --verify -q HEAD >/dev/null; then
@@ -87,6 +101,13 @@ if [ -z "$staged_go" ] && [ -n "$staged_go_deleted" ]; then
   else
     fail "删除 Go 文件后 doc.go 的文件结构树未同步（见上方清单）"
   fi
+fi
+
+# 4b) 跨 agent 规则：AGENTS 共享段与正本一致、Cursor 规则 glob 有效
+if make check-agents-docs; then
+  green "✓ check-agents-docs"
+else
+  fail "AGENTS 共享段漂移或 .cursor/rules glob 失效（见上方清单）"
 fi
 
 # 5) 密钥扫描：有 gitleaks 用 gitleaks，否则退回内建规则
