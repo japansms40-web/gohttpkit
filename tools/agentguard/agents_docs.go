@@ -53,6 +53,8 @@ func scanAgentsDocs(root string) ([]string, error) {
 }
 
 // isSharedMarker 判断一行是否以指定标记开头（容忍前导空格与制表符）。
+// 输入 line：文档中的一行；marker：标记前缀。
+// 返回：去掉前导空格 / 制表符后以 marker 开头时为 true。
 func isSharedMarker(line, marker string) bool {
 	return strings.HasPrefix(strings.TrimLeft(line, " \t"), marker)
 }
@@ -177,9 +179,19 @@ func globSupported(glob string) bool {
 	return !strings.ContainsAny(glob, "{}[]") && !strings.HasPrefix(glob, "/") && !strings.HasSuffix(glob, "/")
 }
 
-// unquote 去掉首尾空白与成对外的单双引号。
+// unquote 先去掉首尾空白，再去掉两端的单双引号字符（不要求成对）。
+// 输入 v：frontmatter 中的一项取值。
+// 返回：去引号后的字符串。
 func unquote(v string) string {
 	return strings.Trim(strings.TrimSpace(v), `"'`)
+}
+
+// stripComment 去掉行内 YAML 注释（空格加 # 及其后内容）。
+// 输入 v：frontmatter 中的一项取值。
+// 返回：注释之前的部分。
+func stripComment(v string) string {
+	v, _, _ = strings.Cut(v, " #")
+	return v
 }
 
 // parseMDCFrontmatter 解析 .mdc 开头由 --- 包围的 frontmatter（容忍开头 BOM）。
@@ -198,8 +210,11 @@ func parseMDCFrontmatter(src string) (always bool, globs []string, ok bool) {
 		if l == "---" {
 			return always, globs, true
 		}
+		if inBlock && l == "" {
+			continue
+		}
 		if inBlock && strings.HasPrefix(l, "-") {
-			if g := unquote(strings.TrimPrefix(l, "-")); g != "" {
+			if g := unquote(stripComment(strings.TrimPrefix(l, "-"))); g != "" {
 				globs = append(globs, g)
 			}
 			continue
@@ -212,14 +227,13 @@ func parseMDCFrontmatter(src string) (always bool, globs []string, ok bool) {
 		val = strings.TrimSpace(val)
 		switch strings.TrimSpace(key) {
 		case "alwaysApply":
-			v, _, _ := strings.Cut(val, " #")
-			always = strings.EqualFold(unquote(v), "true")
+			always = strings.EqualFold(unquote(stripComment(val)), "true")
 		case "globs":
 			if val == "" {
 				inBlock = true
 				continue
 			}
-			val = strings.TrimSuffix(strings.TrimPrefix(val, "["), "]")
+			val = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(stripComment(val)), "["), "]")
 			if strings.Contains(val, "{") {
 				globs = append(globs, unquote(val))
 				continue

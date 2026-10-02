@@ -99,6 +99,10 @@ func TestParseMDCFrontmatter_只读frontmatter里的alwaysApply和globs(t *testi
 		{"alwaysApply非true", "---\nalwaysApply: yes\n---\n", false, nil, true},
 		{"流列表", "---\nglobs: [\"a/**\", 'b/**']\n---\n", false, []string{"a/**", "b/**"}, true},
 		{"块列表", "---\nglobs:\n  - \"a/**\"\n  - b/*.go\nalwaysApply: false\n---\n", false, []string{"a/**", "b/*.go"}, true},
+		{"块列表中间有空行", "---\nglobs:\n  - a/**\n\n  - b/**\n---\n", false, []string{"a/**", "b/**"}, true},
+		{"单行行内注释", "---\nglobs: a/** # 注释\n---\n", false, []string{"a/**"}, true},
+		{"块列表行内注释", "---\nglobs:\n  - a/** # 注释\n---\n", false, []string{"a/**"}, true},
+		{"流列表行内注释", "---\nglobs: [\"a/**\", b/**] # 注释\n---\n", false, []string{"a/**", "b/**"}, true},
 		{"花括号整行保留不拆分", "---\nglobs: a/{x,y}/**\n---\n", false, []string{"a/{x,y}/**"}, true},
 		{"未闭合", "---\nglobs: a/**\n", false, nil, false},
 	}
