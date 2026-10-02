@@ -38,7 +38,7 @@ linters:
       forbid:
         - pattern: '^(fmt\.Print(|f|ln)|log\.(Print|Fatal|Panic)|slog\.(Debug|Info|Warn|Error))'
           msg: "请使用 logger 门面: logger.Info(ctx, msg, attrs...)，ctx 必传"
-        - pattern: '^logger\.(Debug|Info|Warn|Error)$'
+        - pattern: '^(logger|log)\.(Debug|Info|Warn|Error)$'
           msg: "禁止自由文案日志：在 events.go 用 logger.NewEvent 声明事件，调用 logger.XxxEvent(ctx, ev, attrs...)"
     nolintlint:
       require-specific: true    # 禁止裸 //nolint 与 //nolint:all
