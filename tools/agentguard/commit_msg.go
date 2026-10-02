@@ -18,6 +18,9 @@ var (
 	sessionTrailerRe = regexp.MustCompile(`(?mi)^(co-authored-by|claude-session|codex-session):`)
 )
 
+// fullSHARe 匹配 40 位十六进制提交 SHA（GitHub 事件里 before 的形态）。
+var fullSHARe = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
 // testLineTypes 是正文必须带「测试：」行的提交类型。
 var testLineTypes = map[string]bool{"feat": true, "fix": true, "refactor": true, "perf": true}
 
@@ -120,11 +123,23 @@ func allowedScopes(root string, cfg repoConfig) (map[string]bool, error) {
 // 返回：0 全部合规，或区间被跳过（起点全零 / 不在本地历史，stdout 提示「跳过检查」）；1 用法错误、不在仓库内、读取失败或有违规（逐条打到 stderr）。
 func runCheckCommitMsg(args []string) int {
 	var spec, file string
-	switch {
-	case len(args) == 2 && args[0] == "--range":
-		spec = args[1]
-	case len(args) == 1 && !strings.HasPrefix(args[0], "-"):
-		file = args[0]
+	isRange := false
+	switch len(args) {
+	case 2:
+		pair := [2]string(args)
+		first, second := pair[0], pair[1]
+		if first != "--range" {
+			usage()
+			return 1
+		}
+		isRange, spec = true, second
+	case 1:
+		one := [1]string(args)
+		file = one[0]
+		if strings.HasPrefix(file, "-") {
+			usage()
+			return 1
+		}
 	default:
 		usage()
 		return 1
@@ -145,7 +160,7 @@ func runCheckCommitMsg(args []string) int {
 		return 1
 	}
 	var violations []string
-	if spec != "" {
+	if isRange {
 		var skipped string
 		violations, skipped, err = checkCommitRange(root, spec, scopes)
 		if err != nil {
@@ -153,7 +168,7 @@ func runCheckCommitMsg(args []string) int {
 			if errors.Is(err, os.ErrInvalid) {
 				hint = "（应为 A..B）"
 			}
-			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg：", err, hint)
+			_, _ = fmt.Fprintln(os.Stderr, "check-commit-msg："+err.Error()+hint)
 			return 1
 		}
 		if skipped != "" {
@@ -179,8 +194,8 @@ func runCheckCommitMsg(args []string) int {
 }
 
 // checkCommitRange 校验 A..B 区间内每个非合并提交的说明。
-// 输入 spec：形如 A..B；A 为全零 SHA（新分支首推）或不在本地历史（force push / 浅克隆）时跳过检查。
-// 返回：violations 为带短 SHA 前缀的违规（按提交从旧到新）；skipped 非空表示跳过及原因；spec 非法（errors.Is os.ErrInvalid）或 git 失败时返回错误。
+// 输入 spec：形如 A..B；A 为全零 SHA（新分支首推），或为 40 位十六进制 SHA 但不在本地历史（force push / 浅克隆）时跳过检查。
+// 返回：violations 为带短 SHA 前缀的违规（按提交从旧到新）；skipped 非空表示跳过及原因；spec 非法（errors.Is os.ErrInvalid）、起点无法解析（os.ErrNotExist）或 git 失败时返回错误。
 func checkCommitRange(root, spec string, scopes map[string]bool) (violations []string, skipped string, err error) {
 	from, _, ok := strings.Cut(spec, "..")
 	if !ok || from == "" {
@@ -190,7 +205,10 @@ func checkCommitRange(root, spec string, scopes map[string]bool) (violations []s
 		return nil, "起点为全零（新分支首推）", nil
 	}
 	if _, verr := gitOut(root, "rev-parse", "--verify", "-q", from+"^{commit}"); verr != nil {
-		return nil, "起点 " + from + " 不在本地历史（force push 或浅克隆）", nil
+		if fullSHARe.MatchString(from) {
+			return nil, "起点 " + from + " 不在本地历史（force push 或浅克隆）", nil
+		}
+		return nil, "", &os.PathError{Op: "git rev-parse", Path: from, Err: os.ErrNotExist}
 	}
 	list, err := gitOut(root, "rev-list", "--no-merges", "--reverse", spec)
 	if err != nil {

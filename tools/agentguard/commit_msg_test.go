@@ -166,7 +166,7 @@ func TestCheckCommitRange_跳过与错误身份(t *testing.T) {
 	initRepo(t, dir, map[string]string{"a.txt": "x"})
 	head := mustGit(t, dir, "rev-parse", "HEAD")
 
-	v, skipped, err := checkCommitRange(dir, "deadbeef.."+head, nil)
+	v, skipped, err := checkCommitRange(dir, strings.Repeat("d", 40)+".."+head, nil)
 	t.Logf("起点缺失 → v=%v skipped=%q err=%v", v, skipped, err)
 	if err != nil || !strings.Contains(skipped, "不在本地历史") || v != nil {
 		t.Fatalf("起点不在本地历史应跳过且无错误，得到 v=%v skipped=%q err=%v", v, skipped, err)
@@ -174,6 +174,10 @@ func TestCheckCommitRange_跳过与错误身份(t *testing.T) {
 	_, skipped, err = checkCommitRange(dir, zeroSHA+".."+head, nil)
 	if err != nil || !strings.Contains(skipped, "全零") {
 		t.Fatalf("全零起点应跳过，得到 skipped=%q err=%v", skipped, err)
+	}
+	v, skipped, err = checkCommitRange(dir, "origin/typo.."+head, nil)
+	if !errors.Is(err, os.ErrNotExist) || skipped != "" || v != nil {
+		t.Fatalf("无法解析的非 SHA 起点应报错而非跳过，得到 skipped=%q err=%v", skipped, err)
 	}
 	_, _, err = checkCommitRange(dir, "no-dots", nil)
 	if !errors.Is(err, os.ErrInvalid) {
@@ -183,5 +187,17 @@ func TestCheckCommitRange_跳过与错误身份(t *testing.T) {
 	var pe *os.PathError
 	if !errors.As(err, &pe) || pe.Op != "git rev-list" {
 		t.Fatalf("终点不存在应为 git rev-list 的 PathError，得到 %v", err)
+	}
+}
+
+func TestRun_checkCommitMsg区间为空串报格式错误(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{"a.txt": "x"})
+	t.Chdir(dir)
+	var code int
+	_, errOut := captureOutput(t, func() { code = run([]string{"check-commit-msg", "--range", ""}) })
+	t.Logf("空区间 → code=%d stderr=%q", code, errOut)
+	if code != 1 || !strings.Contains(errOut, "应为 A..B") || strings.HasSuffix(errOut, " \n") {
+		t.Fatalf("--range 空串应报区间格式错误且无尾随空格，得到 code=%d stderr=%q", code, errOut)
 	}
 }
