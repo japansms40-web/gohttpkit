@@ -55,7 +55,7 @@ func (v violation) String() string {
 }
 
 var (
-	coverageGateRe = regexp.MustCompile(`(?m)^(MIN_[A-Z_]*COVERAGE)[ \t]*\?=[ \t]*([^\s#]+)[ \t]*(?:#.*)?$`)
+	coverageGateRe = regexp.MustCompile(`(?m)^(MIN_[A-Z_]*COVERAGE)[ \t]*\?=[ \t]*([^\s#]+)[ \t\r]*(?:#.*)?$`)
 	// coverageNumberRe 只认严格十进制数，避免 9_9 / inf / 十六进制浮点被 ParseFloat 接受而与 Makefile awk 的 m+0 比较不一致。
 	coverageNumberRe = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
 	skipCallRe       = regexp.MustCompile(`\b[tbf]\.Skip(f|Now)?\(`)

@@ -69,6 +69,7 @@ func TestCompareCoverage_首次定义生效且只认十进制数(t *testing.T) {
 		{"inf", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= inf\n", []string{"被删除或改成非数字"}},
 		{"十六进制浮点", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 0x1.8cp6\n", []string{"被删除或改成非数字"}},
 		{"行尾注释", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 98 # 注释\n", []string{"从 99 下调到 98"}},
+		{"CRLF行尾", "MIN_COVERAGE ?= 99\r\n", "MIN_COVERAGE ?= 98\r\n", []string{"从 99 下调到 98"}},
 		{"行尾注释未下调", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?= 99 # 注释\n", nil},
 		{"值为空不跨行", "MIN_COVERAGE ?= 99\n", "MIN_COVERAGE ?=\nall:\n", []string{"被删除或改成非数字"}},
 		{"基线非数字不检查", "MIN_PKG_COVERAGE ?= $(X)\n", "MIN_PKG_COVERAGE ?= 1\n", nil},
