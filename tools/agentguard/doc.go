@@ -8,14 +8,18 @@
 //	agentguard check-test-layout   检查测试文件与源文件一一对应（foo.go ↔ foo_test.go）
 //	agentguard check-pkg-doc   检查每个 Go 包有 doc.go，且文件结构树与实际文件一致
 //	agentguard check-style   代码规则：lock-defer / event-decl / panic-placement / root-ctx / helper-placement
+//	agentguard check-agents-docs   AGENTS 共享段与内嵌正本一致、.cursor/rules glob 都能匹配到文件
 //	agentguard check-commit-msg <文件>|--range A..B   提交说明：标题 / scope 白名单 / feat·fix·refactor·perf 的「测试：」行 / 会话尾注
 //	agentguard hook --agent claude|cursor|codex --event <事件>   三家 agent 钩子的薄适配
+//
+// shared_rules.md 是 AGENTS 共享段正本（go:embed），check-agents-docs 以它比对两仓 AGENTS.md。
 //
 // 规范出处：docs/ENGINEERING_GOVERNANCE.md §3（agent 钩子语义）、§4（规则 → 强制手段）。
 //
 // 文件结构：
 //
 //	agentguard/
+//	├── agents_docs.go   check-agents-docs：AGENTS 共享段正本比对与 Cursor 规则 glob 有效性
 //	├── commit_msg.go    check-commit-msg：提交说明规范（标题、scope、测试行、会话尾注）
 //	├── config.go        读取仓库根 .agentguard.yml 的仓库级差异配置
 //	├── doc.go           包文档（本文件）

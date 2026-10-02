@@ -139,3 +139,15 @@ func TestRun_checkStyle路由到scanStyle(t *testing.T) {
 		t.Fatalf("有违规应退出 1 并列出，得到 code=%d stderr=%q", code, errOut)
 	}
 }
+
+func TestRun_checkAgentsDocs路由到scanAgentsDocs(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir, map[string]string{agentsPath: "<!-- shared-rules:start -->\n" + sharedRules + "\n" + sharedEndMarker + "\n"})
+	t.Chdir(dir)
+	var code int
+	out, errOut := captureOutput(t, func() { code = run([]string{"check-agents-docs"}) })
+	t.Logf("code=%d stdout=%q stderr=%q", code, out, errOut)
+	if code != 0 || !strings.Contains(out, "AGENTS 共享段与正本一致") {
+		t.Fatalf("合规仓库应退出 0，得到 code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+}
