@@ -30,7 +30,7 @@
   由调用方从 `localemobile.DeviceLocaleForCountry` 的结果裁剪。
 - 新增 `geo.LookupCountry(table, country)`：按本包统一语义（trim + 大写、空或未命中返回 `*geo.UnknownCountryError`）查任意国家表。
 - 各包包注释迁入 `doc.go` 并补文件结构树，`go doc` 只多出文件树。`tools/agentguard/v0.1.5` 新增 `check-pkg-doc`；
-  下游升级 agentguard 不会自动启用，在自己的 Makefile / 钩子里接入前，先按 `CODE_STANDARDS.md` §13 整改。
+  下游升级 agentguard 不会自动启用，在自己的 Makefile / 钩子里接入前，先按 `CODE_STANDARDS.md` §17 整改。
 
 ## v0.13.0（相对 v0.12.0）
 

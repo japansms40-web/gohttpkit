@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// pkgDocFile 是每个 Go 包唯一承载包注释的文件（CODE_STANDARDS §13）。
+// pkgDocFile 是每个 Go 包唯一承载包注释的文件（CODE_STANDARDS「包文档」一节）。
 const pkgDocFile = "doc.go"
 
 // pkgDocTreeHeading 是包注释里文件结构树的标题行；树条目只认它之后的行。
@@ -17,7 +17,7 @@ const pkgDocTreeHeading = "文件结构："
 // 以 │ 缩进的下层行不匹配——下层由子包自己的 doc.go 登记。
 var pkgDocTreeEntry = regexp.MustCompile(`^[├└]── (\S+)[ \t]*(.*)$`)
 
-// scanPkgDoc 检查每个 Go 包都有 doc.go 与一层文件结构树（CODE_STANDARDS §13）。
+// scanPkgDoc 检查每个 Go 包都有 doc.go 与一层文件结构树（CODE_STANDARDS「包文档」一节）。
 // 输入 root 是 Git 仓库根目录；扫描已跟踪与未跟踪（不含忽略）的 Go 文件，含独立子模块，跳过 testdata/。
 // Go 包目录指直接含非测试 .go 文件的目录。规则：
 //   - 必须有 doc.go，且带包注释；包注释只能写在 doc.go；
@@ -88,7 +88,7 @@ func checkPkgDoc(root, dir string, names []string, subdirs map[string]bool) ([]s
 		}
 	}
 	if !hasDoc {
-		return append(out, docRel+": 缺少 doc.go（包注释 + 文件结构树），见 CODE_STANDARDS §13"), nil
+		return append(out, docRel+": 缺少 doc.go（包注释 + 文件结构树），见 CODE_STANDARDS「包文档」一节"), nil
 	}
 	f, err := parseGoFile(root, docRel)
 	if err != nil {
