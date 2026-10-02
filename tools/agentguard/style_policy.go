@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -81,14 +80,16 @@ type styleChecker struct {
 	violations []string
 }
 
-// add 记录一条违规。
+// add 记录一条违规；行号取真实源码行，不受 //line 指令影响。
 // 输入 pos：违规位置；rule：规则名；msg：说明。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) add(pos token.Pos, rule, msg string) {
-	c.violations = append(c.violations, c.filename+":"+strconv.Itoa(c.fset.Position(pos).Line)+": "+rule+"："+msg)
+	c.violations = append(c.violations, c.filename+":"+strconv.Itoa(c.fset.PositionFor(pos, false).Line)+": "+rule+"："+msg)
 }
 
 // checkLockDefer 遍历全部语句列表（代码块、switch case、select 分支），检查加锁后紧跟 defer 解锁。
 // 需要提前解锁的临界区应抽成函数或闭包，而不是手写 Unlock；TryLock 不在此列。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) checkLockDefer(f *ast.File) {
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -105,6 +106,7 @@ func (c *styleChecker) checkLockDefer(f *ast.File) {
 
 // lockDeferInList 检查一个语句列表里每个加锁语句的下一条是否为对应的 defer 解锁。
 // 输入 list：语句列表。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) lockDeferInList(list []ast.Stmt) {
 	for i, st := range list {
 		recv, lock, ok := lockCall(st)
@@ -138,6 +140,8 @@ func lockCall(st ast.Stmt) (recv, lock string, ok bool) {
 }
 
 // isDeferCall 判断 st 是否为 defer <recv>.<method>()。
+// 输入 st：语句；recv：接收者表达式文本；method：解锁方法名。
+// 返回：是则 true。
 func isDeferCall(st ast.Stmt, recv, method string) bool {
 	d, ok := st.(*ast.DeferStmt)
 	if !ok || len(d.Call.Args) != 0 {
@@ -147,7 +151,8 @@ func isDeferCall(st ast.Stmt, recv, method string) bool {
 	return ok && sel.Sel.Name == method && types.ExprString(sel.X) == recv
 }
 
-// checkEventDecl 检查 logger.NewEvent 只作为 events.go 包级 var 的值出现。
+// checkEventDecl 检查 logger.NewEvent 只作为 events.go 包级 var 的值出现；点导入时按裸 NewEvent 匹配。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) checkEventDecl(f *ast.File) {
 	alias := importAlias(f, kitLoggerPath, "logger")
 	if alias == "" {
@@ -184,7 +189,7 @@ func (c *styleChecker) checkEventDecl(f *ast.File) {
 
 // importAlias 返回 importPath 在文件里的本地名。
 // 输入 def：未起别名时的默认包名。
-// 返回：本地名；未导入、点导入或空白导入时返回空串。
+// 返回：本地名；点导入返回 "."；未导入或空白导入返回空串。
 func importAlias(f *ast.File, importPath, def string) string {
 	for _, imp := range f.Imports {
 		p, err := strconv.Unquote(imp.Path.Value)
@@ -194,7 +199,7 @@ func importAlias(f *ast.File, importPath, def string) string {
 		if imp.Name == nil {
 			return def
 		}
-		if imp.Name.Name == "." || imp.Name.Name == "_" {
+		if imp.Name.Name == "_" {
 			return ""
 		}
 		return imp.Name.Name
@@ -202,8 +207,14 @@ func importAlias(f *ast.File, importPath, def string) string {
 	return ""
 }
 
-// isPkgSel 判断 expr 是否为 <alias>.<name>。
+// isPkgSel 判断 expr 是否为 <alias>.<name>；alias 为 "." 时（点导入）匹配裸标识符 <name>。
+// 输入 expr：被调表达式；alias：包的本地名；name：成员名。
+// 返回：命中则 true。
 func isPkgSel(expr ast.Expr, alias, name string) bool {
+	if alias == "." {
+		id, ok := expr.(*ast.Ident)
+		return ok && id.Name == name
+	}
 	sel, ok := expr.(*ast.SelectorExpr)
 	if !ok || sel.Sel.Name != name {
 		return false
@@ -214,6 +225,7 @@ func isPkgSel(expr ast.Expr, alias, name string) bool {
 
 // checkPanicPlacement 检查 panic 只出现在允许的函数里（CODE_STANDARDS「资源与生命周期」：请求路径不 panic）。
 // 包级 var 初始化里的 panic 一律不放行：需要启动期 fail-fast 时写成 Must* 函数。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) checkPanicPlacement(f *ast.File) {
 	for _, decl := range f.Decls {
 		if fd, ok := decl.(*ast.FuncDecl); ok && panicAllowed(f, fd) {
@@ -256,6 +268,7 @@ func panicAllowed(f *ast.File, fd *ast.FuncDecl) bool {
 
 // hasMustPrefix 判断函数名是否以 Must / must 开头且其后为空或大写字母。
 // 例：MustGet、mustFileWriter → true；mustard → false。
+// 返回：满足前缀约定则 true。
 func hasMustPrefix(name string) bool {
 	rest, ok := strings.CutPrefix(name, "Must")
 	if !ok {
@@ -272,13 +285,15 @@ func hasMustPrefix(name string) bool {
 }
 
 // checkRootCtx 检查生产代码不硬造根 ctx：context.Background() / context.TODO()（CODE_STANDARDS context 一节）。
-// 输入 allow：放行的路径前缀（.agentguard.yml style.root_ctx_allow）。package main 整体放行：CLI 与示例没有上游 ctx。
+// 输入 allow：放行的目录（.agentguard.yml style.root_ctx_allow，规范化后按目录边界前缀匹配）。package main 整体放行：CLI 与示例没有上游 ctx。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) checkRootCtx(f *ast.File, allow []string) {
 	if f.Name.Name == "main" {
 		return
 	}
 	for _, p := range allow {
-		if strings.HasPrefix(c.filename, p) {
+		// 先 Clean（去掉 ./ 与末尾 /）再补 /，按目录边界匹配，避免 log 误放行 login/。
+		if p = path.Clean(p); p != "." && strings.HasPrefix(c.filename, p+"/") {
 			return
 		}
 	}
@@ -297,11 +312,13 @@ func (c *styleChecker) checkRootCtx(f *ast.File, allow []string) {
 
 // checkHelperPlacement 检查声明了方法的文件里没有包级未导出纯辅助函数（CODE_STANDARDS §2「辅助函数归位」）。
 // 输入 exempt：放行的文件完整路径（.agentguard.yml style.helper_placement_exempt），按完整路径精确匹配。
-// 例外：common.go 自身；exempt 列出的文件；类型构造器 newXxx；首参为 context.Context 的端点主实现；init、main 与 _。
+// 例外：common.go 自身；exempt 列出的文件（先 path.Clean）；类型构造器 newXxx；首参为 context.Context 的端点主实现；init、main 与 _。
+// 返回：无，违规追加到 c.violations。
 func (c *styleChecker) checkHelperPlacement(f *ast.File, exempt []string) {
-	if path.Base(c.filename) == "common.go" || slices.Contains(exempt, c.filename) {
+	if path.Base(c.filename) == "common.go" || slices.ContainsFunc(exempt, func(e string) bool { return path.Clean(e) == c.filename }) {
 		return
 	}
+	ctxAlias := importAlias(f, "context", "context")
 	hasMethod := false
 	for _, decl := range f.Decls {
 		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv != nil {
@@ -314,7 +331,7 @@ func (c *styleChecker) checkHelperPlacement(f *ast.File, exempt []string) {
 	}
 	for _, decl := range f.Decls {
 		fd, ok := decl.(*ast.FuncDecl)
-		if !ok || fd.Recv != nil || !isHelperFunc(fd) {
+		if !ok || fd.Recv != nil || !isHelperFunc(fd, ctxAlias) {
 			continue
 		}
 		c.add(fd.Pos(), ruleHelperPlacement, "纯辅助函数 "+fd.Name.Name+" 须移到本包 common.go（本文件声明了方法；用例同步移到 common_test.go）")
@@ -322,16 +339,16 @@ func (c *styleChecker) checkHelperPlacement(f *ast.File, exempt []string) {
 }
 
 // isHelperFunc 判断包级函数 fd 是否属于须归位的纯辅助函数。
-func isHelperFunc(fd *ast.FuncDecl) bool {
+// 输入 fd：包级函数声明；ctxAlias：context 包在本文件的本地名（点导入为 "."，未导入为空串）。
+// 返回：属于须归位的辅助函数则 true。
+func isHelperFunc(fd *ast.FuncDecl, ctxAlias string) bool {
 	name := fd.Name.Name
 	if ast.IsExported(name) || name == "init" || name == "main" || name == "_" || isConstructorName(name) {
 		return false
 	}
 	if params := fd.Type.Params.List; len(params) > 0 {
-		if sel, ok := params[0].Type.(*ast.SelectorExpr); ok && sel.Sel.Name == "Context" {
-			if id, ok := sel.X.(*ast.Ident); ok && id.Name == "context" {
-				return false
-			}
+		if ctxAlias != "" && isPkgSel(params[0].Type, ctxAlias, "Context") {
+			return false
 		}
 	}
 	return true
@@ -339,6 +356,7 @@ func isHelperFunc(fd *ast.FuncDecl) bool {
 
 // isConstructorName 判断是否为类型构造器名 newXxx（new 后紧跟大写字母）。
 // 例：newClient → true；newline → false。
+// 返回：是构造器名则 true。
 func isConstructorName(name string) bool {
 	rest, ok := strings.CutPrefix(name, "new")
 	if !ok || rest == "" {
@@ -380,6 +398,38 @@ func scanStyle(root string) ([]string, error) {
 		}
 		violations = append(violations, found...)
 	}
-	sort.Strings(violations)
+	slices.SortFunc(violations, compareViolation)
 	return violations, nil
+}
+
+// violationLocRe 从「路径:行: 规则：说明」里取路径与行号。
+var violationLocRe = regexp.MustCompile(`^(.*?):(\d+): `)
+
+// compareViolation 按路径、行号数值、原字符串比较两条违规。
+// 输入 a、b：findStyleViolations 产出的违规文本。
+// 返回：a 在前为负，相等为 0，a 在后为正。
+func compareViolation(a, b string) int {
+	pa, la := splitViolation(a)
+	pb, lb := splitViolation(b)
+	if c := strings.Compare(pa, pb); c != 0 {
+		return c
+	}
+	if la != lb {
+		return la - lb
+	}
+	return strings.Compare(a, b)
+}
+
+// splitViolation 解析违规文本的路径与行号。
+// 返回：路径与行号；格式不符时返回整串与 0。
+func splitViolation(v string) (string, int) {
+	m := violationLocRe.FindStringSubmatch(v)
+	if m == nil {
+		return v, 0
+	}
+	n, err := strconv.Atoi(m[2])
+	if err != nil {
+		return v, 0
+	}
+	return m[1], n
 }
