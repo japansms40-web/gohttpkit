@@ -12,18 +12,37 @@ import (
 	"testing"
 )
 
+// packageDefault 是包加载时放好的缺省 logger；TestMain 换成静默输出之前先记下，供缺省输出的用例断言。
+var packageDefault *slog.Logger
+
 func TestMain(m *testing.M) {
-	fallback.Store(slog.New(wrapCtxHandler(slog.NewJSONHandler(io.Discard, nil))))
+	packageDefault = current.Load()
+	current.Store(slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	os.Exit(m.Run())
+}
+
+// useHandler 把 h 装成当前输出，用例结束时还原。
+func useHandler(t *testing.T, h slog.Handler) {
+	t.Helper()
+	prev := current.Load()
+	current.Store(slog.New(h))
+	t.Cleanup(func() { current.Store(prev) })
 }
 
 func captureJSON(t *testing.T, opts *slog.HandlerOptions) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	install(slog.NewJSONHandler(buf, opts))
-	t.Cleanup(func() { install(nil) })
+	useHandler(t, slog.NewJSONHandler(buf, opts))
 	return buf
 }
+
+// errHandler 的 Handle 永远返回错误，用来验证门面吞掉输出错误、以及未启用时不进 Handle。
+type errHandler struct{ enabled bool }
+
+func (e errHandler) Enabled(context.Context, slog.Level) bool  { return e.enabled }
+func (e errHandler) Handle(context.Context, slog.Record) error { return io.ErrUnexpectedEOF }
+func (e errHandler) WithAttrs([]slog.Attr) slog.Handler        { return e }
+func (e errHandler) WithGroup(string) slog.Handler             { return e }
 
 func lastLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	t.Helper()
@@ -51,51 +70,59 @@ func assertLevelMsgN(t *testing.T, buf *bytes.Buffer, level string) {
 	}
 }
 
-func TestInstall_安装后自动带trace_id(t *testing.T) {
-	buf := &bytes.Buffer{}
-	install(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { install(nil) })
+func TestCurrent_包加载后即有缺省输出(t *testing.T) {
+	if packageDefault == nil {
+		t.Fatal("包加载后 current 应已放好缺省 logger")
+	}
+	h := packageDefault.Handler()
+	t.Logf("default handler=%T", h)
+	if _, ok := h.(*slog.JSONHandler); !ok {
+		t.Fatalf("缺省输出应是 JSON 处理器，实际 %T", h)
+	}
+	if !h.Enabled(t.Context(), slog.LevelInfo) || h.Enabled(t.Context(), slog.LevelDebug) {
+		t.Fatal("缺省输出应是 info 级：放行 info、拦下 debug")
+	}
+}
 
-	Info(WithTraceID(t.Context(), "lg"), "via-install")
+func TestLog_ctx里的trace_id自动写出(t *testing.T) {
+	buf := captureJSON(t, nil)
+
+	Info(WithTraceID(t.Context(), "lg"), "with-trace")
 	m := lastLine(t, buf)
 	t.Logf("msg=%v trace_id=%v", m["msg"], m["trace_id"])
-	if m["msg"] != "via-install" {
-		t.Fatalf("安装的 handler 未生效: %v", m)
+	if m["msg"] != "with-trace" {
+		t.Fatalf("当前输出未生效: %v", m)
 	}
 	if m["trace_id"] != "lg" {
-		t.Fatalf("安装的 handler 未自动获得 trace_id: %v", m)
+		t.Fatalf("门面日志未自动带 trace_id: %v", m)
 	}
 }
 
-func TestInstall_nil还原缺省(t *testing.T) {
-	buf := &bytes.Buffer{}
-	install(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { install(nil) })
-
-	install(nil)
-	t.Logf("installed after nil = %v", installed.Load())
-	if installed.Load() != nil {
-		t.Fatal("install(nil) 应清空 installed")
+func TestLog_只有WithAttrs无trace(t *testing.T) {
+	buf := captureJSON(t, nil)
+	Info(WithAttrs(t.Context(), slog.String("account_id", "u9")), "attrs-only")
+	m := lastLine(t, buf)
+	t.Logf("attrs-only=%v", m)
+	if m["account_id"] != "u9" {
+		t.Fatalf("WithAttrs 未写出: %v", m)
 	}
-
-	buf.Reset()
-	Info(t.Context(), "after-nil")
-	t.Logf("old buf after nil = %q", buf.String())
-	if buf.Len() != 0 {
-		t.Fatalf("install(nil) 后不应再写入旧 buf: %s", buf.String())
+	if m["trace_id"] != nil || m["span_id"] != nil {
+		t.Fatalf("无 trace/span 的 ctx 不应冒出这两个键: %v", m)
 	}
 }
 
-func TestActive_反映当前安装(t *testing.T) {
-	buf := &bytes.Buffer{}
-	install(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { install(nil) })
+func TestLog_Handle错误被吞掉(t *testing.T) {
+	useHandler(t, errHandler{enabled: true})
 
-	active().Info("via-active")
-	t.Logf("buf=%s", buf.String())
-	if !strings.Contains(buf.String(), "via-active") {
-		t.Fatalf("active() 未反映已安装的 handler: %s", buf.String())
-	}
+	Info(t.Context(), "ignored-1")
+	Error(WithAttrs(WithTraceID(t.Context(), "t"), slog.String("a", "1")), "ignored-2")
+	t.Logf("Handle 返回 error 后未向上传播")
+}
+
+func TestLog_未启用时直接返回(t *testing.T) {
+	useHandler(t, errHandler{enabled: false})
+	Info(t.Context(), "should-skip")
+	t.Logf("Enabled=false 时不进 Handle")
 }
 
 func TestEnabled_随当前输出的级别变化且nil_ctx不panic(t *testing.T) {
@@ -123,68 +150,6 @@ func TestEnabled_随当前输出的级别变化且nil_ctx不panic(t *testing.T) 
 			}
 		})
 	}
-}
-
-func TestActive_惰性初始化回填fallback(t *testing.T) {
-	prevInstalled := installed.Load()
-	prevFb := fallback.Load()
-	t.Cleanup(func() {
-		installed.Store(prevInstalled)
-		fallback.Store(prevFb)
-	})
-
-	installed.Store(nil)
-	fallback.Store(nil)
-
-	got := active()
-	t.Logf("active=%p fallback=%p", got, fallback.Load())
-	if got == nil {
-		t.Fatal("惰性初始化应返回非 nil logger")
-	}
-	if fallback.Load() == nil {
-		t.Fatal("惰性初始化应回填 fallback")
-	}
-}
-
-func TestActive_并发惰性初始化同一实例(t *testing.T) {
-	prevInstalled := installed.Load()
-	prevFb := fallback.Load()
-	t.Cleanup(func() {
-		installed.Store(prevInstalled)
-		fallback.Store(prevFb)
-	})
-
-	installed.Store(nil)
-
-	const rounds, n = 200, 8
-	for r := range rounds {
-		fallback.Store(nil)
-
-		var wg sync.WaitGroup
-		start := make(chan struct{})
-		got := make([]*slog.Logger, n)
-		for i := range n {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
-				<-start
-				got[idx] = active()
-			}(i)
-		}
-		close(start)
-		wg.Wait()
-
-		first := got[0]
-		if first == nil {
-			t.Fatal("惰性初始化返回 nil")
-		}
-		for i, l := range got {
-			if l != first {
-				t.Fatalf("round %d 并发惰性初始化返回不同实例: got[%d]=%p first=%p", r, i, l, first)
-			}
-		}
-	}
-	t.Logf("rounds=%d goroutines=%d 全员同一实例", rounds, n)
 }
 
 func TestLevelFunctions_四级透传msg与attr(t *testing.T) {
@@ -294,20 +259,21 @@ func TestSourceLocation_指向本测试文件(t *testing.T) {
 }
 
 func TestConcurrentSetAndLog_混跑不炸(t *testing.T) {
-	t.Cleanup(func() { install(nil) })
+	prev := current.Load()
+	t.Cleanup(func() { current.Store(prev) })
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(3)
 		go func() {
 			defer wg.Done()
 			for range 100 {
-				install(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+				current.Store(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)))
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for range 100 {
-				install(nil)
+				current.Store(prev)
 			}
 		}()
 		go func() {

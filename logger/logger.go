@@ -9,26 +9,19 @@ import (
 	"time"
 )
 
-// logger.go —— 门面 API 与当前生效 logger 的选取。
-// 独立成文件：接入方只需要认这几个函数，配置 / handler / span 的实现细节不该和 Debug/Info 挤在一起。
+// logger.go —— 门面 API、当前生效的 logger，以及全部门面日志的唯一出口 output。
+// 独立成文件：接入方只需要认这几个函数，配置 / span 的实现细节不该和 Debug/Info 挤在一起。
 //
-// 并发：installed 与 fallback 均为 atomic.Pointer，install / active 可被多 goroutine 同时调用。
-// 打日志不拿锁；替换的是整份 *slog.Logger 引用。
+// 并发：current 是 atomic.Pointer，Init / Close 替换的是整份 *slog.Logger 引用，打日志不拿锁。
 
-var (
-	installed atomic.Pointer[slog.Logger] // Init 安装的 logger；nil = 没有初始化，走 fallback
-	fallback  atomic.Pointer[slog.Logger] // 缺省 logger，没有初始化时使用，首次使用时惰性创建
-)
+// current 当前生效的 logger，任何时刻都非 nil：包加载时放好缺省输出，Init 换掉，Close 换回。
+var current atomic.Pointer[slog.Logger]
 
-// install 把 h 装成当前生效的输出，是 Init 之下唯一的安装点。
-// 输入 h：非 nil 时包一层 ctx 注入后生效，自动获得 ctx 中的 trace_id、span_id 与 WithAttrs 字段；nil 清空，回到缺省输出。
-// 返回：无。
-func install(h slog.Handler) {
-	if h == nil {
-		installed.Store(nil)
-		return
-	}
-	installed.Store(slog.New(wrapCtxHandler(h)))
+// init 在包加载时放好缺省输出，没有调用 Init 的进程也能打日志。
+// 输入：无。
+// 返回：无。缺省输出按 DefaultConfig：控制台 JSON、info 级。
+func init() {
+	current.Store(slog.New(buildHandler(os.Stdout, DefaultConfig(), nil)))
 }
 
 // Enabled 报告当前输出在 level 级别是否会写出。
@@ -39,29 +32,12 @@ func Enabled(ctx context.Context, level slog.Level) bool {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return active().Handler().Enabled(ctx, level)
-}
-
-// active 选取当前 logger。
-// 输入：无（读进程级 installed / fallback）。
-// 返回：Init 安装的优先；否则 fallback；都空则按 DefaultConfig 惰性创建并 CAS 回填。
-func active() *slog.Logger {
-	if l := installed.Load(); l != nil {
-		return l
-	}
-	if l := fallback.Load(); l != nil {
-		return l
-	}
-	l := slog.New(wrapCtxHandler(buildHandler(os.Stdout, DefaultConfig(), nil)))
-	if fallback.CompareAndSwap(nil, l) {
-		return l
-	}
-	return fallback.Load()
+	return current.Load().Handler().Enabled(ctx, level)
 }
 
 // Debug 打 debug 级日志。
 // 输入 ctx：可为 nil（回落 Background）；msg / attrs 原样进 Record。
-// 返回：无。低于阈值时不写。trace_id 与 ctx 通用字段由 handler 附加。
+// 返回：无。低于阈值时不写。trace_id、span_id 与 ctx 通用字段由 output 附加。
 func Debug(ctx context.Context, msg string, attrs ...slog.Attr) {
 	log(ctx, slog.LevelDebug, msg, attrs...)
 }
@@ -97,13 +73,14 @@ func log(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) 
 	output(ctx, level, msg, 4, nil, attrs)
 }
 
-// output 构造 Record 并转发给当前 handler。
+// output 构造 Record 并交给当前输出，是全部门面日志的唯一出口。
 // 输入 ctx：非 nil；skip：runtime.Callers 的跳过帧数，须指向业务调用点；
 // pre：先写入的固定字段（Logger 的 module / With）；attrs：本次调用字段，排在 pre 之后。
 // 返回：无。Handler.Handle 的 error 被丢掉——日志失败不能反向打爆业务。
+// 字段顺序：pre、attrs，然后是 ctx 里的 trace_id、span_id 与 WithAttrs 通用字段；ctx 里没有的不写。
 // 先判 Enabled 再取调用栈：低于阈值时不付 runtime.Callers 的开销。
 func output(ctx context.Context, level slog.Level, msg string, skip int, pre, attrs []slog.Attr) {
-	h := active().Handler()
+	h := current.Load().Handler()
 	if !h.Enabled(ctx, level) {
 		return
 	}
@@ -112,6 +89,13 @@ func output(ctx context.Context, level slog.Level, msg string, skip int, pre, at
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	r.AddAttrs(pre...)
 	r.AddAttrs(attrs...)
+	if tid := TraceIDFromContext(ctx); tid != "" {
+		r.AddAttrs(slog.String(FieldTraceID, tid))
+	}
+	if sid := SpanIDFromContext(ctx); sid != "" {
+		r.AddAttrs(slog.String(FieldSpanID, sid))
+	}
+	r.AddAttrs(attrsFromContext(ctx)...)
 	_ = h.Handle(ctx, r)
 }
 

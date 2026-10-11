@@ -22,6 +22,9 @@
   - 测试里 `SetHandler(捕获器)` 加 `SetLogger(nil)` 的写法，改成 `rec := loggertest.Capture(t, logger.LevelDebug)`，读 `rec.Records()` / `rec.Events()`；
     只想要原始 JSON 的，用 `logger.Init(logger.Config{Writer: &buf})` 加 `t.Cleanup(logger.Close)`。
   - 需要把当前 logger 交给别的库的：`Init` 之后 `slog.Default()` 就是它。
+- ctx 里的 `trace_id` / `span_id` / `WithAttrs` 字段只写进门面日志（`logger.XxxEvent`、`logger.Info` 等与具名 `Logger`）。
+  经 `slog.Default()` 或标准库 `log` 打出的日志仍并入同一条通道，但不再带这些字段（原来由内部 handler 包装注入，该包装已删除）。
+  迁移：需要 trace 串联的日志改走门面。
 - `logger.Config.FilePath` 改名 `Filename`。
 - 落盘失败不再 panic：`Init` 返回 `*FileSetupError`，原来 `recover` 的地方改成判断返回值。
 - 新增直接依赖 `gopkg.in/natefinch/lumberjack.v2 v2.2.1`。

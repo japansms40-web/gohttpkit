@@ -88,8 +88,8 @@ type session struct {
 	parent *session
 	// file 本次 Init 打开的日志文件；没有落盘时为 nil。
 	file *lumberjack.Logger
-	// prevInstalled 本次 Init 之前生效的 logger；nil 表示之前走缺省输出。
-	prevInstalled *slog.Logger
+	// prevCurrent 本次 Init 之前生效的 logger，非 nil。
+	prevCurrent *slog.Logger
 	// prevDefault 本次 Init 之前的 slog 默认 logger。
 	prevDefault *slog.Logger
 	// prevOut 本次 Init 之前标准库 log 的输出。
@@ -117,22 +117,23 @@ func Init(c Config, attrs ...slog.Attr) error {
 	if err != nil {
 		return err
 	}
-	h := buildHandler(w, c, attrs)
+	l := slog.New(buildHandler(w, c, attrs))
 
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
 	live = &session{
-		parent:        live,
-		file:          file,
-		prevInstalled: installed.Load(),
-		prevDefault:   slog.Default(),
-		prevOut:       stdlog.Writer(),
-		prevFlags:     stdlog.Flags(),
+		parent:      live,
+		file:        file,
+		prevCurrent: current.Load(),
+		prevDefault: slog.Default(),
+		prevOut:     stdlog.Writer(),
+		prevFlags:   stdlog.Flags(),
 	}
-	install(h)
+	current.Store(l)
 	// net/http 等标准库在出错路径直接用 log.Printf，第三方库也可能直接用 slog 默认 logger；
 	// 把默认 logger 换成同一个处理器，这些输出才不会绕过本通道、破坏结构化日志采集。
-	slog.SetDefault(installed.Load())
+	// 它们不经门面的 output，所以不带 ctx 里的 trace_id、span_id 与 WithAttrs 字段。
+	slog.SetDefault(l)
 	return nil
 }
 
@@ -149,7 +150,7 @@ func Close() {
 		return
 	}
 	live = s.parent
-	installed.Store(s.prevInstalled)
+	current.Store(s.prevCurrent)
 	// 上一个默认 logger 若是标准库原生的那个，SetDefault 不会动标准库 log 的输出，所以输出与标志要显式写回。
 	slog.SetDefault(s.prevDefault)
 	stdlog.SetOutput(s.prevOut)
@@ -209,7 +210,7 @@ func openLogFile(c Config) (*lumberjack.Logger, error) {
 
 // buildHandler 按 c 的格式与级别构造处理器，并挂上固定字段。
 // 输入 w：写入目标，非 nil；c：Format=="console" 用文本，否则 JSON，Level 经 parseLevel；attrs：固定字段，可为空。
-// 返回：非 nil slog.Handler，带调用位置（AddSource）。不包 ctx 注入，由 install 负责。
+// 返回：非 nil slog.Handler，带调用位置（AddSource）。
 func buildHandler(w io.Writer, c Config, attrs []slog.Attr) slog.Handler {
 	opts := &slog.HandlerOptions{Level: parseLevel(c.Level), AddSource: true}
 	var h slog.Handler

@@ -26,7 +26,7 @@ func mustInit(t *testing.T, c Config, attrs ...slog.Attr) {
 
 // processLogState 是 Init / Close 会改动的进程级状态，用来断言「没变」或「已还原」。
 type processLogState struct {
-	installed   *slog.Logger
+	current     *slog.Logger
 	slogDefault *slog.Logger
 	stdOut      io.Writer
 	stdFlags    int
@@ -36,7 +36,7 @@ type processLogState struct {
 func snapshotLogState() processLogState {
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
-	return processLogState{installed: installed.Load(), slogDefault: slog.Default(), stdOut: stdlog.Writer(), stdFlags: stdlog.Flags(), live: live}
+	return processLogState{current: current.Load(), slogDefault: slog.Default(), stdOut: stdlog.Writer(), stdFlags: stdlog.Flags(), live: live}
 }
 
 func TestDefaultConfig_单点默认值(t *testing.T) {
@@ -431,6 +431,27 @@ func TestInit_标准库log与slog默认logger并入同一通道(t *testing.T) {
 	}
 }
 
+func TestInit_slog默认logger不带ctx字段而门面带(t *testing.T) {
+	var buf bytes.Buffer
+	mustInit(t, Config{Level: LevelInfo, Writer: &buf})
+
+	ctx := WithAttrs(WithTraceID(t.Context(), "tid-default"), slog.String("account_id", "u1"))
+	slog.Default().InfoContext(ctx, "third-party-with-ctx")
+	Info(ctx, "via-facade")
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	t.Logf("lines=%v", lines)
+	if len(lines) != 2 {
+		t.Fatalf("应有 2 行，实际 %d 行: %s", len(lines), buf.String())
+	}
+	if strings.Contains(lines[0], FieldTraceID) || strings.Contains(lines[0], "account_id") {
+		t.Fatalf("slog 默认 logger 不经门面，不应带 ctx 字段: %s", lines[0])
+	}
+	if !strings.Contains(lines[1], `"trace_id":"tid-default"`) || !strings.Contains(lines[1], `"account_id":"u1"`) {
+		t.Fatalf("门面日志应带 ctx 里的 trace_id 与通用字段: %s", lines[1])
+	}
+}
+
 func TestClose_还原进程日志状态(t *testing.T) {
 	before := snapshotLogState()
 	path := filepath.Join(t.TempDir(), "close.log")
@@ -438,7 +459,7 @@ func TestClose_还原进程日志状态(t *testing.T) {
 		t.Fatal(err)
 	}
 	during := snapshotLogState()
-	if during.installed == before.installed || during.slogDefault == before.slogDefault || during.live == nil {
+	if during.current == before.current || during.slogDefault == before.slogDefault || during.live == nil {
 		t.Fatalf("Init 应替换当前输出与 slog 默认 logger: %+v", during)
 	}
 

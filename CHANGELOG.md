@@ -14,6 +14,8 @@
 - `logger.Config`：`FilePath` 改名 `Filename`。
 - `logger`：落盘失败不再 panic，由 `Init` 返回 `*FileSetupError`（`Op` 只有 `open`），失败时进程日志状态不变。
 - `logger` 不再是「只依赖标准库」：新增直接依赖 `gopkg.in/natefinch/lumberjack.v2`，下游间接带上。
+- `logger`：ctx 里的 `trace_id` / `span_id` / `WithAttrs` 字段只写进门面日志；经 `slog.Default()` 或标准库 `log` 打出的日志
+  仍并入同一条通道，但不再带这些字段（内部的 handler 包装已删除，字段改在门面出口写入）。
 
 ### 新增
 

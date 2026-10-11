@@ -168,16 +168,16 @@ func TestLogger_调用时才解析当前handler(t *testing.T) {
 		t.Fatalf("先 Named 后安装 handler，日志应进新 handler: %v", m)
 	}
 
-	prev := fallback.Load()
-	fb := &bytes.Buffer{}
-	fallback.Store(slog.New(wrapCtxHandler(slog.NewJSONHandler(fb, nil))))
-	t.Cleanup(func() { fallback.Store(prev) })
-	install(nil)
-	l.Info("back-to-fallback")
-	m := lastLine(t, fb)
-	t.Logf("fallback=%v", m)
-	if m["msg"] != "back-to-fallback" {
-		t.Fatalf("清空安装后应回到 fallback: %v", m)
+	swapped := &bytes.Buffer{}
+	useHandler(t, slog.NewJSONHandler(swapped, nil))
+	l.Info("after-swap")
+	m := lastLine(t, swapped)
+	t.Logf("swapped=%v", m)
+	if m["msg"] != "after-swap" {
+		t.Fatalf("再换一次输出后，日志应进新的输出: %v", m)
+	}
+	if strings.Contains(buf.String(), "after-swap") {
+		t.Fatalf("换掉之后不应再写入旧输出: %s", buf.String())
 	}
 }
 
@@ -195,7 +195,8 @@ func TestLoggerSource_指向本测试文件(t *testing.T) {
 }
 
 func TestLogger_并发With与Set混跑(t *testing.T) {
-	t.Cleanup(func() { install(nil) })
+	prev := current.Load()
+	t.Cleanup(func() { current.Store(prev) })
 	base := Named("race")
 	var wg sync.WaitGroup
 	for range 8 {
@@ -204,9 +205,9 @@ func TestLogger_并发With与Set混跑(t *testing.T) {
 			defer wg.Done()
 			for j := range 100 {
 				if j%2 == 0 {
-					install(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+					current.Store(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)))
 				} else {
-					install(nil)
+					current.Store(prev)
 				}
 			}
 		}()

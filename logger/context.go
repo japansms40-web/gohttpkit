@@ -10,7 +10,7 @@ import (
 )
 
 // context.go —— trace_id 与 ctx 通用字段注入。
-// 独立成文件：ctx key 与 handler 包装、span 生命周期分开，避免把注入散落到门面文件。
+// 独立成文件：ctx 里字段的存取与门面、span 生命周期分开；写进日志由 logger.go 的 output 统一做。
 
 type traceIDKey struct{}
 

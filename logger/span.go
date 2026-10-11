@@ -14,7 +14,7 @@ type spanIDKey struct{}
 // 输入 ctx：nil 或未开启 span 返回 ""。
 // 返回：StartSpan 写入的短 id。
 // 例：SpanIDFromContext(ctx) 在 span 内非空，外面是 ""。
-// handler 层会把它自动附加到该 ctx 下每条日志，与 trace_id 同等待遇。
+// output 会把它自动附加到该 ctx 下每条门面日志，与 trace_id 同等待遇。
 func SpanIDFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -57,7 +57,7 @@ func StartSpan(ctx context.Context, name string, attrs ...slog.Attr) (context.Co
 
 	start := time.Now()
 
-	// span_id 由 handler 从 ctx 自动附加，这里不重复加；只补 span_name 与父链。
+	// span_id 由 output 从 ctx 自动附加，这里不重复加；只补 span_name 与父链。
 	startAttrs := make([]slog.Attr, 0, len(attrs)+2)
 	startAttrs = append(startAttrs, slog.String(FieldSpanName, name))
 	if parent != "" {
