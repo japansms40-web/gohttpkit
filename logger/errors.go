@@ -2,13 +2,13 @@ package logger
 
 import "fmt"
 
-// FileSetupError 创建或打开日志文件失败。
-// mustFileWriter 在进程启动期构造默认 logger，失败比带着半残 handler 继续更安全，
-// 因此以 panic 抛出本类型。判定请用 errors.As，不要扫文案。
+// FileSetupError 日志文件建不出来或打不开。
+// Init 在落盘失败时返回本类型（Op=open），进程日志状态保持不变。
+// 判定请用 errors.As，不要扫文案。
 type FileSetupError struct {
 	// Path 实际尝试使用的文件路径（空输入已被回落成默认路径）。
 	Path string
-	// Op 失败步骤：mkdir 或 open。
+	// Op 失败步骤，目前只有 open：建目录或打开文件。
 	Op string
 	// Err 底层错误。
 	Err error
@@ -17,7 +17,7 @@ type FileSetupError struct {
 // Error 实现 error。
 // 输入：接收者可为 nil。
 // 返回：nil → "logger: file setup failed <nil>"；
-// 否则 → `logger: mkdir "/path": ...` 或 `logger: open "/path": ...`。
+// 否则 → `logger: open "/path": ...`。
 func (e *FileSetupError) Error() string {
 	if e == nil {
 		return "logger: file setup failed <nil>"

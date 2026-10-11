@@ -20,8 +20,8 @@ func TestMain(m *testing.M) {
 func captureJSON(t *testing.T, opts *slog.HandlerOptions) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, opts))
-	t.Cleanup(func() { SetLogger(nil) })
+	install(slog.NewJSONHandler(buf, opts))
+	t.Cleanup(func() { install(nil) })
 	return buf
 }
 
@@ -51,62 +51,89 @@ func assertLevelMsgN(t *testing.T, buf *bytes.Buffer, level string) {
 	}
 }
 
-func TestSetLogger_注入后自动带trace_id(t *testing.T) {
+func TestInstall_安装后自动带trace_id(t *testing.T) {
 	buf := &bytes.Buffer{}
-	SetLogger(slog.New(slog.NewJSONHandler(buf, nil)))
-	t.Cleanup(func() { SetLogger(nil) })
+	install(slog.NewJSONHandler(buf, nil))
+	t.Cleanup(func() { install(nil) })
 
-	Info(WithTraceID(t.Context(), "lg"), "via-setlogger")
+	Info(WithTraceID(t.Context(), "lg"), "via-install")
 	m := lastLine(t, buf)
 	t.Logf("msg=%v trace_id=%v", m["msg"], m["trace_id"])
-	if m["msg"] != "via-setlogger" {
-		t.Fatalf("SetLogger 注入未生效: %v", m)
+	if m["msg"] != "via-install" {
+		t.Fatalf("安装的 handler 未生效: %v", m)
 	}
 	if m["trace_id"] != "lg" {
-		t.Fatalf("SetLogger 注入的 handler 未自动获得 trace_id: %v", m)
+		t.Fatalf("安装的 handler 未自动获得 trace_id: %v", m)
 	}
 }
 
-func TestSetHandler_nil还原默认(t *testing.T) {
+func TestInstall_nil还原缺省(t *testing.T) {
 	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
+	install(slog.NewJSONHandler(buf, nil))
+	t.Cleanup(func() { install(nil) })
 
-	SetHandler(nil)
-	t.Logf("external after nil = %v", external.Load())
-	if external.Load() != nil {
-		t.Fatal("SetHandler(nil) 应清空 external")
+	install(nil)
+	t.Logf("installed after nil = %v", installed.Load())
+	if installed.Load() != nil {
+		t.Fatal("install(nil) 应清空 installed")
 	}
 
 	buf.Reset()
 	Info(t.Context(), "after-nil")
 	t.Logf("old buf after nil = %q", buf.String())
 	if buf.Len() != 0 {
-		t.Fatalf("SetHandler(nil) 后不应再写入旧注入 buf: %s", buf.String())
+		t.Fatalf("install(nil) 后不应再写入旧 buf: %s", buf.String())
 	}
 }
 
-func TestDefault_反映当前注入(t *testing.T) {
+func TestActive_反映当前安装(t *testing.T) {
 	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
+	install(slog.NewJSONHandler(buf, nil))
+	t.Cleanup(func() { install(nil) })
 
-	Default().Info("via-default")
+	active().Info("via-active")
 	t.Logf("buf=%s", buf.String())
-	if !strings.Contains(buf.String(), "via-default") {
-		t.Fatalf("Default() 未反映已注入的 handler: %s", buf.String())
+	if !strings.Contains(buf.String(), "via-active") {
+		t.Fatalf("active() 未反映已安装的 handler: %s", buf.String())
+	}
+}
+
+func TestEnabled_随当前输出的级别变化且nil_ctx不panic(t *testing.T) {
+	captureJSON(t, &slog.HandlerOptions{Level: slog.LevelWarn})
+
+	var nilCtx context.Context
+	cases := []struct {
+		name  string
+		ctx   context.Context
+		level slog.Level
+		want  bool
+	}{
+		{"低于阈值", t.Context(), slog.LevelInfo, false},
+		{"等于阈值", t.Context(), slog.LevelWarn, true},
+		{"高于阈值", t.Context(), slog.LevelError, true},
+		{"nil ctx 回落 Background", nilCtx, slog.LevelError, true},
+		{"nil ctx 低于阈值", nilCtx, slog.LevelDebug, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Enabled(c.ctx, c.level)
+			t.Logf("Enabled(%v) → %v", c.level, got)
+			if got != c.want {
+				t.Fatalf("Enabled(%v) = %v, want %v", c.level, got, c.want)
+			}
+		})
 	}
 }
 
 func TestActive_惰性初始化回填fallback(t *testing.T) {
-	prevExt := external.Load()
+	prevInstalled := installed.Load()
 	prevFb := fallback.Load()
 	t.Cleanup(func() {
-		external.Store(prevExt)
+		installed.Store(prevInstalled)
 		fallback.Store(prevFb)
 	})
 
-	external.Store(nil)
+	installed.Store(nil)
 	fallback.Store(nil)
 
 	got := active()
@@ -120,14 +147,14 @@ func TestActive_惰性初始化回填fallback(t *testing.T) {
 }
 
 func TestActive_并发惰性初始化同一实例(t *testing.T) {
-	prevExt := external.Load()
+	prevInstalled := installed.Load()
 	prevFb := fallback.Load()
 	t.Cleanup(func() {
-		external.Store(prevExt)
+		installed.Store(prevInstalled)
 		fallback.Store(prevFb)
 	})
 
-	external.Store(nil)
+	installed.Store(nil)
 
 	const rounds, n = 200, 8
 	for r := range rounds {
@@ -158,34 +185,6 @@ func TestActive_并发惰性初始化同一实例(t *testing.T) {
 		}
 	}
 	t.Logf("rounds=%d goroutines=%d 全员同一实例", rounds, n)
-}
-
-func TestInjectionPriority_SetConfig不覆盖external(t *testing.T) {
-	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
-
-	Info(t.Context(), "via external")
-	t.Logf("after SetHandler: %s", buf.String())
-	if !strings.Contains(buf.String(), "via external") {
-		t.Fatal("SetHandler 注入未生效")
-	}
-
-	SetConfig(Config{Level: "info", Format: "json", Output: "console"})
-	buf.Reset()
-	Info(t.Context(), "still external")
-	t.Logf("after SetConfig: %s", buf.String())
-	if !strings.Contains(buf.String(), "still external") {
-		t.Fatal("SetConfig 不应覆盖已注入的 external logger")
-	}
-
-	SetLogger(nil)
-	buf.Reset()
-	Info(t.Context(), "to default")
-	t.Logf("after SetLogger(nil) bufLen=%d", buf.Len())
-	if buf.Len() != 0 {
-		t.Fatal("SetLogger(nil) 后不应再写入注入的 buf")
-	}
 }
 
 func TestLevelFunctions_四级透传msg与attr(t *testing.T) {
@@ -260,16 +259,6 @@ func TestErr_nil不产键非nil写出(t *testing.T) {
 	}
 }
 
-func TestSetLogger_nil清空external(t *testing.T) {
-	SetLogger(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)))
-	t.Cleanup(func() { SetLogger(nil) })
-	SetLogger(nil)
-	t.Logf("external=%v", external.Load())
-	if external.Load() != nil {
-		t.Fatal("SetLogger(nil) 应清空 external")
-	}
-}
-
 func TestNamedErr_空键名仍写出(t *testing.T) {
 	a := NamedErr("", io.EOF)
 	t.Logf("NamedErr(\"\", EOF) → key=%q val=%q", a.Key, a.Value.String())
@@ -305,20 +294,20 @@ func TestSourceLocation_指向本测试文件(t *testing.T) {
 }
 
 func TestConcurrentSetAndLog_混跑不炸(t *testing.T) {
-	t.Cleanup(func() { SetLogger(nil) })
+	t.Cleanup(func() { install(nil) })
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(3)
 		go func() {
 			defer wg.Done()
 			for range 100 {
-				SetHandler(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+				install(slog.NewJSONHandler(&bytes.Buffer{}, nil))
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for range 100 {
-				SetLogger(nil)
+				install(nil)
 			}
 		}()
 		go func() {

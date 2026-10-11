@@ -9,15 +9,15 @@ import (
 // 独立成文件：这是门面与底层 slog 的接缝，和 Config 构造分开。
 
 // ctxHandler 包装任意 slog.Handler，把 ctx 中的 trace_id 与 WithAttrs 通用字段自动附加到每条日志。
-// 默认 handler 与 SetLogger/SetHandler 注入的 handler 都会被包装 —— 调用方无需自行处理 trace 注入。
+// 缺省 handler 与 Init 安装的 handler 都会被包装 —— 调用方无需自行处理 trace 注入。
 // 并发：实例不可变；inner 的并发安全由被包装的 handler 负责。WithAttrs/WithGroup 返回新包装，不改原实例。
 type ctxHandler struct {
 	inner slog.Handler
 }
 
 // wrapCtxHandler 给任意 handler 套上 ctx 注入。
-// 输入 h：已是 *ctxHandler 则原样返回同一指针，防止 SetLogger(Default()) 双层注入。
-// 返回：*ctxHandler。调用方须保证 h 非 nil（SetHandler / SetLogger 已挡）。
+// 输入 h：已是 *ctxHandler 则原样返回同一指针，防止双层注入。
+// 返回：*ctxHandler。调用方须保证 h 非 nil（install 已挡）。
 func wrapCtxHandler(h slog.Handler) slog.Handler {
 	if _, ok := h.(*ctxHandler); ok {
 		return h

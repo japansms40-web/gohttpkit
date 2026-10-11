@@ -5,10 +5,24 @@
 
 ## [Unreleased]
 
-> agentguard 随 `tools/agentguard/v0.2.0` 发布（不含 gohttpkit 根模块导出 API 变化）。
+> 含破坏性变更，升 minor（预计 v0.17.0）。agentguard 随 `tools/agentguard/v0.2.0` 发布。
+
+### 破坏
+
+- `logger`：删除 `SetConfig`、`SetHandler`、`SetLogger`、`Default`，全进程只留 `Init` 一个初始化入口，不走弃用周期（维护者决定）。
+  迁移见 [`docs/VERSIONING.md`](docs/VERSIONING.md) 的 v0.17.0 段落。
+- `logger.Config`：`FilePath` 改名 `Filename`。
+- `logger`：落盘失败不再 panic，由 `Init` 返回 `*FileSetupError`（`Op` 只有 `open`），失败时进程日志状态不变。
+- `logger` 不再是「只依赖标准库」：新增直接依赖 `gopkg.in/natefinch/lumberjack.v2`，下游间接带上。
 
 ### 新增
 
+- `logger.Init(Config, attrs...)`：唯一的初始化入口。按配置建输出（落盘走轮转，启动时即探测能否打开）、挂每行都带的固定字段，
+  并把标准库 `log` 与 `slog` 默认 logger 的输出并入同一条通道。
+- `logger.Close()`：撤销最近一次 `Init`，关闭日志文件并还原进程日志状态；`Init` / `Close` 可嵌套，后进先出。
+- `logger.Enabled(ctx, level)`：在拼装昂贵字段前判断该级别是否会写出。
+- `logger.Config` 新增 `MaxSize`、`MaxBackups`、`MaxAge`、`Compress`（轮转）与 `Writer`（控制台一路的去向）。
+- `logger/loggertest`：`Capture(tb, level, attrs...)` 走 `Init` 把日志接进内存，返回结构化记录，用例结束自动还原。
 - agentguard v0.2.0：新增 `check-style`（lock-defer / event-decl / panic-placement / root-ctx / helper-placement）、
   `check-agents-docs`（共享段正本、Cursor glob）、`check-commit-msg`（标题 / scope / 测试行 / 会话尾注，支持 `--range`）。
 - `.agentguard.yml` 新增 `commit.scopes`、`style.helper_placement`、`style.helper_placement_exempt`、`style.root_ctx_allow`（静态检查读 HEAD 上的配置）。

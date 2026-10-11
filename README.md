@@ -11,7 +11,7 @@
 go get github.com/japansms40-web/gohttpkit
 ```
 
-依赖只有三个，全是公开模块，没有任何 `replace`：`brotli`、`klauspost/compress`、`golang.org/x/net`。
+依赖只有四个，全是公开模块，没有任何 `replace`：`brotli`、`klauspost/compress`、`golang.org/x/net`、`lumberjack`（日志文件轮转）。
 最低 Go 版本以 `go.mod` 的 `go` 指令为准（当前 1.27.1），随 Go 最新稳定版上调。
 
 ---
@@ -187,7 +187,7 @@ client, err := httpx.NewClient(httpx.Options{
 })
 ```
 
-关掉重试用 `httpx.NoRetry()`。日志用 `logger.SetConfig` / `logger.SetHandler`，也不读环境变量。
+关掉重试用 `httpx.NoRetry()`。日志在进程入口调一次 `logger.Init(logger.Config{...})`（级别、格式、去向、轮转、固定字段都在这里），也不读环境变量；不调时走缺省输出（控制台 JSON、info 级）。
 
 按 `event=http.transaction` 过滤交易日志，请求头与响应头按原文输出。
 高保真复刻用的 `Transaction` 快照同样是原文（给抓包对比），不要写进共享日志。
@@ -200,10 +200,10 @@ client, err := httpx.NewClient(httpx.Options{
   外部读取必须走 `SnapshotResponseStatusCode()` / `SnapshotResponseHeaders()`，不要直读字段
 - `HeaderProvider` 的并发安全**由你的实现保证** —— 带会话状态的实现请自带锁（见 `examples/fidelity`）
 - 跨会话不要共享 `Client`：它与 `HeaderProvider` 绑定，而后者通常携带某个账号的身份，复用会串号
-- `logger` 是**进程级全局单例**（`SetHandler` 会影响整个进程）。多个库共用时注意互相覆盖
+- `logger` 是**进程级全局单例**：全进程只有 `logger.Init` 一个初始化入口，它同时接管标准库 `log` 与 `slog` 默认 logger 的输出。库代码不要调 `Init`，由进程入口调一次；测试要观察日志用 `logger/loggertest` 的 `Capture`
 - 拿不到 ctx 的地方（main、init、启动配置）用具名实例，不必硬造 `context.Background()`：
   `var log = logger.Named("mymod")` 后直接 `log.InfoEvent(ev)`（业务代码只打事件，不写自由文案），每条带 `module=mymod`，`log.With(...)` 追加固定字段。
-  它每次调用才读当前全局 handler，包级 var 先于 `SetHandler` 创建也生效；但不带 trace_id，要与 HTTP 日志同链仍用 `logger.InfoEvent(ctx, ev, ...)`
+  它每次调用才读当前全局 handler，包级 var 先于 `Init` 创建也生效；但不带 trace_id，要与 HTTP 日志同链仍用 `logger.InfoEvent(ctx, ev, ...)`
 
 ---
 

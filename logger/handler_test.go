@@ -25,12 +25,12 @@ func TestWrapCtxHandler_已包装不再套一层(t *testing.T) {
 	}
 }
 
-func TestSetLogger_Default不再双写trace_id(t *testing.T) {
+func TestInstall_已包装的handler不再双写trace_id(t *testing.T) {
 	buf := &bytes.Buffer{}
-	SetHandler(slog.NewJSONHandler(buf, nil))
-	t.Cleanup(func() { SetLogger(nil) })
+	install(slog.NewJSONHandler(buf, nil))
+	t.Cleanup(func() { install(nil) })
 
-	SetLogger(Default())
+	install(active().Handler())
 
 	Info(WithTraceID(t.Context(), "solo"), "msg")
 	n := strings.Count(buf.String(), "trace_id")
@@ -106,8 +106,8 @@ func (e errHandler) WithAttrs([]slog.Attr) slog.Handler        { return e }
 func (e errHandler) WithGroup(string) slog.Handler             { return e }
 
 func TestLog_inner错误被吞掉(t *testing.T) {
-	SetHandler(errHandler{enabled: true})
-	t.Cleanup(func() { SetLogger(nil) })
+	install(errHandler{enabled: true})
+	t.Cleanup(func() { install(nil) })
 
 	Info(t.Context(), "ignored-1")
 	Error(WithAttrs(WithTraceID(t.Context(), "t"), slog.String("a", "1")), "ignored-2")
@@ -115,8 +115,8 @@ func TestLog_inner错误被吞掉(t *testing.T) {
 }
 
 func TestLog_inner关闭时直接返回(t *testing.T) {
-	SetHandler(errHandler{enabled: false})
-	t.Cleanup(func() { SetLogger(nil) })
+	install(errHandler{enabled: false})
+	t.Cleanup(func() { install(nil) })
 	Info(t.Context(), "should-skip")
 	t.Logf("Enabled=false 时不进 Handle")
 }

@@ -6,4 +6,5 @@ require (
 	github.com/andybalholm/brotli v1.2.4
 	github.com/klauspost/compress v1.20.0
 	golang.org/x/net v0.59.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

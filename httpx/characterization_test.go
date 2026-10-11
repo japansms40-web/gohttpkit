@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -39,7 +38,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	logger.SetConfig(logger.Config{
+	// 只写控制台、不落盘，Init 没有会失败的步骤。
+	_ = logger.Init(logger.Config{
 		Level:  logger.LevelError,
 		Format: logger.FormatJSON,
 		Output: logger.OutputConsole,
@@ -1270,8 +1270,10 @@ func TestLogging_摘要日志不含出口信息(t *testing.T) {
 
 func TestLogging_交易日志保留请求头原文(t *testing.T) {
 	var buf bytes.Buffer
-	logger.SetHandler(slog.NewJSONHandler(&buf, nil))
-	t.Cleanup(func() { logger.SetLogger(nil) })
+	if err := logger.Init(logger.Config{Level: logger.LevelInfo, Format: logger.FormatJSON, Writer: &buf}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(logger.Close)
 
 	srv := newRecordingServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Set-Cookie", "sid=secret")
@@ -1329,8 +1331,10 @@ func findLogEvent(t *testing.T, records []map[string]any, event string) map[stri
 func captureClientLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
-	logger.SetHandler(slog.NewJSONHandler(&buf, nil))
-	t.Cleanup(func() { logger.SetLogger(nil) })
+	if err := logger.Init(logger.Config{Level: logger.LevelInfo, Format: logger.FormatJSON, Writer: &buf}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(logger.Close)
 	return &buf
 }
 

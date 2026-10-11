@@ -52,7 +52,7 @@
 - `httpx/interceptor/`：内建拦截器（追踪、日志、解压、缓存、重试、桥接、状态语义、归类、HTML）与预设链；
   默认链在本包 `init()` 里注册，程序里需 import 一次本包（用到任何拦截器即已满足），否则 `httpx.NewClient` 返回 `*httpx.NoDefaultChainError`。
 - `geo/`：国家 → Web locale / 时区大数据映射表，一表一文件，keyset 由测试对齐；`geo/locale_mobile/`（包名 `localemobile`）：国家 → Android 5 个 locale 头。
-- `logger/`：结构化日志门面，`SetHandler` 注入实现。
+- `logger/`：结构化日志门面，`Init` 是唯一的初始化入口（配置、轮转、固定字段、标准库日志桥接），`loggertest/` 给测试捕获日志。
 - `netproxy/`：代理接入；`traffic/`：TCP 层流量计数。
 - `versionreg/`：版本 / 配置注册表。
 - `errors/`：**带字段的类型错误**（非哨兵），供调用方 `errors.As` 解出字段。

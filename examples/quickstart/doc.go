@@ -3,7 +3,7 @@
 //
 //	go run ./examples/quickstart
 //	go run ./examples/quickstart -url https://api.github.com/zen
-//	在 main 里 logger.SetConfig(logger.Config{Level: logger.LevelDebug}) 可看全量 event=http.transaction 日志
+//	在 main 里 logger.Init(logger.Config{Level: logger.LevelDebug}) 可看全量 event=http.transaction 日志
 //	go run ./examples/quickstart -proxy socks5://127.0.0.1:1080   # 走代理
 //
 // 文件结构：

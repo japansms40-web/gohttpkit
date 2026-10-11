@@ -49,7 +49,7 @@
 | `internal.ApplyProxyToTransport` | `netproxy.ApplyProxyToTransport` | |
 | `internal.ParseProxyURL` / `DialContextWithProxy` | `netproxy.*` | |
 | `pkg/traffic` | `traffic` | 原样 |
-| `insgo/logger` | `logger` | 日志用 `SetConfig` / `SetHandler`，不读环境变量 |
+| `insgo/logger` | `logger` | 日志在进程入口调一次 `logger.Init`，不读环境变量 |
 | `insgo/errors`（通用半边） | `errors` | 只带 `RetryableError` / `IsRetryableNetworkError` / 关键词表 |
 | `insgo/errors`（IG sentinel、`ClassifyIGResponse*`） | 不带 | 业务归类改由 `interceptor.NewClassifyInterceptor` 注入 |
 | `internal/geo` | `geo` | 原样（含两张国家表与 keyset 守护测试） |

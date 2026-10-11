@@ -3,64 +3,56 @@ package logger
 import (
 	"context"
 	"log/slog"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
 )
 
 // logger.go —— 门面 API 与当前生效 logger 的选取。
-// 独立成文件：接入方只需要认这几个函数，env / handler / span 的实现细节不该和 Debug/Info 挤在一起。
+// 独立成文件：接入方只需要认这几个函数，配置 / handler / span 的实现细节不该和 Debug/Info 挤在一起。
 //
-// 并发：external 与 fallback 均为 atomic.Pointer，SetLogger / SetHandler / SetConfig / active
-// 可被多 goroutine 同时调用。没有互斥锁；替换的是整份 *slog.Logger 引用。
+// 并发：installed 与 fallback 均为 atomic.Pointer，install / active 可被多 goroutine 同时调用。
+// 打日志不拿锁；替换的是整份 *slog.Logger 引用。
 
 var (
-	external atomic.Pointer[slog.Logger] // SetLogger/SetHandler 注入；nil = 未注入
-	fallback atomic.Pointer[slog.Logger] // 默认 logger，SetConfig 重建，首次使用时惰性初始化
+	installed atomic.Pointer[slog.Logger] // Init 安装的 logger；nil = 没有初始化，走 fallback
+	fallback  atomic.Pointer[slog.Logger] // 缺省 logger，没有初始化时使用，首次使用时惰性创建
 )
 
-// SetLogger 注入外部 *slog.Logger，优先于默认 logger。
-// 输入 l：非 nil 时取其 Handler 再包一层 ctx 注入；nil 清空 external，回到 fallback。
+// install 把 h 装成当前生效的输出，是 Init 之下唯一的安装点。
+// 输入 h：非 nil 时包一层 ctx 注入后生效，自动获得 ctx 中的 trace_id、span_id 与 WithAttrs 字段；nil 清空，回到缺省输出。
 // 返回：无。
-// 例：SetLogger(slog.New(h)) 后 Info 走 h；SetLogger(nil) 还原默认。
-// 注入的 handler 会被包装，自动获得 ctx 中的 trace_id 与 WithAttrs 字段。
-func SetLogger(l *slog.Logger) {
-	if l == nil {
-		external.Store(nil)
-		return
-	}
-	external.Store(slog.New(wrapCtxHandler(l.Handler())))
-}
-
-// SetHandler 注入外部 slog.Handler（接入自家日志的主入口）。
-// 输入 h：zap 可传 zapslog.NewHandler(core)；nil 清空 external，回到 fallback。
-// 返回：无。
-// 例：SetHandler(slog.NewJSONHandler(w, nil))。
-func SetHandler(h slog.Handler) {
+func install(h slog.Handler) {
 	if h == nil {
-		external.Store(nil)
+		installed.Store(nil)
 		return
 	}
-	external.Store(slog.New(wrapCtxHandler(h)))
+	installed.Store(slog.New(wrapCtxHandler(h)))
 }
 
-// Default 返回当前生效的 logger（已含 ctx 字段自动注入）。
-// 输入：无。
-// 返回：非 nil *slog.Logger，可转交给其它库。
-// 例：Default().Info("via-default")。
-func Default() *slog.Logger { return active() }
+// Enabled 报告当前输出在 level 级别是否会写出。
+// 输入 ctx：可为 nil（回落 Background）；level：slog 级别。
+// 返回：会写出为 true。供调用方在拼装昂贵字段（如完整 SQL 文本）之前判断，省掉注定被丢弃的开销。
+// 例：if logger.Enabled(ctx, slog.LevelDebug) { logger.DebugEvent(ctx, ev, slog.String("sql", explain())) }。
+func Enabled(ctx context.Context, level slog.Level) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return active().Handler().Enabled(ctx, level)
+}
 
 // active 选取当前 logger。
-// 输入：无（读进程级 external / fallback）。
-// 返回：external 优先；否则 fallback；都空则按 DefaultConfig 惰性创建并 CAS 回填。
+// 输入：无（读进程级 installed / fallback）。
+// 返回：Init 安装的优先；否则 fallback；都空则按 DefaultConfig 惰性创建并 CAS 回填。
 func active() *slog.Logger {
-	if l := external.Load(); l != nil {
+	if l := installed.Load(); l != nil {
 		return l
 	}
 	if l := fallback.Load(); l != nil {
 		return l
 	}
-	l := newDefault(DefaultConfig())
+	l := slog.New(wrapCtxHandler(buildHandler(os.Stdout, DefaultConfig(), nil)))
 	if fallback.CompareAndSwap(nil, l) {
 		return l
 	}

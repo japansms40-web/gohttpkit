@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -101,7 +100,9 @@ func newClientWith(t *testing.T, opts httpx.Options) *httpx.Client {
 func captureInterceptorLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
-	logger.SetHandler(slog.NewJSONHandler(&buf, nil))
-	t.Cleanup(func() { logger.SetLogger(nil) })
+	if err := logger.Init(logger.Config{Level: logger.LevelInfo, Format: logger.FormatJSON, Writer: &buf}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(logger.Close)
 	return &buf
 }

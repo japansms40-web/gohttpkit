@@ -131,7 +131,7 @@ go test -race -count=1 ./httpx/...           # -race 抓角度 #6，-count=1 绕
 - **MUST** 依赖时间或随机数的逻辑可注入：时钟用函数 / 接口参数，随机用 `*rand.Rand` 固定种子。
   范例：`geo.BuildChromeAcceptLanguageForCountry` 接收 `*rand.Rand`。
 - **MUST** flaky 零容忍：发现偶发失败立即开 issue 并修复根因；禁止加重试、放宽断言或 `t.Skip` 了事。
-- **SHOULD** 无共享全局状态的测试加 `t.Parallel()`；改全局状态（`logger.SetHandler`、包级变量）的测试**不得**并行，
+- **SHOULD** 无共享全局状态的测试加 `t.Parallel()`；改全局状态（`logger.Init`、`loggertest.Capture`、包级变量）的测试**不得**并行，
   并用 `t.Cleanup` 还原。
 - **SHOULD** 单个测试 < 1s，包级 < 30s；挂死由 `go test` 默认的 10m 超时兜底（CI 未另设 `-timeout`）。
 - **SHOULD** golden 文件放 `testdata/`，更新走 `-update` 标志并在 PR 说明为什么变；禁止手改 golden 迁就实现。

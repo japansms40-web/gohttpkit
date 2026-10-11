@@ -10,6 +10,24 @@
 - **上调 `go.mod` 的 `go` 指令**按 minor 处理。
 - 每个版本的用户可见变化同时记入 [`../CHANGELOG.md`](../CHANGELOG.md)；打 tag、hotfix、`retract` 流程见 [`RELEASE.md`](RELEASE.md)。
 
+## v0.17.0（未发布，相对 v0.16.0）
+
+破坏点（0.x 阶段按 minor）：`logger` 只留一个初始化入口，未经弃用周期（维护者决定）。
+
+- 删除 `logger.SetConfig`、`logger.SetHandler`、`logger.SetLogger`、`logger.Default`。迁移：
+  - 进程入口原来 `SetConfig(c)` 或自己拼 handler 再 `SetHandler(h)` 的，改成调一次 `logger.Init(c, attrs...)`。
+    轮转不用再自己接：`Config` 的 `MaxSize` / `MaxBackups` / `MaxAge` / `Compress` 直接交给内置的 lumberjack。
+    每行都要带的字段（服务名、环境等）用 `Init` 的 `attrs` 传。
+  - 原来自己做的标准库 `log` 桥接（`slog.SetDefault`）可以删：`Init` 已经做了。
+  - 测试里 `SetHandler(捕获器)` 加 `SetLogger(nil)` 的写法，改成 `rec := loggertest.Capture(t, logger.LevelDebug)`，读 `rec.Records()` / `rec.Events()`；
+    只想要原始 JSON 的，用 `logger.Init(logger.Config{Writer: &buf})` 加 `t.Cleanup(logger.Close)`。
+  - 需要把当前 logger 交给别的库的：`Init` 之后 `slog.Default()` 就是它。
+- `logger.Config.FilePath` 改名 `Filename`。
+- 落盘失败不再 panic：`Init` 返回 `*FileSetupError`，原来 `recover` 的地方改成判断返回值。
+- 新增直接依赖 `gopkg.in/natefinch/lumberjack.v2 v2.2.1`。
+
+新增：`logger.Init`、`logger.Close`、`logger.Enabled`、`logger/loggertest`。
+
 ## agentguard v0.2.0（`tools/agentguard/v0.2.0`，相对 v0.1.6）
 
 仅工具升级，不含 gohttpkit 根模块导出 API 变化。下游升级 agentguard 不会自动启用新检查，按下列要点接入：

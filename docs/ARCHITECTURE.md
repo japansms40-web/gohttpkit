@@ -441,8 +441,9 @@ classDiagram
 | `github.com/andybalholm/brotli` | 解压 Brotli 响应体 |
 | `github.com/klauspost/compress` | 解压 Zstandard 响应体 |
 | `golang.org/x/net` | HTML 解析和 SOCKS5 代理 |
+| `gopkg.in/natefinch/lumberjack.v2` | 日志文件轮转（只在 `logger` 用） |
 
-HTTP、TLS、日志、并发和基础压缩能力主要使用 Go 标准库。
+HTTP、TLS、日志门面、并发和基础压缩能力主要使用 Go 标准库。
 
 ## 11. 最应该先看的 5 个文件
 

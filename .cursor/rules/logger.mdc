@@ -13,6 +13,6 @@ alwaysApply: false
 - 本包之外的生产代码只打事件，不写自由 msg；自由 msg 的 `Info(ctx, msg)` 只留给本包自身与 `examples/`。
 - ctx 值不可变：`EnsureTraceID` / `WithAttrs` / `StartSpan` / `WithTraceID` 返回派生 ctx，文档与示例都写成 `ctx = ...`。
 - 保留字段（`trace_id` / `span_id` / `parent_span_id` / `span_name` / `event` / `duration_ms` / `error`）集中在 `fields.go`，不得新增同名字面量。
-- `SetLogger` / `SetHandler` / `SetConfig` 是进程级全局状态：读写经锁或原子；测试改它们必须 `t.Cleanup` 还原且不得 `t.Parallel()`。
-- 不读环境变量，配置只走 `SetConfig`。本包只依赖标准库，不引 OpenTelemetry 等第三方。
-- 错误用类型（如 `*FileSetupError`），`mustFileWriter` 的 panic 值必须是该类型，调用方 `recover` 后可 `errors.As`。
+- 初始化入口只有 `Init`，不再新增 `SetXxx` 这类注入点。`Init` / `Close` 改的是进程级全局状态：读写经锁或原子；测试调它们必须 `t.Cleanup(logger.Close)` 还原且不得 `t.Parallel()`，包外测试用 `logger/loggertest` 的 `Capture`。
+- 不读环境变量，配置只走 `Init` 的 `Config`。本包除标准库外只依赖 lumberjack（日志文件轮转），不引 OpenTelemetry 等其它第三方。
+- 错误用类型（如 `*FileSetupError`）：落盘失败由 `Init` 返回，不 panic，且失败时进程日志状态不变，调用方用 `errors.As` 判定。
